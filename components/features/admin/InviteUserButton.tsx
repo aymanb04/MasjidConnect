@@ -28,7 +28,11 @@ export function InviteUserButton({ tenantId, classes, onInvited }: { tenantId: s
         }
       })
 
-      if (authError) throw authError
+      if (authError) {
+        alert('Fout bij aanmaken gebruiker: ' + authError.message)
+        setLoading(false)
+        return
+      }
 
       // 2. Stuur password reset mail — gebruiker kiest zelf wachtwoord
       await supabase.auth.resetPasswordForEmail(
