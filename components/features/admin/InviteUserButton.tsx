@@ -14,16 +14,46 @@ export function InviteUserButton({ tenantId, classes, onInvited }: { tenantId: s
     if (!form.email || !form.first_name || !form.last_name) return
     setLoading(true)
     try {
-      const supabase = getSupabase()
-      const { data: { session } } = await supabase.auth.getSession()
-
-      await supabase.from('invitations').insert({
-        tenant_id: tenantId, email: form.email.trim().toLowerCase(),
-        role: form.role, class_id: form.class_id || null, invited_by: session!.user.id,
+      // 1. Maak auth gebruiker aan zonder wachtwoord
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: form.email.trim().toLowerCase(),
+        password: crypto.randomUUID(), // random wachtwoord — gebruiker reset dit zelf
+        options: {
+          data: {
+            first_name: form.first_name.trim(),
+            last_name: form.last_name.trim(),
+            role: form.role,
+            tenant_id: tenantId,
+          }
+        }
       })
 
+      if (authError) throw authError
+
+      // 2. Stuur password reset mail — gebruiker kiest zelf wachtwoord
+      await supabase.auth.resetPasswordForEmail(
+          form.email.trim().toLowerCase(),
+          { redirectTo: `${window.location.origin}/login` }
+      )
+
+      // 3. Klas toewijzen
+      if (form.class_id && authData.user) {
+        if (form.role === 'student') {
+          await supabase.from('class_students').insert({ class_id: form.class_id, student_id: authData.user.id })
+        } else if (form.role === 'teacher') {
+          await supabase.from('class_teachers').insert({ class_id: form.class_id, teacher_id: authData.user.id })
+        }
+      }
+
       setSuccess(true)
-      setTimeout(() => { setOpen(false); setSuccess(false); setForm({ email: '', first_name: '', last_name: '', role: 'student', class_id: '' }); onInvited?.() }, 1200)
+      setTimeout(() => {
+        setOpen(false)
+        setSuccess(false)
+        setForm({ email: '', first_name: '', last_name: '', role: 'student', class_id: '' })
+        onInvited?.()
+      }, 1500)
+    } catch (e: any) {
+      alert('Fout: ' + e.message)
     } finally { setLoading(false) }
   }
 
