@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail]       = useState('')
@@ -104,7 +105,9 @@ export default function LoginPage() {
           </form>
           <p className="text-center text-sm text-gray-500 mt-5">
             Wachtwoord vergeten?{' '}
-            <a href="mailto:info@masjidconnect.be" className="font-medium hover:underline" style={{ color: '#1B6B4A' }}>Contacteer de beheerder</a>
+            <Link href="/forgot-password" className="font-medium hover:underline" style={{ color: '#1B6B4A' }}>
+              Reset via e-mail
+            </Link>
           </p>
           <p className="text-center text-xs text-gray-400 mt-8">© {new Date().getFullYear()} MasjidConnect · Alle rechten voorbehouden</p>
         </div>
