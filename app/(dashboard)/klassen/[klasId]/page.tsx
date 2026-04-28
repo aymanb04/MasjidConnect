@@ -1,0 +1,134 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { getSupabase } from '@/lib/supabase/singleton'
+import { useProfile } from '@/lib/hooks/useProfile'
+import { PageLoader } from '@/components/ui/PageShell'
+import { getDeadlineLabel, getSubmissionStatusBadge } from '@/lib/utils'
+import { ArrowLeft, FileText, BookOpen, Users, Plus, Clock } from 'lucide-react'
+import Link from 'next/link'
+
+export default function KlasDetailPage() {
+  const { klasId } = useParams()
+  const { profile, loading: profileLoading } = useProfile()
+  const [klas, setKlas] = useState<any>(null)
+  const [assignments, setAssignments] = useState<any[]>([])
+  const [modules, setModules] = useState<any[]>([])
+  const [students, setStudents] = useState<any[]>([])
+  const [mySubmissions, setMySubmissions] = useState<Record<string, any>>({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!profile || !klasId) return
+    loadData()
+  }, [profile, klasId])
+
+  async function loadData() {
+    const supabase = getSupabase()
+    const isTeacher = ['teacher','admin','super_admin'].includes(profile!.role)
+
+    const { data: k } = await supabase.from('classes').select('*, school_years(name)').eq('id', klasId).single()
+    setKlas(k)
+
+    const { data: a } = await supabase.from('assignments').select('*').eq('class_id', klasId).eq('is_published', true).order('due_date', { ascending: true })
+    setAssignments(a ?? [])
+
+    const { data: m } = await supabase.from('lesson_modules').select('*, module_documents(id)').eq('class_id', klasId).eq('is_visible', true).order('order_index')
+    setModules(m ?? [])
+
+    if (isTeacher) {
+      const { data: s } = await supabase.from('class_students').select('profiles(id, first_name, last_name)').eq('class_id', klasId)
+      setStudents(s?.map((x: any) => x.profiles).filter(Boolean) ?? [])
+    }
+
+    if (profile!.role === 'student' && a?.length) {
+      const { data: subs } = await supabase.from('submissions').select('*').eq('student_id', profile!.id).in('assignment_id', a.map((x: any) => x.id))
+      const map: Record<string, any> = {}
+      subs?.forEach((s: any) => { map[s.assignment_id] = s })
+      setMySubmissions(map)
+    }
+
+    setLoading(false)
+  }
+
+  if (profileLoading || loading) return <PageLoader />
+  if (!klas) return null
+
+  const isTeacher = ['teacher','admin','super_admin'].includes(profile?.role ?? '')
+
+  return (
+    <div className="animate-slide-up">
+      <div className="mb-6">
+        <Link href="/klassen" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4 transition-colors"><ArrowLeft size={15}/> Terug naar klassen</Link>
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-xl" style={{ backgroundColor: klas.color }}>{klas.name[0]}</div>
+          <div><h1 className="page-title">{klas.name}</h1><p className="page-subtitle">{klas.school_years?.name}{klas.description && ` · ${klas.description}`}</p></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2"><FileText size={18} className="text-primary-600"/><h2 className="font-semibold text-gray-900">Huiswerk</h2></div>
+              {isTeacher && <Link href={`/huiswerk?klas=${klasId}`} className="btn-secondary text-xs py-1.5 px-3"><Plus size={13}/> Nieuw</Link>}
+            </div>
+            {assignments.length === 0 ? <p className="text-sm text-gray-400 text-center py-6">Geen huiswerk voor deze klas.</p> : (
+              <div className="space-y-2">
+                {assignments.map((a: any) => {
+                  const dl = getDeadlineLabel(a.due_date)
+                  const sub = mySubmissions[a.id]
+                  const sb = sub ? getSubmissionStatusBadge(sub.status) : null
+                  return (
+                    <Link key={a.id} href={`/huiswerk/${a.id}`} className="flex items-center justify-between p-3.5 rounded-xl border border-border hover:border-primary-200 hover:bg-primary-50/30 transition-all group">
+                      <div className="min-w-0 flex-1"><div className="font-medium text-sm text-gray-800 group-hover:text-primary-700 truncate">{a.title}</div><div className={`text-xs mt-0.5 ${dl.color}`}><Clock size={10} className="inline mr-1"/>{dl.label}</div></div>
+                      {sb && <span className={`badge ml-3 flex-shrink-0 ${sb.color}`}>{sb.label}</span>}
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2"><BookOpen size={18} className="text-primary-600"/><h2 className="font-semibold text-gray-900">Lesmodules</h2></div>
+              {isTeacher && <Link href={`/lesmodules?klas=${klasId}`} className="btn-secondary text-xs py-1.5 px-3"><Plus size={13}/> Nieuw</Link>}
+            </div>
+            {modules.length === 0 ? <p className="text-sm text-gray-400 text-center py-6">Geen lesmodules beschikbaar.</p> : (
+              <div className="space-y-2">
+                {modules.map((m: any) => (
+                  <Link key={m.id} href={`/lesmodules/${m.id}`} className="flex items-center justify-between p-3.5 rounded-xl border border-border hover:border-primary-200 hover:bg-primary-50/30 transition-all group">
+                    <div><div className="font-medium text-sm text-gray-800 group-hover:text-primary-700">{m.title}</div>{m.description && <div className="text-xs text-gray-400 mt-0.5 line-clamp-1">{m.description}</div>}</div>
+                    <span className="text-xs text-gray-400 ml-3 flex-shrink-0">{m.module_documents?.length ?? 0} docs</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {isTeacher && (
+          <div className="card p-6 h-fit">
+            <div className="flex items-center gap-2 mb-4">
+              <Users size={18} className="text-primary-600"/>
+              <h2 className="font-semibold text-gray-900">Leerlingen</h2>
+              <span className="ml-auto text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{students.length}</span>
+            </div>
+            {students.length === 0 ? <p className="text-sm text-gray-400 text-center py-4">Geen leerlingen toegewezen.</p> : (
+              <div className="space-y-1">
+                {students.map((s: any) => (
+                  <div key={s.id} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 transition-colors">
+                    <div className="w-7 h-7 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">{s.first_name[0]}{s.last_name[0]}</div>
+                    <span className="text-sm text-gray-700">{s.first_name} {s.last_name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
