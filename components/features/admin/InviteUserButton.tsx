@@ -24,44 +24,26 @@ export function InviteUserButton({ tenantId, classes, onInvited }: Props) {
     setLoading(true)
     setError('')
     try {
-      // Maak auth gebruiker aan
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: form.email.trim().toLowerCase(),
-        password: crypto.randomUUID(),
-        options: {
-          data: {
-            first_name: form.first_name.trim(),
-            last_name: form.last_name.trim(),
-            role: form.role,
-            tenant_id: tenantId,
-          }
-        }
+      const res = await fetch('/api/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email:      form.email.trim().toLowerCase(),
+          first_name: form.first_name.trim(),
+          last_name:  form.last_name.trim(),
+          role:       form.role,
+          tenant_id:  tenantId,
+          class_id:   form.class_id || null,
+          class_role: form.role,
+        })
       })
 
-      if (authError) {
-        setError('Fout bij aanmaken gebruiker: ' + authError.message)
+      const data = await res.json()
+      if (!res.ok) {
+        setError('Fout: ' + data.error)
         setLoading(false)
         return
       }
-
-      // Wijs aan klas toe
-      if (form.class_id && authData.user) {
-        if (form.role === 'student') {
-          await supabase.from('class_students').insert({
-            class_id: form.class_id, student_id: authData.user.id
-          })
-        } else if (form.role === 'teacher') {
-          await supabase.from('class_teachers').insert({
-            class_id: form.class_id, teacher_id: authData.user.id
-          })
-        }
-      }
-
-      // Stuur wachtwoord-reset mail
-      await supabase.auth.resetPasswordForEmail(
-        form.email.trim().toLowerCase(),
-        { redirectTo: `${window.location.origin}/login` }
-      )
 
       setSuccess(true)
       setTimeout(() => {

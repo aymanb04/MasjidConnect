@@ -153,35 +153,25 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
                     ? classes.find(c => c.name.toLowerCase() === row.klas.toLowerCase())
                     : null
 
-                const { data: authData, error: authError } = await supabase.auth.signUp({
-                    email: row.email.toLowerCase(),
-                    password: crypto.randomUUID(),
-                    options: {
-                        data: {
-                            first_name: row.voornaam,
-                            last_name: row.achternaam,
-                            role,
-                            tenant_id: tenantId,
-                        }
-                    }
+                const res = await fetch('/api/invite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email:      row.email.toLowerCase(),
+                        first_name: row.voornaam,
+                        last_name:  row.achternaam,
+                        role,
+                        tenant_id:  tenantId,
+                        class_id:   klas?.id ?? null,
+                        class_role: role,
+                    })
                 })
 
-                if (authError) {
-                    importResults.push({ email: row.email, status: 'error', message: authError.message })
+                const data = await res.json()
+                if (!res.ok) {
+                    importResults.push({ email: row.email, status: 'error', message: data.error })
                     continue
                 }
-
-                if (klas && authData.user) {
-                    if (role === 'student') {
-                        await supabase.from('class_students').insert({ class_id: klas.id, student_id: authData.user.id })
-                    } else if (role === 'teacher') {
-                        await supabase.from('class_teachers').insert({ class_id: klas.id, teacher_id: authData.user.id })
-                    }
-                }
-
-                await supabase.auth.resetPasswordForEmail(row.email.toLowerCase(), {
-                    redirectTo: `${window.location.origin}/login`
-                })
 
                 importResults.push({
                     email: row.email,
