@@ -166,7 +166,11 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
         is_active: true,
       }).select().single()
 
-      if (tenantErr) throw new Error(tenantErr.message)
+      if (tenantErr) {
+        setError(tenantErr.message)
+        setLoading(false)
+        return
+      }
 
       // 2. Schooljaar automatisch aanmaken
       const year = new Date().getFullYear()
