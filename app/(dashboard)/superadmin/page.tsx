@@ -6,6 +6,7 @@ import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { formatDate } from '@/lib/utils'
 import { Building2, Users, TrendingUp, Shield, Plus, X, Loader2 } from 'lucide-react'
+import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 
 export default function SuperAdminPage() {
   const { profile, loading: profileLoading } = useProfile()
@@ -55,9 +56,12 @@ export default function SuperAdminPage() {
           </h1>
           <p className="page-subtitle">Overzicht van alle moskeeën op het platform</p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="btn-primary">
-          <Plus size={16}/> Moskee toevoegen
-        </button>
+        <div className="flex gap-2">
+          <InviteUserButton onInvited={loadData}/>
+          <button onClick={() => setShowAdd(true)} className="btn-primary">
+            <Plus size={16}/> Moskee toevoegen
+          </button>
+        </div>
       </div>
 
       {/* Platform stats */}
