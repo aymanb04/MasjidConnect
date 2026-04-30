@@ -55,7 +55,7 @@ export default function ModuleDetailPage() {
       <div className="card p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-gray-900">Documenten ({docs.length})</h2>
-          {isTeacher && <ModuleDocumentUpload moduleId={id as string} userId={profile!.id} onUploaded={loadData} />}
+          {isTeacher && <ModuleDocumentUpload moduleId={id as string} onUploaded={loadData} />}
         </div>
         {docs.length === 0 ? (
           <div className="text-center py-8 text-gray-400"><FileText size={32} className="mx-auto mb-2 text-gray-300"/><p className="text-sm">Nog geen documenten.</p></div>
