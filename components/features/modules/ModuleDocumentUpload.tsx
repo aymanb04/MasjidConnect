@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation'
 import { Upload, X, Loader2, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-interface Props { moduleId: string; userId: string; onUploaded?: () => void }
+interface Props { moduleId: string; onUploaded?: () => void }
 
-export default function ModuleDocumentUpload({ moduleId, userId }: Props) {
+export default function ModuleDocumentUpload({ moduleId, onUploaded }: Props) {
   const [open, setOpen]       = useState(false)
   const [file, setFile]       = useState<File | null>(null)
   const [title, setTitle]     = useState('')
@@ -34,7 +34,11 @@ export default function ModuleDocumentUpload({ moduleId, userId }: Props) {
     try {
       const path = `modules/${moduleId}/${Date.now()}_${file.name}`
       const { error: upErr } = await supabase.storage.from('module-documents').upload(path, file)
-      if (upErr) throw upErr
+      if (upErr) {
+        setError(upErr.message ?? 'Upload mislukt.')
+        setLoading(false)
+        return
+      }
 
       const { data: { publicUrl } } = supabase.storage.from('module-documents').getPublicUrl(path)
 
