@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { getRoleBadge, formatDate } from '@/lib/utils'
-import { Users, GraduationCap, Mail, Shield } from 'lucide-react'
+import {Users, GraduationCap, Mail, Shield, Trash2} from 'lucide-react'
 import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 import { CreateClassButton } from '@/components/features/admin/CreateClassButton'
 import CsvImportButton from '@/components/features/admin/CsvImportButton'
@@ -122,16 +122,18 @@ export default function BeheerPage() {
             {users.filter(u => u.role !== 'admin').map((u: any) => {
               const rb = getRoleBadge(u.role)
               return (
-                <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
-                    style={{ backgroundColor: '#EEF6F1', color: '#1B6B4A' }}>
-                    {u.first_name?.[0]}{u.last_name?.[0]}
+                  <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
+                         style={{ backgroundColor: '#EEF6F1', color: '#1B6B4A' }}>
+                      {u.first_name?.[0]}{u.last_name?.[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-800">{u.first_name} {u.last_name}</div>
+                      <div className="text-xs text-gray-400">{u.email}</div>
+                    </div>
+                    <span className={`badge ${rb.color}`}>{rb.label}</span>
+                    <DeleteUserButton userId={u.id} name={`${u.first_name} ${u.last_name}`} onDeleted={loadData}/>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-800">{u.first_name} {u.last_name}</div>
-                  </div>
-                  <span className={`badge ${rb.color}`}>{rb.label}</span>
-                </div>
               )
             })}
             {!users.filter(u => u.role !== 'admin').length && (
@@ -165,5 +167,50 @@ export default function BeheerPage() {
         )}
       </div>
     </div>
+  )
+}
+
+function DeleteUserButton({ userId, name, onDeleted }: { userId: string; name: string; onDeleted: () => void }) {
+  const [loading, setLoading] = useState(false)
+  const [confirm, setConfirm] = useState(false)
+
+  async function handleDelete() {
+    setLoading(true)
+    const res = await fetch('/api/user/delete', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
+    })
+    if (res.ok) {
+      onDeleted()
+    } else {
+      const data = await res.json()
+      alert('Fout: ' + data.error)
+    }
+    setLoading(false)
+    setConfirm(false)
+  }
+
+  if (confirm) {
+    return (
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span className="text-xs text-gray-500">{name} verwijderen?</span>
+          <button onClick={handleDelete} disabled={loading}
+                  className="text-xs bg-red-500 text-white px-2 py-1 rounded-lg hover:bg-red-600 transition-colors">
+            {loading ? '...' : 'Ja'}
+          </button>
+          <button onClick={() => setConfirm(false)}
+                  className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-200 transition-colors">
+            Nee
+          </button>
+        </div>
+    )
+  }
+
+  return (
+      <button onClick={() => setConfirm(true)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 p-1 flex-shrink-0">
+        <Trash2 size={14}/>
+      </button>
   )
 }
