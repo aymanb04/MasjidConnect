@@ -16,6 +16,7 @@ export interface Tenant {
   phone?: string
   email?: string
   logo_url?: string
+  website_url?: string
   is_active: boolean
   subscription_status: SubscriptionStatus
   subscription_price: number
@@ -166,6 +167,19 @@ export interface Invitation {
   accepted_at?: string
   expires_at: string
   created_at: string
+}
+
+export interface Announcement {
+  id: string
+  tenant_id: string
+  class_id?: string
+  created_by: string
+  title: string
+  body?: string
+  created_at: string
+  // joined
+  creator?: Pick<Profile, 'id' | 'first_name' | 'last_name'>
+  class?: Pick<Class, 'id' | 'name' | 'color'>
 }
 
 // ============================================================
