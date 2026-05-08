@@ -1,13 +1,17 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { cn, getInitials } from '@/lib/utils'
-import type { Profile } from '@/lib/types'
-import { LayoutDashboard, BookOpen, FileText, GraduationCap, Settings, LogOut, Shield, ChevronRight } from 'lucide-react'
+import type { Profile, Tenant } from '@/lib/types'
+import { LayoutDashboard, BookOpen, FileText, GraduationCap, Settings, LogOut, Shield, ChevronRight, ExternalLink } from 'lucide-react'
 
-interface Props { profile: Profile; tenantName?: string }
+interface Props {
+  profile: Profile
+  tenant?: Tenant | null
+  onClose?: () => void
+}
 
 const navItems = [
   { label: 'Dashboard',   href: '/dashboard',   icon: LayoutDashboard, roles: ['super_admin','admin','teacher','student'] },
@@ -22,9 +26,8 @@ const roleLabels: Record<string, string> = {
   super_admin: 'Super Admin', admin: 'Beheerder', teacher: 'Leerkracht', student: 'Leerling'
 }
 
-export default function Sidebar({ profile, tenantName }: Props) {
-  const pathname  = usePathname()
-  const router    = useRouter()
+export default function Sidebar({ profile, tenant, onClose }: Props) {
+  const pathname = usePathname()
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -34,15 +37,38 @@ export default function Sidebar({ profile, tenantName }: Props) {
   const filtered = navItems.filter(item => item.roles.includes(profile.role))
 
   return (
-    <aside className="w-[240px] bg-white border-r border-border flex flex-col h-screen sticky top-0 flex-shrink-0">
+    <aside className="w-[240px] bg-white border-r border-border flex flex-col h-screen">
       <div className="px-5 py-5 border-b border-border">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#1B6B4A' }}>
-            <span className="text-white font-bold text-sm">م</span>
+          <div
+            className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden"
+            style={{ backgroundColor: '#1B6B4A' }}
+          >
+            {tenant?.logo_url ? (
+              <img src={tenant.logo_url} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-white font-bold text-sm">م</span>
+            )}
           </div>
-          <div className="min-w-0">
-            <div className="font-semibold text-gray-900 text-sm leading-tight">MasjidConnect</div>
-            {tenantName && <div className="text-xs text-gray-400 truncate leading-tight mt-0.5">{tenantName}</div>}
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold text-gray-900 text-sm leading-tight truncate">
+              {tenant?.name ?? 'MasjidConnect'}
+            </div>
+            {tenant?.website_url ? (
+              <a
+                href={tenant.website_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-gray-400 hover:text-primary-600 transition-colors flex items-center gap-1 leading-tight mt-0.5"
+                onClick={e => e.stopPropagation()}
+              >
+                Website <ExternalLink size={9} />
+              </a>
+            ) : (
+              tenant?.name && (
+                <div className="text-xs text-gray-400 leading-tight mt-0.5">MasjidConnect</div>
+              )
+            )}
           </div>
         </div>
       </div>
@@ -52,7 +78,7 @@ export default function Sidebar({ profile, tenantName }: Props) {
           const Icon   = item.icon
           const active = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
-            <Link key={item.href} href={item.href}
+            <Link key={item.href} href={item.href} onClick={onClose}
               className={cn('nav-item', active && 'active')}>
               <Icon size={17} className="flex-shrink-0" />
               <span className="flex-1">{item.label}</span>
@@ -64,8 +90,10 @@ export default function Sidebar({ profile, tenantName }: Props) {
 
       <div className="border-t border-border p-3">
         <div className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-gray-50 transition-colors">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
-            style={{ backgroundColor: '#EEF6F1', color: '#1B6B4A' }}>
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
+            style={{ backgroundColor: '#EEF6F1', color: '#1B6B4A' }}
+          >
             {getInitials(profile.first_name, profile.last_name)}
           </div>
           <div className="flex-1 min-w-0">
