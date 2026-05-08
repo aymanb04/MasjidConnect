@@ -6,7 +6,7 @@ import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { getDeadlineLabel, getSubmissionStatusBadge } from '@/lib/utils'
-import { ArrowLeft, FileText, BookOpen, Users, Plus, Clock } from 'lucide-react'
+import { ArrowLeft, FileText, BookOpen, Users, Plus, Clock, GraduationCap, Mail } from 'lucide-react'
 import Link from 'next/link'
 
 export default function KlasDetailPage() {
@@ -15,6 +15,7 @@ export default function KlasDetailPage() {
   const [klas, setKlas] = useState<any>(null)
   const [assignments, setAssignments] = useState<any[]>([])
   const [modules, setModules] = useState<any[]>([])
+  const [teachers, setTeachers] = useState<any[]>([])
   const [students, setStudents] = useState<any[]>([])
   const [mySubmissions, setMySubmissions] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
@@ -28,14 +29,17 @@ export default function KlasDetailPage() {
     const supabase = getSupabase()
     const isTeacher = ['teacher','admin','super_admin'].includes(profile!.role)
 
-    const { data: k } = await supabase.from('classes').select('*, school_years(name)').eq('id', klasId).single()
+    const [{ data: k }, { data: a }, { data: m }, { data: tc }] = await Promise.all([
+      supabase.from('classes').select('*, school_years(name)').eq('id', klasId).single(),
+      supabase.from('assignments').select('*').eq('class_id', klasId).eq('is_published', true).order('due_date', { ascending: true }),
+      supabase.from('lesson_modules').select('*, module_documents(id)').eq('class_id', klasId).eq('is_visible', true).order('order_index'),
+      supabase.from('class_teachers').select('profiles(id, first_name, last_name, email)').eq('class_id', klasId),
+    ])
+
     setKlas(k)
-
-    const { data: a } = await supabase.from('assignments').select('*').eq('class_id', klasId).eq('is_published', true).order('due_date', { ascending: true })
     setAssignments(a ?? [])
-
-    const { data: m } = await supabase.from('lesson_modules').select('*, module_documents(id)').eq('class_id', klasId).eq('is_visible', true).order('order_index')
     setModules(m ?? [])
+    setTeachers(tc?.map((x: any) => x.profiles).filter(Boolean) ?? [])
 
     if (isTeacher) {
       const { data: s } = await supabase.from('class_students').select('profiles(id, first_name, last_name)').eq('class_id', klasId)
@@ -60,10 +64,17 @@ export default function KlasDetailPage() {
   return (
     <div className="animate-slide-up">
       <div className="mb-6">
-        <Link href="/klassen" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4 transition-colors"><ArrowLeft size={15}/> Terug naar klassen</Link>
+        <Link href="/klassen" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4 transition-colors">
+          <ArrowLeft size={15} /> Terug naar klassen
+        </Link>
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-xl" style={{ backgroundColor: klas.color }}>{klas.name[0]}</div>
-          <div><h1 className="page-title">{klas.name}</h1><p className="page-subtitle">{klas.school_years?.name}{klas.description && ` · ${klas.description}`}</p></div>
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-xl" style={{ backgroundColor: klas.color }}>
+            {klas.name[0]}
+          </div>
+          <div>
+            <h1 className="page-title">{klas.name}</h1>
+            <p className="page-subtitle">{klas.school_years?.name}{klas.description && ` · ${klas.description}`}</p>
+          </div>
         </div>
       </div>
 
@@ -109,25 +120,61 @@ export default function KlasDetailPage() {
           </div>
         </div>
 
-        {isTeacher && (
+        <div className="space-y-4">
+          {/* Teachers */}
           <div className="card p-6 h-fit">
             <div className="flex items-center gap-2 mb-4">
-              <Users size={18} className="text-primary-600"/>
-              <h2 className="font-semibold text-gray-900">Leerlingen</h2>
-              <span className="ml-auto text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{students.length}</span>
+              <GraduationCap size={18} className="text-primary-600" />
+              <h2 className="font-semibold text-gray-900">Leerkrachten</h2>
             </div>
-            {students.length === 0 ? <p className="text-sm text-gray-400 text-center py-4">Geen leerlingen toegewezen.</p> : (
+            {teachers.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-2">Geen leerkracht toegewezen.</p>
+            ) : (
               <div className="space-y-1">
-                {students.map((s: any) => (
-                  <div key={s.id} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 transition-colors">
-                    <div className="w-7 h-7 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">{s.first_name[0]}{s.last_name[0]}</div>
-                    <span className="text-sm text-gray-700">{s.first_name} {s.last_name}</span>
+                {teachers.map((t: any) => (
+                  <div key={t.id} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 transition-colors group">
+                    <div className="w-7 h-7 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">
+                      {t.first_name?.[0]}{t.last_name?.[0]}
+                    </div>
+                    <span className="text-sm text-gray-700 flex-1 min-w-0 truncate">{t.first_name} {t.last_name}</span>
+                    {t.email && (
+                      <a
+                        href={`mailto:${t.email}`}
+                        className="text-gray-300 hover:text-primary-600 transition-colors p-0.5"
+                        title={`Mail ${t.first_name}`}
+                      >
+                        <Mail size={14} />
+                      </a>
+                    )}
                   </div>
                 ))}
               </div>
             )}
           </div>
-        )}
+
+          {/* Students (teachers/admins only) */}
+          {isTeacher && (
+            <div className="card p-6 h-fit">
+              <div className="flex items-center gap-2 mb-4">
+                <Users size={18} className="text-primary-600" />
+                <h2 className="font-semibold text-gray-900">Leerlingen</h2>
+                <span className="ml-auto text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{students.length}</span>
+              </div>
+              {students.length === 0 ? <p className="text-sm text-gray-400 text-center py-4">Geen leerlingen toegewezen.</p> : (
+                <div className="space-y-1">
+                  {students.map((s: any) => (
+                    <div key={s.id} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="w-7 h-7 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">
+                        {s.first_name[0]}{s.last_name[0]}
+                      </div>
+                      <span className="text-sm text-gray-700">{s.first_name} {s.last_name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
