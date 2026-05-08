@@ -7,6 +7,7 @@ import { PageLoader } from '@/components/ui/PageShell'
 import { getDeadlineLabel } from '@/lib/utils'
 import { BookOpen, FileText, GraduationCap, Users, Clock, CheckCircle2, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import { AnnouncementsCard } from '@/components/features/announcements/AnnouncementsCard'
 
 export default function DashboardPage() {
   const { profile, loading: profileLoading } = useProfile()
@@ -61,6 +62,7 @@ export default function DashboardPage() {
           <h1 className="page-title">Salam {profile?.first_name} 👋</h1>
           <p className="page-subtitle">Overzicht van jouw leeractiviteiten</p>
         </div>
+        <AnnouncementsCard profile={profile!} />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <div className="stat-card"><div className="stat-icon bg-primary-50"><GraduationCap className="text-primary-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{enrollments?.length ?? 0}</div><div className="text-sm text-gray-500">Klassen</div></div></div>
           <div className="stat-card"><div className="stat-icon bg-amber-50"><Clock className="text-amber-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{assignments?.length ?? 0}</div><div className="text-sm text-gray-500">Openstaand huiswerk</div></div></div>
@@ -110,6 +112,7 @@ export default function DashboardPage() {
           <h1 className="page-title">Salam {profile?.first_name} 👋</h1>
           <p className="page-subtitle">Overzicht van uw klassen</p>
         </div>
+        <AnnouncementsCard profile={profile!} />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <div className="stat-card"><div className="stat-icon bg-primary-50"><GraduationCap className="text-primary-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{teachingClasses?.length ?? 0}</div><div className="text-sm text-gray-500">Mijn klassen</div></div></div>
           <div className="stat-card"><div className="stat-icon bg-blue-50"><FileText className="text-blue-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{assignmentCount ?? 0}</div><div className="text-sm text-gray-500">Opdrachten aangemaakt</div></div></div>
@@ -140,6 +143,7 @@ export default function DashboardPage() {
         <h1 className="page-title">Salam {profile?.first_name} 👋</h1>
         <p className="page-subtitle">Overzicht van uw school</p>
       </div>
+      <AnnouncementsCard profile={profile!} />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <div className="stat-card"><div className="stat-icon bg-primary-50"><GraduationCap className="text-primary-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{classCount ?? 0}</div><div className="text-sm text-gray-500">Actieve klassen</div></div></div>
         <div className="stat-card"><div className="stat-icon bg-blue-50"><BookOpen className="text-blue-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{teacherCount ?? 0}</div><div className="text-sm text-gray-500">Leerkrachten</div></div></div>
