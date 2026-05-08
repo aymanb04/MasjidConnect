@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
-import { formatDate } from '@/lib/utils'
-import { Building2, Users, TrendingUp, Shield, Plus, X, Loader2 } from 'lucide-react'
+import { formatDate, getRoleBadge } from '@/lib/utils'
+import { Building2, Users, TrendingUp, Shield, Plus, X, Loader2, ChevronDown, ChevronRight } from 'lucide-react'
 import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
+import { DeleteUserButton } from '@/components/features/admin/DeleteUserButton'
 
 export default function SuperAdminPage() {
   const { profile, loading: profileLoading } = useProfile()
@@ -14,6 +15,9 @@ export default function SuperAdminPage() {
   const [totalUsers, setTotalUsers] = useState(0)
   const [loading, setLoading]     = useState(true)
   const [showAdd, setShowAdd]     = useState(false)
+  const [expandedTenant, setExpandedTenant] = useState<string | null>(null)
+  const [tenantUsers, setTenantUsers] = useState<Record<string, any[]>>({})
+  const [usersLoading, setUsersLoading] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (!profile || profile.role !== 'super_admin') return
@@ -26,6 +30,30 @@ export default function SuperAdminPage() {
     setTenants(t ?? [])
     setTotalUsers(count ?? 0)
     setLoading(false)
+  }
+
+  async function toggleTenant(tenantId: string) {
+    if (expandedTenant === tenantId) {
+      setExpandedTenant(null)
+      return
+    }
+    setExpandedTenant(tenantId)
+    if (tenantUsers[tenantId]) return
+    setUsersLoading(prev => ({ ...prev, [tenantId]: true }))
+    const { data } = await supabase.from('profiles').select('*').eq('tenant_id', tenantId).eq('is_active', true).order('last_name')
+    setTenantUsers(prev => ({ ...prev, [tenantId]: data ?? [] }))
+    setUsersLoading(prev => ({ ...prev, [tenantId]: false }))
+  }
+
+  function reloadTenantUsers(tenantId: string) {
+    setTenantUsers(prev => { const next = { ...prev }; delete next[tenantId]; return next })
+    setUsersLoading(prev => ({ ...prev, [tenantId]: true }))
+    supabase.from('profiles').select('*').eq('tenant_id', tenantId).eq('is_active', true).order('last_name')
+      .then(({ data }) => {
+        setTenantUsers(prev => ({ ...prev, [tenantId]: data ?? [] }))
+        setUsersLoading(prev => ({ ...prev, [tenantId]: false }))
+        loadData()
+      })
   }
 
   if (profileLoading || loading) return <PageLoader />
@@ -89,28 +117,80 @@ export default function SuperAdminPage() {
         </div>
         <div className="divide-y divide-border">
           {tenants.map((t: any) => (
-            <div key={t.id} className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50/70 transition-colors">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center font-semibold text-sm flex-shrink-0"
-                style={{ backgroundColor: '#EEF6F1', color: '#1B6B4A' }}>
-                {t.name[0]}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900">{t.name}</div>
-                <div className="text-xs text-gray-400 mt-0.5">
-                  {t.city && `${t.city} · `}masjidconnect.be/{t.slug}
+            <div key={t.id}>
+              <button
+                onClick={() => toggleTenant(t.id)}
+                className="w-full flex items-center gap-4 px-6 py-4 hover:bg-gray-50/70 transition-colors text-left"
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center font-semibold text-sm flex-shrink-0 overflow-hidden"
+                  style={{ backgroundColor: '#EEF6F1', color: '#1B6B4A' }}>
+                  {t.logo_url ? (
+                    <img src={t.logo_url} alt="" className="w-full h-full object-cover rounded-xl"/>
+                  ) : (
+                    t.name[0]
+                  )}
                 </div>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <span className={`badge ${statusColors[t.subscription_status]}`}>
-                  {statusLabels[t.subscription_status]}
-                </span>
-                <div className="text-xs text-gray-400 mt-1">
-                  €{t.subscription_price}/{t.subscription_interval === 'monthly' ? 'mnd' : 'jaar'}
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-gray-900">{t.name}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    {t.city && `${t.city} · `}masjidconnect.be/{t.slug}
+                    {t.website_url && ` · ${t.website_url}`}
+                  </div>
                 </div>
-              </div>
-              <div className="text-xs text-gray-400 flex-shrink-0 hidden sm:block">
-                Sinds {formatDate(t.created_at)}
-              </div>
+                <div className="text-right flex-shrink-0">
+                  <span className={`badge ${statusColors[t.subscription_status]}`}>
+                    {statusLabels[t.subscription_status]}
+                  </span>
+                  <div className="text-xs text-gray-400 mt-1">
+                    €{t.subscription_price}/{t.subscription_interval === 'monthly' ? 'mnd' : 'jaar'}
+                  </div>
+                </div>
+                <div className="text-xs text-gray-400 flex-shrink-0 hidden sm:block">
+                  Sinds {formatDate(t.created_at)}
+                </div>
+                {expandedTenant === t.id
+                  ? <ChevronDown size={15} className="text-gray-400 flex-shrink-0"/>
+                  : <ChevronRight size={15} className="text-gray-400 flex-shrink-0"/>
+                }
+              </button>
+
+              {/* Expanded users */}
+              {expandedTenant === t.id && (
+                <div className="px-6 pb-4 bg-gray-50/50 border-t border-border">
+                  <div className="flex items-center justify-between py-3 mb-2">
+                    <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                      <Users size={14}/> Gebruikers
+                    </span>
+                  </div>
+                  {usersLoading[t.id] ? (
+                    <div className="flex items-center gap-2 py-3 text-sm text-gray-400">
+                      <Loader2 size={14} className="animate-spin"/> Laden…
+                    </div>
+                  ) : (tenantUsers[t.id] ?? []).length === 0 ? (
+                    <p className="text-sm text-gray-400 py-2">Geen gebruikers gevonden.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {(tenantUsers[t.id] ?? []).map((u: any) => {
+                        const rb = getRoleBadge(u.role)
+                        return (
+                          <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white transition-colors group border border-transparent hover:border-border">
+                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
+                              style={{ backgroundColor: '#EEF6F1', color: '#1B6B4A' }}>
+                              {u.first_name?.[0]}{u.last_name?.[0]}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-800">{u.first_name} {u.last_name}</div>
+                              <div className="text-xs text-gray-400">{u.email}</div>
+                            </div>
+                            <span className={`badge ${rb.color}`}>{rb.label}</span>
+                            <DeleteUserButton userId={u.id} name={`${u.first_name} ${u.last_name}`} onDeleted={() => reloadTenantUsers(t.id)}/>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
           {!tenants.length && (
@@ -136,7 +216,7 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [form, setForm]       = useState({
-    name: '', slug: '', city: '', email: '',
+    name: '', slug: '', city: '', email: '', logo_url: '', website_url: '',
     subscription_price: '500', subscription_status: 'active',
     subscription_interval: 'yearly',
     admin_first: '', admin_last: '', admin_email: '',
@@ -154,12 +234,13 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
     setLoading(true)
     setError('')
     try {
-      // 1. Moskee aanmaken
       const { data: tenant, error: tenantErr } = await supabase.from('tenants').insert({
         name: form.name.trim(),
         slug: form.slug.trim(),
         city: form.city || null,
         email: form.email || null,
+        logo_url: form.logo_url || null,
+        website_url: form.website_url || null,
         subscription_status: form.subscription_status,
         subscription_price: parseFloat(form.subscription_price),
         subscription_interval: form.subscription_interval,
@@ -172,7 +253,6 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
         return
       }
 
-      // 2. Schooljaar automatisch aanmaken
       const year = new Date().getFullYear()
       await supabase.from('school_years').insert({
         tenant_id: tenant!.id,
@@ -182,7 +262,6 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
         is_active: true,
       })
 
-      // 3. Admin account aanmaken als ingevuld
       if (form.admin_email) {
         const { error: adminErr } = await supabase.auth.signUp({
           email: form.admin_email.trim().toLowerCase(),
@@ -252,6 +331,20 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
                   <input type="email" value={form.email}
                     onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
                     placeholder="info@moskee.be" className="input"/>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Logo URL</label>
+                  <input type="url" value={form.logo_url}
+                    onChange={e => setForm(p => ({ ...p, logo_url: e.target.value }))}
+                    placeholder="https://..." className="input"/>
+                </div>
+                <div>
+                  <label className="label">Website</label>
+                  <input type="url" value={form.website_url}
+                    onChange={e => setForm(p => ({ ...p, website_url: e.target.value }))}
+                    placeholder="https://moskee.be" className="input"/>
                 </div>
               </div>
             </div>
