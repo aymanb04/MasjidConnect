@@ -58,6 +58,7 @@ export function InviteUserButton({ tenantId, classes: initialClasses, onInvited 
           tenant_id:  form.tenant_id,
           class_id:   form.class_id || null,
           class_role: form.role,
+          invited_by: profile?.id,
         })
       })
 

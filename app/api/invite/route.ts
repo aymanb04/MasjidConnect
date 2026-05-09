@@ -9,7 +9,7 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: Request) {
     try {
-        const { email, first_name, last_name, role, tenant_id, class_id, class_role } = await request.json()
+        const { email, first_name, last_name, role, tenant_id, class_id, class_role, invited_by } = await request.json()
 
         // Nodig gebruiker uit via admin API
         const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
@@ -18,6 +18,18 @@ export async function POST(request: Request) {
         })
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+        // Schrijf naar invitations tabel zodat admin openstaande uitnodigingen kan zien
+        if (invited_by) {
+            await supabaseAdmin.from('invitations').insert({
+                tenant_id,
+                email,
+                role,
+                class_id: class_id || null,
+                invited_by,
+                token: data.user!.id,
+            })
+        }
 
         // Wijs aan klas toe
         if (class_id && data.user) {
