@@ -14,7 +14,7 @@ export async function POST(request: Request) {
         // Nodig gebruiker uit via admin API
         const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
             data: { first_name, last_name, role, tenant_id },
-            redirectTo: `${request.headers.get('origin')}/reset-password`,
+            redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? request.headers.get('origin')}/reset-password`,
         })
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 })
