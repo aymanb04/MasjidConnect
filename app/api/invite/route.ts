@@ -27,7 +27,6 @@ export async function POST(request: Request) {
                 role,
                 class_id: class_id || null,
                 invited_by,
-                token: data.user!.id,
             })
         }
 
