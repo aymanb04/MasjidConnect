@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase/singleton'
 import { useRouter } from 'next/navigation'
 import { Upload, X, CheckCircle2, Loader2, FileText, RotateCcw } from 'lucide-react'
 import { formatFileSize, getFileIcon, getSubmissionStatusBadge, cn } from '@/lib/utils'
@@ -27,7 +27,6 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
   const [dragging, setDragging] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const router  = useRouter()
-  const supabase = createClient()
 
   const sub = existingSubmission
   const sb  = sub ? getSubmissionStatusBadge(sub.status) : null

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase/singleton'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, Clock, Download, MessageSquare, Star, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { formatFileSize, getFileIcon, getSubmissionStatusBadge, formatDateTime, cn } from '@/lib/utils'
@@ -18,8 +18,7 @@ export default function TeacherSubmissionsView({ submissions, studentCount, assi
   const [feedbacks, setFeedbacks] = useState<Record<string, { score: string; comment: string }>>({})
   const [saving, setSaving]       = useState<string | null>(null)
   const [saved, setSaved]         = useState<Set<string>>(new Set())
-  const router   = useRouter()
-  const supabase = createClient()
+  const router = useRouter()
 
   const submitted = submissions.filter(s => s.status !== 'draft')
   const notSubmitted = studentCount - submitted.length
