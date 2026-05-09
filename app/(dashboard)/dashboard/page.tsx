@@ -38,7 +38,13 @@ export default function DashboardPage() {
       const { data: teaching } = await supabase.from('class_teachers').select('classes(id, name, color)').eq('teacher_id', profile!.id)
       const classIds = teaching?.map((c: any) => c.classes?.id).filter(Boolean) ?? []
       const { count: assignmentCount } = await supabase.from('assignments').select('*', { count: 'exact', head: true }).in('class_id', classIds)
-      const { count: submissionCount } = await supabase.from('submissions').select('*', { count: 'exact', head: true }).eq('status', 'submitted')
+      const { data: assignmentRows } = classIds.length > 0
+        ? await supabase.from('assignments').select('id').in('class_id', classIds)
+        : { data: [] }
+      const assignmentIds = assignmentRows?.map((a: any) => a.id) ?? []
+      const { count: submissionCount } = assignmentIds.length > 0
+        ? await supabase.from('submissions').select('*', { count: 'exact', head: true }).in('assignment_id', assignmentIds).eq('status', 'submitted')
+        : { count: 0 }
       setData({ teachingClasses: teaching, assignmentCount, submissionCount })
     } else {
       const tid = profile!.tenant_id
