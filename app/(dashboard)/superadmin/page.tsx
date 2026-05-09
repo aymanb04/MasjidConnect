@@ -263,25 +263,17 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
       })
 
       if (form.admin_email) {
-        const { error: adminErr } = await supabase.auth.signUp({
-          email: form.admin_email.trim().toLowerCase(),
-          password: crypto.randomUUID(),
-          options: {
-            data: {
-              first_name: form.admin_first.trim() || 'Admin',
-              last_name:  form.admin_last.trim()  || form.name,
-              role:       'admin',
-              tenant_id:  tenant!.id,
-            }
-          }
+        await fetch('/api/invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email:      form.admin_email.trim().toLowerCase(),
+            first_name: form.admin_first.trim() || 'Admin',
+            last_name:  form.admin_last.trim()  || form.name,
+            role:       'admin',
+            tenant_id:  tenant!.id,
+          }),
         })
-
-        if (!adminErr) {
-          await supabase.auth.resetPasswordForEmail(
-            form.admin_email.trim().toLowerCase(),
-            { redirectTo: `${window.location.origin}/login` }
-          )
-        }
       }
 
       onCreated()
