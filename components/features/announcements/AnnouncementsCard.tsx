@@ -11,7 +11,8 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
   const [classes, setClasses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ title: '', body: '', class_id: '' })
+  const [form, setForm] = useState({ title: '', content: '', class_id: '' })
+  const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
 
   const canPost = ['admin', 'super_admin', 'teacher'].includes(profile.role)
@@ -46,7 +47,8 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
         .order('name')
       setClasses(data ?? [])
     }
-    setForm({ title: '', body: '', class_id: '' })
+    setForm({ title: '', content: '', class_id: '' })
+    setFormError('')
     setShowForm(true)
   }
 
@@ -54,16 +56,19 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
     if (!form.title.trim()) return
     if (profile.role === 'teacher' && !form.class_id) return
     setSaving(true)
+    setFormError('')
     const { error } = await supabase.from('announcements').insert({
       tenant_id: profile.tenant_id,
       created_by: profile.id,
       title: form.title.trim(),
-      body: form.body.trim() || null,
+      content: form.content.trim() || null,
       class_id: form.class_id || null,
     })
     if (!error) {
       setShowForm(false)
       loadAnnouncements()
+    } else {
+      setFormError(error.message)
     }
     setSaving(false)
   }
@@ -104,8 +109,8 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
           />
           <textarea
             placeholder="Bericht (optioneel)"
-            value={form.body}
-            onChange={e => setForm(p => ({ ...p, body: e.target.value }))}
+            value={form.content}
+            onChange={e => setForm(p => ({ ...p, content: e.target.value }))}
             className="input resize-none h-20"
           />
           <select
@@ -123,6 +128,9 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+          {formError && (
+            <p className="text-xs text-red-500">{formError}</p>
+          )}
           <div className="flex gap-2 justify-end">
             <button onClick={() => setShowForm(false)} className="btn-secondary text-xs py-1.5 px-3">
               Annuleren
@@ -171,8 +179,8 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
                       </button>
                     )}
                   </div>
-                  {ann.body && (
-                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{ann.body}</p>
+                  {ann.content && (
+                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{ann.content}</p>
                   )}
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                     <span className="text-xs text-gray-400">

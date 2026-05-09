@@ -175,7 +175,7 @@ export interface Announcement {
   class_id?: string
   created_by: string
   title: string
-  body?: string
+  content?: string
   created_at: string
   // joined
   creator?: Pick<Profile, 'id' | 'first_name' | 'last_name'>
