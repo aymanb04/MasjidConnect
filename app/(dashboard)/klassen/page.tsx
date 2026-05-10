@@ -46,9 +46,10 @@ export default function KlassenPage() {
 
     } else if (profile!.role === 'super_admin') {
       // Super admin ziet alle klassen van alle moskeeën
+      // FK hint needed: both classes and school_years have FKs to tenants
       const { data: d } = await supabase
         .from('classes')
-        .select('*, school_years(name), tenants(name)')
+        .select('*, school_years(name), tenants!classes_tenant_id_fkey(name)')
         .eq('is_archived', false)
         .order('name')
       data = d ?? []
