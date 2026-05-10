@@ -27,6 +27,14 @@ export interface Tenant {
   updated_at: string
 }
 
+export interface Group {
+  id: string
+  tenant_id: string
+  school_year_id: string
+  name: string
+  created_at: string
+}
+
 export interface SchoolYear {
   id: string
   tenant_id: string
@@ -58,6 +66,7 @@ export interface Class {
   id: string
   tenant_id: string
   school_year_id: string
+  group_id?: string
   name: string
   description?: string
   color: string
@@ -67,6 +76,7 @@ export interface Class {
   updated_at: string
   // joined
   school_year?: SchoolYear
+  group?: Group
   teacher_count?: number
   student_count?: number
   teachers?: Profile[]
