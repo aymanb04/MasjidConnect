@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { Upload, X, Loader2, CheckCircle2, AlertCircle, FileText, ArrowRight } from 'lucide-react'
 
@@ -12,30 +12,36 @@ interface ImportResult {
 
 interface Props {
     tenantId: string
-    classes: any[]
     onImported: () => void
 }
 
-// Velden die het systeem verwacht
 const SYSTEM_FIELDS = [
-    { key: 'voornaam',   label: 'Voornaam',   required: true },
-    { key: 'achternaam', label: 'Achternaam', required: true },
-    { key: 'email',      label: 'E-mail',     required: true },
+    { key: 'voornaam',   label: 'Voornaam',   required: true  },
+    { key: 'achternaam', label: 'Achternaam', required: true  },
+    { key: 'email',      label: 'E-mail',     required: true  },
     { key: 'rol',        label: 'Rol',        required: false },
-    { key: 'klas',       label: 'Klas',       required: false },
+    { key: 'groep',      label: 'Groep',      required: false },
 ]
 
-export default function CsvImportButton({ tenantId, classes, onImported }: Props) {
+export default function CsvImportButton({ tenantId, onImported }: Props) {
     const [open, setOpen]           = useState(false)
     const [step, setStep]           = useState<'upload' | 'mapping' | 'preview' | 'done'>('upload')
     const [rawHeaders, setRawHeaders] = useState<string[]>([])
     const [rawRows, setRawRows]     = useState<Record<string, string>[]>([])
     const [mapping, setMapping]     = useState<Record<string, string>>({})
     const [mappedRows, setMappedRows] = useState<any[]>([])
+    const [groups, setGroups]       = useState<any[]>([])
     const [loading, setLoading]     = useState(false)
     const [results, setResults]     = useState<ImportResult[]>([])
     const [error, setError]         = useState('')
     const fileRef = useRef<HTMLInputElement>(null)
+
+    // Load groups when modal opens
+    useEffect(() => {
+        if (!open || !tenantId) return
+        supabase.from('groups').select('id, name').eq('tenant_id', tenantId).order('name')
+            .then(({ data }) => setGroups(data ?? []))
+    }, [open, tenantId])
 
     function detectSeparator(line: string) {
         if (line.includes(';')) return ';'
@@ -44,7 +50,7 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
     }
 
     function parseRaw(text: string) {
-        const clean = text.replace(/^\uFEFF/, '').trim()
+        const clean = text.replace(/^﻿/, '').trim()
         const lines = clean.split('\n').filter(l => l.trim())
         if (!lines.length) return { headers: [], rows: [] }
 
@@ -69,24 +75,19 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
         return { headers, rows }
     }
 
-    // Probeer automatisch te mappen op basis van kolomnamen
     function autoMap(headers: string[]): Record<string, string> {
         const map: Record<string, string> = {}
         const aliases: Record<string, string[]> = {
             voornaam:   ['voornaam', 'firstname', 'first_name', 'naam', 'name', 'prenom', 'prénom'],
-            achternaam: ['achternaam', 'lastname', 'last_name', 'familienaam', 'naam2', 'surname', 'nom'],
+            achternaam: ['achternaam', 'lastname', 'last_name', 'familienaam', 'surname', 'nom'],
             email:      ['email', 'e-mail', 'emailadres', 'mail', 'courriel'],
             rol:        ['rol', 'role', 'type', 'functie'],
-            klas:       ['klas', 'class', 'groep', 'group', 'classe'],
+            groep:      ['groep', 'group', 'klas', 'class', 'classe', 'groupe'],
         }
-
         SYSTEM_FIELDS.forEach(field => {
-            const match = headers.find(h =>
-                aliases[field.key]?.includes(h.toLowerCase().trim())
-            )
+            const match = headers.find(h => aliases[field.key]?.includes(h.toLowerCase().trim()))
             if (match) map[field.key] = match
         })
-
         return map
     }
 
@@ -94,7 +95,6 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
         if (!file) return
         if (!file.name.endsWith('.csv')) { setError('Enkel CSV bestanden zijn toegestaan.'); return }
         setError('')
-
         const reader = new FileReader()
         reader.onload = e => {
             try {
@@ -110,26 +110,20 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
     }
 
     function applyMapping() {
-        // Valideer verplichte velden
         const missing = SYSTEM_FIELDS
             .filter(f => f.required && !mapping[f.key])
             .map(f => f.label)
-
-        if (missing.length) {
-            setError(`Verplichte velden niet gekoppeld: ${missing.join(', ')}`)
-            return
-        }
+        if (missing.length) { setError(`Verplichte velden niet gekoppeld: ${missing.join(', ')}`); return }
 
         const mapped = rawRows.map(row => ({
             voornaam:   mapping.voornaam   ? row[mapping.voornaam]   || '' : '',
             achternaam: mapping.achternaam ? row[mapping.achternaam] || '' : '',
             email:      mapping.email      ? row[mapping.email]      || '' : '',
             rol:        mapping.rol        ? row[mapping.rol]        || 'student' : 'student',
-            klas:       mapping.klas       ? row[mapping.klas]       || '' : '',
+            groep:      mapping.groep      ? row[mapping.groep]      || '' : '',
         })).filter(r => r.email && r.email.includes('@'))
 
         if (!mapped.length) { setError('Geen geldige e-mailadressen gevonden.'); return }
-
         setMappedRows(mapped)
         setError('')
         setStep('preview')
@@ -142,16 +136,18 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
         return 'student'
     }
 
+    function findGroup(name: string) {
+        return groups.find(g => g.name.toLowerCase() === name.toLowerCase())
+    }
+
     async function handleImport() {
         setLoading(true)
         const importResults: ImportResult[] = []
 
         for (const row of mappedRows) {
             try {
-                const role = normalizeRole(row.rol)
-                const klas = row.klas
-                    ? classes.find(c => c.name.toLowerCase() === row.klas.toLowerCase())
-                    : null
+                const role  = normalizeRole(row.rol)
+                const group = row.groep ? findGroup(row.groep) : null
 
                 const res = await fetch('/api/invite', {
                     method: 'POST',
@@ -162,9 +158,9 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
                         last_name:  row.achternaam,
                         role,
                         tenant_id:  tenantId,
-                        class_id:   klas?.id ?? null,
+                        group_id:   role === 'student' ? (group?.id ?? null) : null,
                         class_role: role,
-                    })
+                    }),
                 })
 
                 const data = await res.json()
@@ -176,11 +172,10 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
                 importResults.push({
                     email: row.email,
                     status: 'success',
-                    message: klas ? `Toegewezen aan ${klas.name}` : 'Account aangemaakt'
+                    message: group ? `Ingeschreven in groep ${group.name}` : 'Account aangemaakt',
                 })
 
                 await new Promise(r => setTimeout(r, 300))
-
             } catch (e: any) {
                 importResults.push({ email: row.email, status: 'error', message: e.message })
             }
@@ -228,11 +223,10 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
                                     <div className="flex items-center gap-1.5 mt-0.5">
                                         {['Upload','Kolommen','Controleer','Klaar'].map((s, i) => (
                                             <div key={s} className="flex items-center gap-1.5">
-                        <span className={`text-xs ${
-                            ['upload','mapping','preview','done'].indexOf(step) >= i
-                                ? 'text-primary-600 font-medium'
-                                : 'text-gray-400'
-                        }`}>{s}</span>
+                                                <span className={`text-xs ${
+                                                    ['upload','mapping','preview','done'].indexOf(step) >= i
+                                                        ? 'text-primary-600 font-medium' : 'text-gray-400'
+                                                }`}>{s}</span>
                                                 {i < 3 && <span className="text-gray-300 text-xs">›</span>}
                                             </div>
                                         ))}
@@ -258,13 +252,16 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
                                 </div>
                                 {error && <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>}
                                 <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-border">
-                                    <p className="text-xs font-medium text-gray-600 mb-2">Uw CSV kan er zo uitzien — kolomnamen worden in de volgende stap gekoppeld:</p>
+                                    <p className="text-xs font-medium text-gray-600 mb-2">Voorbeeldformaat — kolomnamen worden in de volgende stap gekoppeld:</p>
                                     <code className="text-xs text-gray-500 block leading-relaxed">
-                                        Voornaam;Naam;Email;Klas<br/>
+                                        Voornaam;Naam;Email;Groep<br/>
                                         Ahmed;Hassan;ahmed@email.be;Groep 1<br/>
-                                        first_name,last_name,email,class<br/>
-                                        Ahmed,Hassan,ahmed@email.be,Group 1
+                                        Fatima;Nour;fatima@email.be;Groep 2
                                     </code>
+                                    <p className="text-xs text-gray-400 mt-2">
+                                        Leerlingen worden automatisch ingeschreven in alle vakken van hun groep.
+                                        {groups.length > 0 && ` Beschikbare groepen: ${groups.map(g => g.name).join(', ')}.`}
+                                    </p>
                                 </div>
                             </div>
                         )}
@@ -276,7 +273,6 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
                                     Koppel de kolommen uit uw bestand aan de velden van het systeem.
                                     <span className="ml-1 text-primary-600 font-medium">{rawRows.length} rijen gevonden.</span>
                                 </p>
-
                                 <div className="space-y-3">
                                     {SYSTEM_FIELDS.map(field => (
                                         <div key={field.key} className="flex items-center gap-3">
@@ -298,17 +294,16 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
                                             </select>
                                             {mapping[field.key] && (
                                                 <span className="text-xs text-gray-400 flex-shrink-0 max-w-24 truncate">
-                          bijv. {rawRows[0]?.[mapping[field.key]] || '—'}
-                        </span>
+                                                    bijv. {rawRows[0]?.[mapping[field.key]] || '—'}
+                                                </span>
                                             )}
                                         </div>
                                     ))}
                                 </div>
-
                                 {error && <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>}
-
                                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-700">
-                                    <strong>Rol:</strong> gebruik "student", "leerling", "teacher" of "leerkracht" in uw bestand. Onbekende waarden worden als leerling behandeld.
+                                    <strong>Rol:</strong> gebruik "student", "leerling", "teacher" of "leerkracht". Onbekende waarden → leerling.<br/>
+                                    <strong>Groep:</strong> naam moet exact overeenkomen met een bestaande groep. Leerlingen worden automatisch ingeschreven in alle vakken.
                                 </div>
                             </div>
                         )}
@@ -324,43 +319,44 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
                                         Mapping aanpassen
                                     </button>
                                 </div>
-
                                 <div className="border border-border rounded-xl overflow-hidden max-h-64 overflow-y-auto">
                                     <table className="w-full text-xs">
                                         <thead className="bg-gray-50 border-b border-border">
                                         <tr>
-                                            {['Voornaam','Achternaam','E-mail','Rol','Klas'].map(h => (
+                                            {['Voornaam','Achternaam','E-mail','Rol','Groep'].map(h => (
                                                 <th key={h} className="text-left px-3 py-2.5 font-medium text-gray-600">{h}</th>
                                             ))}
                                         </tr>
                                         </thead>
                                         <tbody className="divide-y divide-border">
-                                        {mappedRows.map((r, i) => (
-                                            <tr key={i} className="hover:bg-gray-50">
-                                                <td className="px-3 py-2">{r.voornaam || <span className="text-red-400">—</span>}</td>
-                                                <td className="px-3 py-2">{r.achternaam || <span className="text-red-400">—</span>}</td>
-                                                <td className="px-3 py-2 text-gray-500">{r.email}</td>
-                                                <td className="px-3 py-2">
-                            <span className={`badge ${normalizeRole(r.rol) === 'teacher' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
-                              {normalizeRole(r.rol) === 'teacher' ? 'Leerkracht' : 'Leerling'}
-                            </span>
-                                                </td>
-                                                <td className="px-3 py-2 text-gray-500">
-                                                    {r.klas
-                                                        ? classes.find(c => c.name.toLowerCase() === r.klas.toLowerCase())
-                                                            ? <span className="text-green-600">{r.klas}</span>
-                                                            : <span className="text-amber-500" title="Klas niet gevonden">{r.klas} ⚠</span>
-                                                        : '—'
-                                                    }
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {mappedRows.map((r, i) => {
+                                            const group = r.groep ? findGroup(r.groep) : null
+                                            return (
+                                                <tr key={i} className="hover:bg-gray-50">
+                                                    <td className="px-3 py-2">{r.voornaam || <span className="text-red-400">—</span>}</td>
+                                                    <td className="px-3 py-2">{r.achternaam || <span className="text-red-400">—</span>}</td>
+                                                    <td className="px-3 py-2 text-gray-500">{r.email}</td>
+                                                    <td className="px-3 py-2">
+                                                        <span className={`badge ${normalizeRole(r.rol) === 'teacher' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                            {normalizeRole(r.rol) === 'teacher' ? 'Leerkracht' : 'Leerling'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        {r.groep
+                                                            ? group
+                                                                ? <span className="text-green-600">{r.groep}</span>
+                                                                : <span className="text-amber-500" title="Groep niet gevonden">{r.groep} ⚠</span>
+                                                            : <span className="text-gray-400">—</span>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })}
                                         </tbody>
                                     </table>
                                 </div>
-
                                 <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
-                                    Elke gebruiker ontvangt een e-mail om zijn wachtwoord in te stellen. Oranje klasnamen worden niet herkend en de gebruiker wordt zonder klas aangemaakt.
+                                    Elke gebruiker ontvangt een uitnodigingsmail. Oranje groepsnamen worden niet herkend — maak eerst de groep aan in Beheer.
                                 </div>
                             </div>
                         )}
@@ -378,7 +374,6 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
                                         <div className="text-xs text-red-600 mt-1">Mislukt</div>
                                     </div>
                                 </div>
-
                                 {errorCount > 0 && (
                                     <div className="border border-border rounded-xl overflow-hidden max-h-48 overflow-y-auto mb-4">
                                         <div className="px-4 py-2.5 bg-gray-50 border-b border-border">
@@ -395,10 +390,9 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
                                         ))}
                                     </div>
                                 )}
-
                                 <div className="flex items-center gap-2 text-sm text-green-700">
                                     <CheckCircle2 size={16}/>
-                                    Import voltooid — nieuwe gebruikers ontvangen een e-mail om hun wachtwoord in te stellen.
+                                    Import voltooid — nieuwe gebruikers ontvangen een uitnodigingsmail.
                                 </div>
                             </div>
                         )}
@@ -411,9 +405,7 @@ export default function CsvImportButton({ tenantId, classes, onImported }: Props
                             {step === 'mapping' && (
                                 <>
                                     <button onClick={reset} className="btn-secondary flex-1 justify-center">Terug</button>
-                                    <button onClick={applyMapping} className="btn-primary flex-1 justify-center">
-                                        Doorgaan naar preview
-                                    </button>
+                                    <button onClick={applyMapping} className="btn-primary flex-1 justify-center">Doorgaan naar preview</button>
                                 </>
                             )}
                             {step === 'preview' && (

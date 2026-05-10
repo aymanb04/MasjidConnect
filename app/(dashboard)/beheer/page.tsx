@@ -115,8 +115,8 @@ export default function BeheerPage() {
               <Users size={17} className="text-primary-600"/> Gebruikers
             </h2>
             <div className="flex gap-2">
-              <CsvImportButton tenantId={profile.tenant_id!} classes={classes} onImported={loadData}/>
-              <InviteUserButton tenantId={profile.tenant_id!} classes={classes} onInvited={loadData}/>
+              <CsvImportButton tenantId={profile.tenant_id!} onImported={loadData}/>
+              <InviteUserButton tenantId={profile.tenant_id!} onInvited={loadData}/>
             </div>
           </div>
           <div className="space-y-1.5">
