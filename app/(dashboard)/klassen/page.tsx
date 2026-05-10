@@ -36,22 +36,23 @@ export default function KlassenPage() {
       data = d?.map((x: any) => x.classes).filter(Boolean) ?? []
 
     } else if (profile!.role === 'admin') {
-      const { data: d } = await supabase
+      const { data: d, error: e } = await supabase
         .from('classes')
         .select('*, school_years(name)')
         .eq('tenant_id', profile!.tenant_id)
         .eq('is_archived', false)
         .order('name')
+      if (e) console.error('[klassen] admin query error:', e)
       data = d ?? []
 
     } else if (profile!.role === 'super_admin') {
-      // Super admin ziet alle klassen van alle moskeeën
       // FK hint needed: both classes and school_years have FKs to tenants
-      const { data: d } = await supabase
+      const { data: d, error: e } = await supabase
         .from('classes')
         .select('*, school_years(name), tenants!classes_tenant_id_fkey(name)')
         .eq('is_archived', false)
         .order('name')
+      if (e) console.error('[klassen] super_admin query error:', e)
       data = d ?? []
     }
 
