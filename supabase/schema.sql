@@ -231,21 +231,29 @@ CREATE TABLE public.audit_logs (
 -- TRIGGER: auto-create profile on auth user creation
 -- ============================================================
 
-CREATE OR REPLACE FUNCTION handle_new_user()
+CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_tenant_id UUID := NULL;
 BEGIN
-  INSERT INTO profiles (id, first_name, last_name, role, tenant_id, email)
+  IF (NEW.raw_user_meta_data->>'tenant_id') IS NOT NULL
+     AND (NEW.raw_user_meta_data->>'tenant_id') != '' THEN
+    v_tenant_id := (NEW.raw_user_meta_data->>'tenant_id')::UUID;
+  END IF;
+
+  INSERT INTO public.profiles (id, first_name, last_name, role, tenant_id, email)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
     COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
     COALESCE(NEW.raw_user_meta_data->>'role', 'student'),
-    (NEW.raw_user_meta_data->>'tenant_id')::UUID,
+    v_tenant_id,
     NEW.email
-  );
+  )
+  ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
 
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
