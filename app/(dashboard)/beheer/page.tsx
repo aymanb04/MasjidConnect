@@ -30,7 +30,7 @@ export default function BeheerPage() {
     const [{ data: u }, { data: c }, { data: inv }] = await Promise.all([
       supabase.from('profiles').select('*').eq('tenant_id', tid).eq('is_active', true).order('last_name'),
       supabase.from('classes')
-        .select('*, school_years(name), class_students(id), class_teachers(profiles(first_name, last_name))')
+        .select('*, school_years(name), groups(name), class_students(id), class_teachers(profiles(first_name, last_name))')
         .eq('tenant_id', tid).eq('is_archived', false).order('name'),
       supabase.from('invitations').select('*').eq('tenant_id', tid).is('accepted_at', null)
         .order('created_at', { ascending: false }),
@@ -91,7 +91,14 @@ export default function BeheerPage() {
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
                   style={{ backgroundColor: klas.color }}>{klas.name[0]}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm text-gray-800">{klas.name}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm text-gray-800">{klas.name}</span>
+                    {klas.groups?.name && (
+                      <span className="text-xs text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                        {klas.groups.name}
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-gray-400">
                     {klas.class_students?.length ?? 0} leerlingen ·{' '}
                     {klas.class_teachers?.map((t: any) =>
