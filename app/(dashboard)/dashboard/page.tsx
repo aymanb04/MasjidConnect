@@ -46,6 +46,14 @@ export default function DashboardPage() {
         ? await supabase.from('submissions').select('*', { count: 'exact', head: true }).in('assignment_id', assignmentIds).eq('status', 'submitted')
         : { count: 0 }
       setData({ teachingClasses: teaching, assignmentCount, submissionCount })
+    } else if (role === 'super_admin') {
+      const [{ count: classCount }, { count: teacherCount }, { count: studentCount }, { count: tenantCount }] = await Promise.all([
+        supabase.from('classes').select('*', { count: 'exact', head: true }).eq('is_archived', false),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'teacher'),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'student'),
+        supabase.from('tenants').select('*', { count: 'exact', head: true }).eq('is_active', true),
+      ])
+      setData({ classCount, teacherCount, studentCount, tenantCount })
     } else {
       const tid = profile!.tenant_id
       const { count: classCount } = await supabase.from('classes').select('*', { count: 'exact', head: true }).eq('tenant_id', tid).eq('is_archived', false)
@@ -137,6 +145,28 @@ export default function DashboardPage() {
               </Link>
             ))}
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (role === 'super_admin') {
+    const { classCount, teacherCount, studentCount, tenantCount } = data
+    return (
+      <div className="animate-slide-up">
+        <div className="page-header">
+          <h1 className="page-title">Salam {profile?.first_name} 👋</h1>
+          <p className="page-subtitle">Platform overzicht</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+          <div className="stat-card"><div className="stat-icon bg-purple-50"><Users className="text-purple-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{tenantCount ?? 0}</div><div className="text-sm text-gray-500">Moskeeën</div></div></div>
+          <div className="stat-card"><div className="stat-icon bg-primary-50"><GraduationCap className="text-primary-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{classCount ?? 0}</div><div className="text-sm text-gray-500">Klassen</div></div></div>
+          <div className="stat-card"><div className="stat-icon bg-blue-50"><BookOpen className="text-blue-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{teacherCount ?? 0}</div><div className="text-sm text-gray-500">Leerkrachten</div></div></div>
+          <div className="stat-card"><div className="stat-icon bg-amber-50"><Users className="text-amber-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{studentCount ?? 0}</div><div className="text-sm text-gray-500">Leerlingen</div></div></div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link href="/superadmin" className="card-hover p-6 flex items-center gap-4"><div className="stat-icon bg-purple-50"><Users className="text-purple-600" size={22}/></div><div><div className="font-semibold text-gray-900">Moskeeën beheren</div><div className="text-sm text-gray-500 mt-0.5">Tenants, gebruikers en abonnementen</div></div></Link>
+          <Link href="/klassen" className="card-hover p-6 flex items-center gap-4"><div className="stat-icon bg-primary-50"><GraduationCap className="text-primary-600" size={22}/></div><div><div className="font-semibold text-gray-900">Alle klassen</div><div className="text-sm text-gray-500 mt-0.5">Klassen over alle moskeeën</div></div></Link>
         </div>
       </div>
     )
