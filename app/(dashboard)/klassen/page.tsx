@@ -1,17 +1,21 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, EmptyState } from '@/components/ui/PageShell'
-import { GraduationCap, Users, BookOpen } from 'lucide-react'
+import { GraduationCap, Users, BookOpen, Building2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function KlassenPage() {
   const { profile, loading: profileLoading } = useProfile()
+  const searchParams = useSearchParams()
   const [classes, setClasses]   = useState<any[]>([])
   const [countMap, setCountMap] = useState<Record<string, number>>({})
   const [loading, setLoading]   = useState(true)
+  const [mosques, setMosques]   = useState<{ id: string; name: string }[]>([])
+  const [mosqueFilter, setMosqueFilter] = useState<string>(searchParams?.get('mosque') ?? '')
 
   useEffect(() => {
     if (!profile) return
@@ -48,11 +52,22 @@ export default function KlassenPage() {
     } else if (profile!.role === 'super_admin') {
       const { data: d, error: e } = await supabase
         .from('classes')
-        .select('*, school_years(name), groups(name), tenants!classes_tenant_id_fkey(name)')
+        .select('*, school_years(name), groups(name), tenants!classes_tenant_id_fkey(id, name)')
         .eq('is_archived', false)
         .order('name')
       if (e) console.error('[klassen] super_admin query error:', e)
       data = d ?? []
+
+      // Build mosque list for filter dropdown
+      const seen = new Set<string>()
+      const uniqueMosques: { id: string; name: string }[] = []
+      for (const c of data) {
+        if (c.tenants?.id && !seen.has(c.tenants.id)) {
+          seen.add(c.tenants.id)
+          uniqueMosques.push({ id: c.tenants.id, name: c.tenants.name })
+        }
+      }
+      setMosques(uniqueMosques.sort((a, b) => a.name.localeCompare(b.name, 'nl')))
     }
 
     setClasses(data)
@@ -75,15 +90,33 @@ export default function KlassenPage() {
   const isSuperAdmin = profile?.role === 'super_admin'
   const isAdmin = ['admin', 'super_admin'].includes(profile?.role ?? '')
 
-  // Group classes by groep name; ungrouped classes go last
-  const grouped = classes.reduce((acc, klas) => {
-    const key = klas.groups?.name ?? ''
+  // Filter by mosque (super_admin only)
+  const filteredClasses = isSuperAdmin && mosqueFilter
+    ? classes.filter(c => c.tenant_id === mosqueFilter)
+    : classes
+
+  // Group: super_admin groups by tenantId+groupName, others by groupName
+  const grouped = filteredClasses.reduce((acc, klas) => {
+    const key = isSuperAdmin
+      ? `${klas.tenant_id}|||${klas.groups?.name ?? ''}`
+      : (klas.groups?.name ?? '')
     if (!acc[key]) acc[key] = []
     acc[key].push(klas)
     return acc
   }, {} as Record<string, any[]>)
 
   const groupKeys = Object.keys(grouped).sort((a, b) => {
+    if (isSuperAdmin) {
+      const tenantA = grouped[a][0]?.tenants?.name ?? ''
+      const tenantB = grouped[b][0]?.tenants?.name ?? ''
+      const cmp = tenantA.localeCompare(tenantB, 'nl')
+      if (cmp !== 0) return cmp
+      const [, groupA] = a.split('|||')
+      const [, groupB] = b.split('|||')
+      if (groupA === '') return 1
+      if (groupB === '') return -1
+      return groupA.localeCompare(groupB, 'nl')
+    }
     if (a === '') return 1
     if (b === '') return -1
     return a.localeCompare(b, 'nl')
@@ -101,7 +134,24 @@ export default function KlassenPage() {
         </p>
       </div>
 
-      {classes.length === 0 ? (
+      {/* Mosque filter — super_admin only */}
+      {isSuperAdmin && mosques.length > 0 && (
+        <div className="flex items-center gap-2 mb-6">
+          <Building2 size={15} className="text-gray-400 flex-shrink-0"/>
+          <select
+            value={mosqueFilter}
+            onChange={e => setMosqueFilter(e.target.value)}
+            className="input max-w-xs text-sm"
+          >
+            <option value="">Alle moskeeën ({classes.length} klassen)</option>
+            {mosques.map(m => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {filteredClasses.length === 0 ? (
         <EmptyState
           icon={<GraduationCap size={40}/>}
           title="Geen klassen gevonden"
@@ -109,59 +159,57 @@ export default function KlassenPage() {
         />
       ) : (
         <div className="space-y-8">
-          {groupKeys.map(groupKey => (
-            <div key={groupKey}>
-              {/* Group header */}
-              <div className="flex items-center gap-3 mb-4">
-                <h2 className="font-semibold text-gray-800 text-base">
-                  {groupKey || 'Zonder groep'}
-                </h2>
-                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                  {grouped[groupKey].length} {grouped[groupKey].length === 1 ? 'vak' : 'vakken'}
-                </span>
-                {/* School year — show once per group since all classes share the same year */}
-                {grouped[groupKey][0]?.school_years?.name && (
-                  <span className="text-xs text-gray-400">
-                    · {grouped[groupKey][0].school_years.name}
-                  </span>
-                )}
-              </div>
+          {groupKeys.map(groupKey => {
+            const [, groupName] = isSuperAdmin ? groupKey.split('|||') : ['', groupKey]
+            const mosqueName    = isSuperAdmin ? grouped[groupKey][0]?.tenants?.name : null
+            const schoolYear    = !isSuperAdmin ? grouped[groupKey][0]?.school_years?.name : null
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {grouped[groupKey].map((klas: any) => (
-                  <Link key={klas.id} href={`/klassen/${klas.id}`} className="card-hover p-5 flex flex-col gap-4">
-                    <div className="flex items-start justify-between">
+            return (
+              <div key={groupKey}>
+                <div className="flex items-center gap-3 mb-4">
+                  {mosqueName && (
+                    <span className="text-xs text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0">
+                      <Building2 size={10}/> {mosqueName}
+                    </span>
+                  )}
+                  <h2 className="font-semibold text-gray-800 text-base">
+                    {(isSuperAdmin ? groupName : groupKey) || 'Zonder groep'}
+                  </h2>
+                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                    {grouped[groupKey].length} {grouped[groupKey].length === 1 ? 'vak' : 'vakken'}
+                  </span>
+                  {schoolYear && (
+                    <span className="text-xs text-gray-400">· {schoolYear}</span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {grouped[groupKey].map((klas: any) => (
+                    <Link key={klas.id} href={`/klassen/${klas.id}`} className="card-hover p-5 flex flex-col gap-4">
                       <div className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg"
                         style={{ backgroundColor: klas.color ?? '#1B6B4A' }}>
                         {klas.name[0]}
                       </div>
-                      <div className="flex flex-col items-end gap-1">
-                        {isSuperAdmin && klas.tenants?.name && (
-                          <span className="text-xs text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full">
-                            {klas.tenants.name}
-                          </span>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{klas.name}</h3>
+                        {klas.description && (
+                          <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{klas.description}</p>
                         )}
                       </div>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{klas.name}</h3>
-                      {klas.description && (
-                        <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{klas.description}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-4 pt-2 border-t border-border">
-                      <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                        <Users size={13}/><span>{countMap[klas.id] ?? 0} leerlingen</span>
+                      <div className="flex items-center gap-4 pt-2 border-t border-border">
+                        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                          <Users size={13}/><span>{countMap[klas.id] ?? 0} leerlingen</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                          <BookOpen size={13}/><span>Huiswerk</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                        <BookOpen size={13}/><span>Huiswerk</span>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
+                    </Link>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

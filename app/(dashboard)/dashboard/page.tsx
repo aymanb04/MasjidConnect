@@ -29,11 +29,16 @@ export default function DashboardPage() {
       const classIds = enrollments?.map((e: any) => e.classes?.id).filter(Boolean) ?? []
       let assignments: any[] = []
       if (classIds.length > 0) {
-        const { data: a } = await supabase.from('assignments').select('*, classes(name)').in('class_id', classIds).eq('is_published', true).order('due_date', { ascending: true }).limit(5)
+        const { data: a } = await supabase.from('assignments').select('*, classes(name)').in('class_id', classIds).eq('is_published', true).order('due_date', { ascending: true })
         assignments = a ?? []
+        if (assignments.length > 0) {
+          const { data: subs } = await supabase.from('submissions').select('assignment_id').eq('student_id', profile!.id).in('assignment_id', assignments.map((x: any) => x.id))
+          const submittedIds = new Set(subs?.map((s: any) => s.assignment_id) ?? [])
+          assignments = assignments.filter((a: any) => !submittedIds.has(a.id))
+        }
       }
       const { count: submittedCount } = await supabase.from('submissions').select('*', { count: 'exact', head: true }).eq('student_id', profile!.id)
-      setData({ enrollments, assignments, submittedCount })
+      setData({ enrollments, assignments: assignments.slice(0, 5), submittedCount })
     } else if (role === 'teacher') {
       const { data: teaching } = await supabase.from('class_teachers').select('classes(id, name, color)').eq('teacher_id', profile!.id)
       const classIds = teaching?.map((c: any) => c.classes?.id).filter(Boolean) ?? []

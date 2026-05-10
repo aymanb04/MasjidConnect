@@ -30,7 +30,7 @@ export default function KlasDetailPage() {
     const isTeacher = ['teacher','admin','super_admin'].includes(profile!.role)
 
     const [{ data: k }, { data: a }, { data: m }, { data: tc }] = await Promise.all([
-      supabase.from('classes').select('*, school_years(name)').eq('id', klasId).single(),
+      supabase.from('classes').select('*, school_years(name), groups(name)').eq('id', klasId).single(),
       supabase.from('assignments').select('*').eq('class_id', klasId).eq('is_published', true).order('due_date', { ascending: true }),
       supabase.from('lesson_modules').select('*, module_documents(id)').eq('class_id', klasId).eq('is_visible', true).order('order_index'),
       supabase.from('class_teachers').select('profiles(id, first_name, last_name, email)').eq('class_id', klasId),
@@ -73,7 +73,9 @@ export default function KlasDetailPage() {
           </div>
           <div>
             <h1 className="page-title">{klas.name}</h1>
-            <p className="page-subtitle">{klas.school_years?.name}{klas.description && ` · ${klas.description}`}</p>
+            <p className="page-subtitle">
+              {[klas.groups?.name, klas.school_years?.name, klas.description].filter(Boolean).join(' · ')}
+            </p>
           </div>
         </div>
       </div>

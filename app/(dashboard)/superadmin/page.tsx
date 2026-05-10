@@ -5,15 +5,17 @@ import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { formatDate, getRoleBadge } from '@/lib/utils'
-import { Building2, Users, TrendingUp, Shield, Plus, X, Loader2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Building2, Users, TrendingUp, Shield, Plus, X, Loader2, ChevronDown, ChevronRight, GraduationCap } from 'lucide-react'
+import Link from 'next/link'
 import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 import { DeleteUserButton } from '@/components/features/admin/DeleteUserButton'
 
 export default function SuperAdminPage() {
   const { profile, loading: profileLoading } = useProfile()
-  const [tenants, setTenants]     = useState<any[]>([])
+  const [tenants, setTenants]       = useState<any[]>([])
   const [totalUsers, setTotalUsers] = useState(0)
-  const [loading, setLoading]     = useState(true)
+  const [classCount, setClassCount] = useState<Record<string, number>>({})
+  const [loading, setLoading]       = useState(true)
   const [showAdd, setShowAdd]     = useState(false)
   const [expandedTenant, setExpandedTenant] = useState<string | null>(null)
   const [tenantUsers, setTenantUsers] = useState<Record<string, any[]>>({})
@@ -25,10 +27,16 @@ export default function SuperAdminPage() {
   }, [profile])
 
   async function loadData() {
-    const { data: t } = await supabase.from('tenants').select('*').order('created_at', { ascending: false })
-    const { count }   = await supabase.from('profiles').select('*', { count: 'exact', head: true })
+    const [{ data: t }, { count }, { data: classRows }] = await Promise.all([
+      supabase.from('tenants').select('*').order('created_at', { ascending: false }),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }),
+      supabase.from('classes').select('tenant_id').eq('is_archived', false),
+    ])
+    const map: Record<string, number> = {}
+    classRows?.forEach((c: any) => { map[c.tenant_id] = (map[c.tenant_id] ?? 0) + 1 })
     setTenants(t ?? [])
     setTotalUsers(count ?? 0)
+    setClassCount(map)
     setLoading(false)
   }
 
@@ -161,6 +169,13 @@ export default function SuperAdminPage() {
                     <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
                       <Users size={14}/> Gebruikers
                     </span>
+                    <Link
+                      href={`/klassen?mosque=${t.id}`}
+                      className="flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700 font-medium"
+                    >
+                      <GraduationCap size={13}/>
+                      {classCount[t.id] ?? 0} klassen →
+                    </Link>
                   </div>
                   {usersLoading[t.id] ? (
                     <div className="flex items-center gap-2 py-3 text-sm text-gray-400">

@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { getRoleBadge, formatDate } from '@/lib/utils'
-import {Users, GraduationCap, Mail, Shield} from 'lucide-react'
+import { Users, GraduationCap, Mail, Shield, Archive, ChevronDown, ChevronRight, X, Loader2 } from 'lucide-react'
 import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 import { CreateClassButton } from '@/components/features/admin/CreateClassButton'
 import CsvImportButton from '@/components/features/admin/CsvImportButton'
@@ -17,6 +17,10 @@ export default function BeheerPage() {
   const [classes, setClasses]         = useState<any[]>([])
   const [invitations, setInvitations] = useState<any[]>([])
   const [loading, setLoading]         = useState(true)
+
+  const [expandedClass, setExpandedClass]     = useState<string | null>(null)
+  const [classStudents, setClassStudents]     = useState<Record<string, any[]>>({})
+  const [studentsLoading, setStudentsLoading] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (!profile) return
@@ -40,6 +44,33 @@ export default function BeheerPage() {
     setClasses(c ?? [])
     setInvitations(inv ?? [])
     setLoading(false)
+  }
+
+  async function toggleClass(classId: string) {
+    if (expandedClass === classId) { setExpandedClass(null); return }
+    setExpandedClass(classId)
+    if (classStudents[classId]) return
+    setStudentsLoading(prev => ({ ...prev, [classId]: true }))
+    const { data } = await supabase
+      .from('class_students')
+      .select('profiles!class_students_student_id_fkey(id, first_name, last_name)')
+      .eq('class_id', classId)
+    setClassStudents(prev => ({ ...prev, [classId]: data?.map((d: any) => d.profiles).filter(Boolean) ?? [] }))
+    setStudentsLoading(prev => ({ ...prev, [classId]: false }))
+  }
+
+  async function archiveClass(classId: string, name: string) {
+    if (!window.confirm(`'${name}' archiveren? Leerlingen verliezen geen toegang tot ingediend werk.`)) return
+    await supabase.from('classes').update({ is_archived: true }).eq('id', classId)
+    if (expandedClass === classId) setExpandedClass(null)
+    setClassStudents(prev => { const n = { ...prev }; delete n[classId]; return n })
+    loadData()
+  }
+
+  async function removeStudentFromClass(classId: string, studentId: string) {
+    await supabase.from('class_students').delete().eq('class_id', classId).eq('student_id', studentId)
+    setClassStudents(prev => ({ ...prev, [classId]: (prev[classId] ?? []).filter((s: any) => s.id !== studentId) }))
+    loadData()
   }
 
   if (profileLoading || loading) return <PageLoader />
@@ -87,26 +118,74 @@ export default function BeheerPage() {
           </div>
           <div className="space-y-2">
             {classes.map((klas: any) => (
-              <div key={klas.id} className="flex items-center gap-3 p-3.5 rounded-xl border border-border">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                  style={{ backgroundColor: klas.color }}>{klas.name[0]}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm text-gray-800">{klas.name}</span>
-                    {klas.groups?.name && (
-                      <span className="text-xs text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-full flex-shrink-0">
-                        {klas.groups.name}
-                      </span>
+              <div key={klas.id} className="rounded-xl border border-border overflow-hidden">
+                <div className="flex items-center gap-3 p-3.5">
+                  <button
+                    onClick={() => toggleClass(klas.id)}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                  >
+                    {expandedClass === klas.id
+                      ? <ChevronDown size={14} className="text-gray-400 flex-shrink-0"/>
+                      : <ChevronRight size={14} className="text-gray-400 flex-shrink-0"/>
+                    }
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                      style={{ backgroundColor: klas.color }}>{klas.name[0]}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm text-gray-800">{klas.name}</span>
+                        {klas.groups?.name && (
+                          <span className="text-xs text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                            {klas.groups.name}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {klas.class_students?.length ?? 0} leerlingen ·{' '}
+                        {klas.class_teachers?.map((t: any) =>
+                          `${t.profiles?.first_name} ${t.profiles?.last_name}`
+                        ).join(', ') || 'Geen leerkracht'}
+                      </div>
+                    </div>
+                  </button>
+                  <span className="text-xs text-gray-400 flex-shrink-0">{klas.school_years?.name}</span>
+                  <button
+                    onClick={() => archiveClass(klas.id, klas.name)}
+                    className="p-1.5 text-gray-300 hover:text-red-400 transition-colors flex-shrink-0"
+                    title="Archiveren"
+                  >
+                    <Archive size={14}/>
+                  </button>
+                </div>
+
+                {expandedClass === klas.id && (
+                  <div className="border-t border-border bg-gray-50/50 px-4 pb-3 pt-2">
+                    {studentsLoading[klas.id] ? (
+                      <div className="flex items-center gap-2 py-2 text-sm text-gray-400">
+                        <Loader2 size={13} className="animate-spin"/> Laden…
+                      </div>
+                    ) : (classStudents[klas.id] ?? []).length === 0 ? (
+                      <p className="text-xs text-gray-400 py-2">Geen leerlingen ingeschreven.</p>
+                    ) : (
+                      <div className="space-y-0.5 mt-1">
+                        {(classStudents[klas.id] ?? []).map((s: any) => (
+                          <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white transition-colors group">
+                            <div className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-medium flex-shrink-0">
+                              {s.first_name?.[0]}{s.last_name?.[0]}
+                            </div>
+                            <span className="text-sm text-gray-700 flex-1">{s.first_name} {s.last_name}</span>
+                            <button
+                              onClick={() => removeStudentFromClass(klas.id, s.id)}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-gray-300 hover:text-red-400 transition-all"
+                              title="Verwijder uit klas"
+                            >
+                              <X size={13}/>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  <div className="text-xs text-gray-400">
-                    {klas.class_students?.length ?? 0} leerlingen ·{' '}
-                    {klas.class_teachers?.map((t: any) =>
-                      `${t.profiles?.first_name} ${t.profiles?.last_name}`
-                    ).join(', ') || 'Geen leerkracht'}
-                  </div>
-                </div>
-                <span className="text-xs text-gray-400 flex-shrink-0">{klas.school_years?.name}</span>
+                )}
               </div>
             ))}
             {!classes.length && (
@@ -127,24 +206,26 @@ export default function BeheerPage() {
             </div>
           </div>
           <div className="space-y-1.5">
-            {users.filter(u => u.role !== 'admin').map((u: any) => {
+            {users.map((u: any) => {
               const rb = getRoleBadge(u.role)
               return (
-                  <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
-                         style={{ backgroundColor: '#EEF6F1', color: '#1B6B4A' }}>
-                      {u.first_name?.[0]}{u.last_name?.[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-800">{u.first_name} {u.last_name}</div>
-                      <div className="text-xs text-gray-400">{u.email}</div>
-                    </div>
-                    <span className={`badge ${rb.color}`}>{rb.label}</span>
-                    <DeleteUserButton userId={u.id} name={`${u.first_name} ${u.last_name}`} onDeleted={loadData}/>
+                <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
+                    style={{ backgroundColor: '#EEF6F1', color: '#1B6B4A' }}>
+                    {u.first_name?.[0]}{u.last_name?.[0]}
                   </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-800">{u.first_name} {u.last_name}</div>
+                    <div className="text-xs text-gray-400">{u.email}</div>
+                  </div>
+                  <span className={`badge ${rb.color}`}>{rb.label}</span>
+                  {u.id !== profile.id && (
+                    <DeleteUserButton userId={u.id} name={`${u.first_name} ${u.last_name}`} onDeleted={loadData}/>
+                  )}
+                </div>
               )
             })}
-            {!users.filter(u => u.role !== 'admin').length && (
+            {!users.length && (
               <p className="text-sm text-gray-400 text-center py-4">Nog geen gebruikers.</p>
             )}
           </div>
@@ -177,4 +258,3 @@ export default function BeheerPage() {
     </div>
   )
 }
-
