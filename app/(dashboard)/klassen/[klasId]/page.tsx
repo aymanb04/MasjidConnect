@@ -6,7 +6,7 @@ import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { getDeadlineLabel, getSubmissionStatusBadge } from '@/lib/utils'
-import { ArrowLeft, FileText, BookOpen, Users, Plus, Clock, GraduationCap, Mail } from 'lucide-react'
+import { ArrowLeft, FileText, BookOpen, Users, Plus, Clock, GraduationCap, Mail, BarChart2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function KlasDetailPage() {
@@ -71,12 +71,17 @@ export default function KlasDetailPage() {
           <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-xl" style={{ backgroundColor: klas.color }}>
             {klas.name[0]}
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="page-title">{klas.name}</h1>
             <p className="page-subtitle">
               {[klas.groups?.name, klas.school_years?.name, klas.description].filter(Boolean).join(' · ')}
             </p>
           </div>
+          {isTeacher && (
+            <Link href={`/klassen/${klasId}/scores`} className="btn-secondary text-xs py-1.5 px-3 flex-shrink-0">
+              <BarChart2 size={13}/> Puntenlijst
+            </Link>
+          )}
         </div>
       </div>
 
