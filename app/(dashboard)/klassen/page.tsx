@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
@@ -17,35 +17,111 @@ export default function KlassenPage() {
   const [mosques, setMosques]   = useState<{ id: string; name: string }[]>([])
   const [mosqueFilter, setMosqueFilter] = useState<string>(searchParams?.get('mosque') ?? '')
 
+  // School year filter state
+  const [schoolYears, setSchoolYears] = useState<any[]>([])
+  const [activeYearId, setActiveYearId] = useState<string | null>(null)
+  const [yearFilter, setYearFilter] = useState<string>('')
+
+  // Use a ref so loadClasses can read the latest yearFilter without stale closure issues
+  const yearFilterRef = useRef(yearFilter)
+  yearFilterRef.current = yearFilter
+
   useEffect(() => {
     if (!profile) return
-    loadClasses()
-  }, [profile])
+    loadClasses(yearFilterRef.current)
+  }, [profile, yearFilter])
 
-  async function loadClasses() {
+  async function loadClasses(requestedYearId?: string) {
+    setLoading(true)
     let data: any[] = []
 
     if (profile!.role === 'student') {
+      // Fetch school years first
+      const { data: years } = await supabase
+        .from('school_years')
+        .select('*')
+        .eq('tenant_id', profile!.tenant_id)
+        .order('start_date', { ascending: false })
+      const fetchedYears = years ?? []
+      const active = fetchedYears.find((y: any) => y.is_active) ?? null
+      setSchoolYears(fetchedYears)
+      if (active && !activeYearId) {
+        setActiveYearId(active.id)
+        if (!yearFilter) setYearFilter(active.id)
+      }
+
+      const effectiveYearId = requestedYearId || active?.id || null
+
       const { data: d } = await supabase
         .from('class_students')
         .select('classes(*, school_years(name), groups(name))')
         .eq('student_id', profile!.id)
-      data = d?.map((x: any) => x.classes).filter(Boolean) ?? []
+      const all = d?.map((x: any) => x.classes).filter(Boolean) ?? []
+      data = effectiveYearId
+        ? all.filter((c: any) => c.school_year_id === effectiveYearId)
+        : all
 
     } else if (profile!.role === 'teacher') {
+      // Fetch school years first
+      const { data: years } = await supabase
+        .from('school_years')
+        .select('*')
+        .eq('tenant_id', profile!.tenant_id)
+        .order('start_date', { ascending: false })
+      const fetchedYears = years ?? []
+      const active = fetchedYears.find((y: any) => y.is_active) ?? null
+      setSchoolYears(fetchedYears)
+      if (active && !activeYearId) {
+        setActiveYearId(active.id)
+        if (!yearFilter) setYearFilter(active.id)
+      }
+
+      const effectiveYearId = requestedYearId || active?.id || null
+
       const { data: d } = await supabase
         .from('class_teachers')
         .select('classes(*, school_years(name), groups(name))')
         .eq('teacher_id', profile!.id)
-      data = d?.map((x: any) => x.classes).filter(Boolean) ?? []
+      const all = d?.map((x: any) => x.classes).filter(Boolean) ?? []
+      data = effectiveYearId
+        ? all.filter((c: any) => c.school_year_id === effectiveYearId)
+        : all
 
     } else if (profile!.role === 'admin') {
-      const { data: d, error: e } = await supabase
+      // Fetch school years first
+      const { data: years } = await supabase
+        .from('school_years')
+        .select('*')
+        .eq('tenant_id', profile!.tenant_id)
+        .order('start_date', { ascending: false })
+      const fetchedYears = years ?? []
+      const active = fetchedYears.find((y: any) => y.is_active) ?? null
+      setSchoolYears(fetchedYears)
+      if (active && !activeYearId) {
+        setActiveYearId(active.id)
+        if (!yearFilter) {
+          setYearFilter(active.id)
+        }
+      }
+
+      const effectiveYearId = requestedYearId || active?.id || null
+      const isActiveYear = !effectiveYearId || effectiveYearId === active?.id
+
+      let query = supabase
         .from('classes')
         .select('*, school_years(name), groups(name)')
         .eq('tenant_id', profile!.tenant_id)
-        .eq('is_archived', false)
         .order('name')
+
+      if (effectiveYearId) {
+        query = query.eq('school_year_id', effectiveYearId)
+      }
+      // Only filter out archived classes when viewing the active year
+      if (isActiveYear) {
+        query = query.eq('is_archived', false)
+      }
+
+      const { data: d, error: e } = await query
       if (e) console.error('[klassen] admin query error:', e)
       data = d ?? []
 
@@ -80,6 +156,8 @@ export default function KlassenPage() {
       const map: Record<string, number> = {}
       sc?.forEach((s: any) => { map[s.class_id] = (map[s.class_id] ?? 0) + 1 })
       setCountMap(map)
+    } else {
+      setCountMap({})
     }
 
     setLoading(false)
@@ -89,6 +167,7 @@ export default function KlassenPage() {
 
   const isSuperAdmin = profile?.role === 'super_admin'
   const isAdmin = ['admin', 'super_admin'].includes(profile?.role ?? '')
+  const showYearFilter = !isSuperAdmin && schoolYears.length > 0
 
   // Filter by mosque (super_admin only)
   const filteredClasses = isSuperAdmin && mosqueFilter
@@ -133,6 +212,33 @@ export default function KlassenPage() {
            'Alle klassen in uw school'}
         </p>
       </div>
+
+      {/* School year filter tabs — all roles except super_admin */}
+      {showYearFilter && (
+        <div className="flex items-center gap-2 mb-5 flex-wrap">
+          {schoolYears.map((year: any) => {
+            const isSelected = yearFilter === year.id
+            return (
+              <button
+                key={year.id}
+                onClick={() => setYearFilter(year.id)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+                  isSelected
+                    ? 'bg-primary-600 text-white border-primary-600'
+                    : 'bg-white text-gray-600 border-border hover:border-primary-300 hover:text-primary-700'
+                }`}
+              >
+                {year.name}
+                {year.is_active && (
+                  <span className={`ml-1.5 text-xs ${isSelected ? 'opacity-80' : 'text-primary-500'}`}>
+                    • actief
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Mosque filter — super_admin only */}
       {isSuperAdmin && mosques.length > 0 && (

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { cn, getInitials } from '@/lib/utils'
 import type { Profile, Tenant } from '@/lib/types'
-import { LayoutDashboard, BookOpen, FileText, GraduationCap, Settings, LogOut, Shield, ChevronRight, ExternalLink } from 'lucide-react'
+import { LayoutDashboard, BookOpen, FileText, GraduationCap, Settings, LogOut, Shield, ChevronRight, ExternalLink, CalendarDays, Lock } from 'lucide-react'
 
 interface Props {
   profile: Profile
@@ -18,6 +18,7 @@ const navItems = [
   { label: 'Klassen',     href: '/klassen',     icon: GraduationCap,   roles: ['admin','teacher','student'] },
   { label: 'Huiswerk',    href: '/huiswerk',    icon: FileText,        roles: ['teacher','student'] },
   { label: 'Lesmodules',  href: '/lesmodules',  icon: BookOpen,        roles: ['teacher','student'] },
+  { label: 'Agenda',      href: '/agenda',      icon: CalendarDays,    roles: ['admin','teacher','student'] },
   { label: 'Beheer',      href: '/beheer',      icon: Settings,        roles: ['admin'] },
   { label: 'Super Admin', href: '/superadmin',  icon: Shield,          roles: ['super_admin'] },
 ]
@@ -104,6 +105,10 @@ export default function Sidebar({ profile, tenant, onClose }: Props) {
             <LogOut size={15} />
           </button>
         </div>
+        <Link href="/privacy" onClick={onClose}
+          className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors mt-1">
+          <Lock size={11}/> Privacy
+        </Link>
       </div>
     </aside>
   )

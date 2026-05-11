@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { getRoleBadge, formatDate } from '@/lib/utils'
-import { Users, GraduationCap, Mail, Shield, Archive, ChevronDown, ChevronRight, X, Loader2, Search } from 'lucide-react'
+import { Users, GraduationCap, Mail, Shield, Archive, ChevronDown, ChevronRight, X, Loader2, Search, CalendarDays } from 'lucide-react'
+import Link from 'next/link'
 import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 import { CreateClassButton } from '@/components/features/admin/CreateClassButton'
 import CsvImportButton from '@/components/features/admin/CsvImportButton'
@@ -117,8 +118,13 @@ export default function BeheerPage() {
   return (
     <div className="animate-slide-up">
       <div className="page-header">
-        <h1 className="page-title">Beheer</h1>
-        <p className="page-subtitle">Gebruikers, klassen en uitnodigingen beheren</p>
+        <div>
+          <h1 className="page-title">Beheer</h1>
+          <p className="page-subtitle">Gebruikers, klassen en uitnodigingen beheren</p>
+        </div>
+        <Link href="/beheer/jaarovergang" className="btn-secondary text-sm py-2 px-3 flex items-center gap-1.5 flex-shrink-0">
+          <CalendarDays size={14}/> Jaarovergang
+        </Link>
       </div>
 
       {/* Stats */}
