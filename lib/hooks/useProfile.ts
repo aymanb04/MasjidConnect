@@ -26,6 +26,11 @@ export function useProfile() {
             const { data: { session } } = await supabase.auth.getSession()
             if (!session?.user) { setLoading(false); return }
             const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
+            if (data?.is_active === false) {
+                await supabase.auth.signOut()
+                window.location.href = '/login'
+                return
+            }
             setProfile(data)
             setLoading(false)
         }
@@ -35,6 +40,11 @@ export function useProfile() {
             if (event === 'SIGNED_OUT') { setProfile(null); setLoading(false) }
             if (event === 'TOKEN_REFRESHED' && session?.user) {
                 const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
+                if (data?.is_active === false) {
+                    await supabase.auth.signOut()
+                    window.location.href = '/login'
+                    return
+                }
                 setProfile(data)
             }
         })
