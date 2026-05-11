@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { formatDate, getRoleBadge } from '@/lib/utils'
-import { Building2, Users, TrendingUp, Shield, Plus, X, Loader2, ChevronDown, ChevronRight, GraduationCap } from 'lucide-react'
+import { Building2, Users, TrendingUp, Shield, Plus, X, Loader2, ChevronDown, ChevronRight, GraduationCap, Pencil } from 'lucide-react'
 import Link from 'next/link'
 import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 import { DeleteUserButton } from '@/components/features/admin/DeleteUserButton'
@@ -17,7 +17,8 @@ export default function SuperAdminPage() {
   const [totalUsers, setTotalUsers] = useState(0)
   const [classCount, setClassCount] = useState<Record<string, number>>({})
   const [loading, setLoading]       = useState(true)
-  const [showAdd, setShowAdd]     = useState(false)
+  const [showAdd, setShowAdd]         = useState(false)
+  const [editingTenant, setEditingTenant] = useState<any>(null)
   const [expandedTenant, setExpandedTenant] = useState<string | null>(null)
   const [tenantUsers, setTenantUsers] = useState<Record<string, any[]>>({})
   const [usersLoading, setUsersLoading] = useState<Record<string, boolean>>({})
@@ -141,9 +142,10 @@ export default function SuperAdminPage() {
         <div className="divide-y divide-border">
           {tenants.map((t: any) => (
             <div key={t.id}>
+              <div className="flex items-center">
               <button
                 onClick={() => toggleTenant(t.id)}
-                className="w-full flex items-center gap-4 px-6 py-4 hover:bg-gray-50/70 transition-colors text-left"
+                className="flex-1 flex items-center gap-4 px-6 py-4 hover:bg-gray-50/70 transition-colors text-left"
               >
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center font-semibold text-sm flex-shrink-0 overflow-hidden"
                   style={{ backgroundColor: '#EEF6F1', color: '#1B6B4A' }}>
@@ -176,6 +178,14 @@ export default function SuperAdminPage() {
                   : <ChevronRight size={15} className="text-gray-400 flex-shrink-0"/>
                 }
               </button>
+              <button
+                onClick={e => { e.stopPropagation(); setEditingTenant(t) }}
+                className="px-3 py-4 text-gray-300 hover:text-gray-500 transition-colors flex-shrink-0"
+                title="Bewerken"
+              >
+                <Pencil size={14}/>
+              </button>
+              </div>
 
               {/* Expanded users */}
               {expandedTenant === t.id && (
@@ -274,6 +284,13 @@ export default function SuperAdminPage() {
         <AddMoskeeModal
           onClose={() => setShowAdd(false)}
           onCreated={() => { setShowAdd(false); loadData() }}
+        />
+      )}
+      {editingTenant && (
+        <EditMoskeeModal
+          tenant={editingTenant}
+          onClose={() => setEditingTenant(null)}
+          onSaved={() => { setEditingTenant(null); loadData() }}
         />
       )}
     </div>
@@ -476,6 +493,111 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
               ? <><Loader2 size={15} className="animate-spin"/> Aanmaken…</>
               : 'Moskee toevoegen'
             }
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EditMoskeeModal({ tenant, onClose, onSaved }: { tenant: any; onClose: () => void; onSaved: () => void }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState('')
+  const [form, setForm]       = useState({
+    name:                  tenant.name ?? '',
+    logo_url:              tenant.logo_url ?? '',
+    website_url:           tenant.website_url ?? '',
+    city:                  tenant.city ?? '',
+    email:                 tenant.email ?? '',
+    subscription_status:   tenant.subscription_status ?? 'trial',
+    subscription_price:    String(tenant.subscription_price ?? 500),
+    subscription_interval: tenant.subscription_interval ?? 'yearly',
+    notes:                 tenant.notes ?? '',
+  })
+
+  async function handleSave() {
+    setLoading(true)
+    setError('')
+    const { error: err } = await supabase.from('tenants').update({
+      name:                  form.name.trim(),
+      logo_url:              form.logo_url.trim() || null,
+      website_url:           form.website_url.trim() || null,
+      city:                  form.city.trim() || null,
+      email:                 form.email.trim() || null,
+      subscription_status:   form.subscription_status,
+      subscription_price:    parseFloat(form.subscription_price),
+      subscription_interval: form.subscription_interval,
+      notes:                 form.notes.trim() || null,
+    }).eq('id', tenant.id)
+    if (err) { setError(err.message); setLoading(false); return }
+    onSaved()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+      <div className="relative bg-white rounded-2xl shadow-modal w-full max-w-lg my-8 animate-slide-up">
+        <div className="flex items-center justify-between p-6 border-b border-border">
+          <h2 className="font-semibold text-gray-900">{tenant.name} bewerken</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>
+        </div>
+        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+          <div>
+            <label className="label">Naam</label>
+            <input type="text" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className="input"/>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Logo URL</label>
+              <input type="url" value={form.logo_url} onChange={e => setForm(p => ({ ...p, logo_url: e.target.value }))}
+                placeholder="https://…/logo.png" className="input"/>
+            </div>
+            <div>
+              <label className="label">Website</label>
+              <input type="url" value={form.website_url} onChange={e => setForm(p => ({ ...p, website_url: e.target.value }))}
+                placeholder="https://moskee.be" className="input"/>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Stad</label>
+              <input type="text" value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))}
+                placeholder="Antwerpen" className="input"/>
+            </div>
+            <div>
+              <label className="label">E-mail moskee</label>
+              <input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                placeholder="info@moskee.be" className="input"/>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Status</label>
+              <select value={form.subscription_status} onChange={e => setForm(p => ({ ...p, subscription_status: e.target.value }))} className="input">
+                <option value="active">Actief</option>
+                <option value="trial">Proefperiode</option>
+                <option value="inactive">Inactief</option>
+                <option value="cancelled">Opgezegd</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Prijs (€)</label>
+              <input type="number" value={form.subscription_price}
+                onChange={e => setForm(p => ({ ...p, subscription_price: e.target.value }))} className="input"/>
+            </div>
+          </div>
+          <div>
+            <label className="label">Notities</label>
+            <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+              className="input resize-none h-16" placeholder="Interne notities…"/>
+          </div>
+          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>}
+        </div>
+        <div className="flex gap-3 p-6 border-t border-border">
+          <button onClick={onClose} className="btn-secondary flex-1 justify-center">Annuleren</button>
+          <button onClick={handleSave} disabled={loading || !form.name}
+            className="btn-primary flex-1 justify-center">
+            {loading ? <><Loader2 size={15} className="animate-spin"/> Opslaan…</> : 'Opslaan'}
           </button>
         </div>
       </div>
