@@ -62,6 +62,7 @@ export default function JaarovergangPage() {
   const [expandedClasses, setExpandedClasses] = useState<Set<string>>(new Set())
   const [rollingOver, setRollingOver] = useState(false)
   const [rolloverDone, setRolloverDone] = useState(false)
+  const [activating, setActivating] = useState<string | null>(null)
 
   // ── Load school years ──────────────────────────────────────────────────────
 
@@ -105,6 +106,22 @@ export default function JaarovergangPage() {
     setShowCreateModal(false)
     setNewYearForm({ name: '', start_date: '', end_date: '' })
     loadYears()
+  }
+
+  // ── Activate a school year ────────────────────────────────────────────────
+
+  async function activateYear(year: SchoolYear) {
+    setActivating(year.id)
+    try {
+      await supabase.from('school_years').update({ is_active: false }).eq('tenant_id', profile!.tenant_id)
+      const { error } = await supabase.from('school_years').update({ is_active: true }).eq('id', year.id)
+      if (error) throw error
+      await loadYears()
+    } catch (e: any) {
+      alert('Fout bij activeren: ' + e.message)
+    } finally {
+      setActivating(null)
+    }
   }
 
   // ── Start rollover: load active year's classes ─────────────────────────────
@@ -357,29 +374,29 @@ export default function JaarovergangPage() {
         ) : (
           <div className="space-y-3">
             {schoolYears.map(year => {
-              const isFuture = !year.is_active && new Date(year.start_date) > new Date()
+              const today = new Date()
+              const start = new Date(year.start_date)
+              const end = new Date(year.end_date)
+              const isCurrent = today >= start && today <= end
               const isTarget = rolloverTarget?.id === year.id
               return (
                 <div
                   key={year.id}
                   className={`rounded-xl border p-4 flex items-center gap-4 transition-colors ${
-                    isTarget
-                      ? 'border-primary-300 bg-primary-50/50'
-                      : 'border-border bg-white'
+                    isTarget ? 'border-primary-300 bg-primary-50/50' : 'border-border bg-white'
                   }`}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-gray-900">{year.name}</span>
                       {year.is_active && (
-                        <span className="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-medium">
-                          Actief
-                        </span>
+                        <span className="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-medium">Actief</span>
+                      )}
+                      {isCurrent && !year.is_active && (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">Huidige periode</span>
                       )}
                       {isTarget && (
-                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
-                          Doel jaarovergang
-                        </span>
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Doel overzetting</span>
                       )}
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5">
@@ -387,20 +404,28 @@ export default function JaarovergangPage() {
                     </div>
                   </div>
 
-                  {/* Show rollover button for non-active years (future or past) */}
-                  {!year.is_active && activeYear && (
-                    <button
-                      onClick={() => startRollover(year)}
-                      disabled={loadingClasses}
-                      className="btn-secondary flex items-center gap-1.5 text-sm py-1.5 px-3 flex-shrink-0"
-                    >
-                      {loadingClasses && isTarget
-                        ? <Loader2 size={13} className="animate-spin"/>
-                        : <ArrowRight size={13}/>
-                      }
-                      Jaarovergang
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {!year.is_active && (
+                      <button
+                        onClick={() => activateYear(year)}
+                        disabled={activating === year.id}
+                        className="btn-secondary text-xs py-1.5 px-2.5 flex items-center gap-1"
+                      >
+                        {activating === year.id ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle2 size={12}/>}
+                        Activeren
+                      </button>
+                    )}
+                    {!year.is_active && activeYear && (
+                      <button
+                        onClick={() => startRollover(year)}
+                        disabled={loadingClasses}
+                        className="btn-secondary text-xs py-1.5 px-2.5 flex items-center gap-1"
+                      >
+                        {loadingClasses && isTarget ? <Loader2 size={12} className="animate-spin"/> : <ArrowRight size={12}/>}
+                        Klassen overzetten
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -409,7 +434,7 @@ export default function JaarovergangPage() {
 
         {!activeYear && schoolYears.length > 0 && (
           <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-            Geen actief schooljaar gevonden. Stel een schooljaar in als actief om een jaarovergang te kunnen uitvoeren.
+            Geen actief schooljaar. Klik op "Activeren" bij het gewenste schooljaar.
           </div>
         )}
       </div>
@@ -420,20 +445,34 @@ export default function JaarovergangPage() {
           <div className="flex items-center gap-3 mb-1">
             <GraduationCap size={18} className="text-primary-600 flex-shrink-0"/>
             <h2 className="font-semibold text-gray-900">
-              Jaarovergang: {activeYear.name} <ArrowRight size={14} className="inline text-gray-400"/> {rolloverTarget.name}
+              Klassen overzetten: {activeYear.name} <ArrowRight size={14} className="inline text-gray-400"/> {rolloverTarget.name}
             </h2>
           </div>
           <p className="text-sm text-gray-500 mb-5 ml-7">
-            Selecteer per klas welke leerlingen worden meegenomen naar het nieuwe schooljaar.
+            Vink per klas aan welke leerlingen doorgaan naar het nieuwe schooljaar. Leerlingen die niet doorgaan kunt u uitvinken. Leerkrachten worden automatisch overgenomen.
           </p>
 
           {rolloverDone ? (
-            <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
               <CheckCircle2 size={44} className="text-primary-500"/>
-              <p className="font-semibold text-gray-900 text-lg">Jaarovergang voltooid!</p>
+              <p className="font-semibold text-gray-900 text-lg">Klassen overgezet!</p>
               <p className="text-sm text-gray-500">
-                Alle klassen zijn aangemaakt in <strong>{rolloverTarget.name}</strong>.
+                Alle klassen zijn aangemaakt in <strong>{rolloverTarget.name}</strong> met de geselecteerde leerlingen.
               </p>
+              {!rolloverTarget.is_active && (
+                <div className="mt-2 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 max-w-sm">
+                  <p className="font-medium mb-2">Wilt u nu overschakelen naar {rolloverTarget.name}?</p>
+                  <p className="text-xs text-amber-600 mb-3">Dit maakt het nieuwe schooljaar actief en deactiveert het huidige.</p>
+                  <button
+                    onClick={() => activateYear(rolloverTarget)}
+                    disabled={activating === rolloverTarget.id}
+                    className="btn-primary text-sm py-2 px-4 w-full flex items-center justify-center gap-2"
+                  >
+                    {activating === rolloverTarget.id ? <Loader2 size={14} className="animate-spin"/> : <CheckCircle2 size={14}/>}
+                    {rolloverTarget.name} activeren
+                  </button>
+                </div>
+              )}
               <div className="flex gap-3 mt-2">
                 <button
                   onClick={() => { setRolloverTarget(null); setRolloverDone(false) }}

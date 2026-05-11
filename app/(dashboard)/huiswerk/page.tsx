@@ -28,7 +28,7 @@ export default function HuiswerkPage() {
       const { data: enr } = await supabase.from('class_students').select('class_id').eq('student_id', profile!.id)
       const ids = enr?.map((e: any) => e.class_id) ?? []
       if (ids.length > 0) {
-        const { data: a } = await supabase.from('assignments').select('*, classes(name, color)').in('class_id', ids).eq('is_published', true).order('due_date', { ascending: true })
+        const { data: a } = await supabase.from('assignments').select('*, classes(name, color, groups(name), school_years(name))').in('class_id', ids).eq('is_published', true).order('due_date', { ascending: true })
         data = a ?? []
         if (data.length > 0) {
           const { data: subs } = await supabase.from('submissions').select('*').eq('student_id', profile!.id).in('assignment_id', data.map((a: any) => a.id))
@@ -41,11 +41,11 @@ export default function HuiswerkPage() {
       const { data: t } = await supabase.from('class_teachers').select('class_id').eq('teacher_id', profile!.id)
       const ids = t?.map((x: any) => x.class_id) ?? []
       if (ids.length > 0) {
-        const { data: a } = await supabase.from('assignments').select('*, classes(name, color)').in('class_id', ids).order('created_at', { ascending: false })
+        const { data: a } = await supabase.from('assignments').select('*, classes(name, color, groups(name), school_years(name))').in('class_id', ids).order('created_at', { ascending: false })
         data = a ?? []
       }
     } else {
-      const { data: a } = await supabase.from('assignments').select('*, classes(name, color)').order('created_at', { ascending: false })
+      const { data: a } = await supabase.from('assignments').select('*, classes(name, color, groups(name), school_years(name))').order('created_at', { ascending: false })
       data = a ?? []
     }
 
@@ -57,9 +57,15 @@ export default function HuiswerkPage() {
 
   const isTeacher = ['teacher','admin','super_admin'].includes(profile?.role ?? '')
 
-  const byClass: Record<string, { name: string; color: string; items: any[] }> = {}
+  const byClass: Record<string, { name: string; color: string; group: string | null; year: string | null; items: any[] }> = {}
   assignments.forEach(a => {
-    if (!byClass[a.class_id]) byClass[a.class_id] = { name: a.classes?.name ?? '—', color: a.classes?.color ?? '#1B6B4A', items: [] }
+    if (!byClass[a.class_id]) byClass[a.class_id] = {
+      name: a.classes?.name ?? '—',
+      color: a.classes?.color ?? '#1B6B4A',
+      group: a.classes?.groups?.name ?? null,
+      year: a.classes?.school_years?.name ?? null,
+      items: [],
+    }
     byClass[a.class_id].items.push(a)
   })
 
@@ -80,9 +86,16 @@ export default function HuiswerkPage() {
           {Object.entries(byClass).map(([classId, group]) => (
             <div key={classId} className="card overflow-hidden">
               <div className="px-5 py-3.5 border-b border-border flex items-center gap-2.5" style={{ borderLeftWidth: '3px', borderLeftColor: group.color }}>
-                <div className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: group.color }}>{group.name[0]}</div>
-                <span className="font-semibold text-gray-800 text-sm">{group.name}</span>
-                <span className="ml-auto text-xs text-gray-400">{group.items.length} opdracht{group.items.length !== 1 ? 'en' : ''}</span>
+                <div className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ backgroundColor: group.color }}>{group.name[0]}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-gray-800 text-sm">{group.name}</div>
+                  {(group.group || group.year) && (
+                    <div className="text-xs text-gray-400 leading-tight">
+                      {[group.group, group.year].filter(Boolean).join(' · ')}
+                    </div>
+                  )}
+                </div>
+                <span className="text-xs text-gray-400 flex-shrink-0">{group.items.length} opdracht{group.items.length !== 1 ? 'en' : ''}</span>
               </div>
               <div className="divide-y divide-border">
                 {group.items.map((a: any) => {
