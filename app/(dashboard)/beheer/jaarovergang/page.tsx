@@ -141,29 +141,35 @@ export default function JaarovergangPage() {
 
     const classIds = classRows.map((c: any) => c.id)
 
-    // 2. Fetch teachers for those classes
-    const { data: teacherLinks } = await supabase
-      .from('class_teachers')
-      .select('class_id, profiles!class_teachers_teacher_id_fkey(id, first_name, last_name)')
-      .in('class_id', classIds)
+    // 2. Fetch teacher + student links (IDs only), then profiles separately
+    const [{ data: teacherLinks }, { data: studentLinks }] = await Promise.all([
+      supabase.from('class_teachers').select('class_id, teacher_id').in('class_id', classIds),
+      supabase.from('class_students').select('class_id, student_id').in('class_id', classIds),
+    ])
 
-    // 3. Fetch students for those classes
-    const { data: studentLinks } = await supabase
-      .from('class_students')
-      .select('class_id, profiles!class_students_student_id_fkey(id, first_name, last_name)')
-      .in('class_id', classIds)
+    const teacherIds = Array.from(new Set((teacherLinks ?? []).map((l: any) => l.teacher_id)))
+    const studentIds = Array.from(new Set((studentLinks ?? []).map((l: any) => l.student_id)))
 
-    // Map teachers & students per class
+    const [{ data: teacherProfiles }, { data: studentProfiles }] = await Promise.all([
+      teacherIds.length ? supabase.from('profiles').select('id, first_name, last_name').in('id', teacherIds) : Promise.resolve({ data: [] }),
+      studentIds.length ? supabase.from('profiles').select('id, first_name, last_name').in('id', studentIds) : Promise.resolve({ data: [] }),
+    ])
+
+    const tpMap = Object.fromEntries((teacherProfiles ?? []).map((p: any) => [p.id, p]))
+    const spMap = Object.fromEntries((studentProfiles ?? []).map((p: any) => [p.id, p]))
+
     const teacherMap: Record<string, { id: string; first_name: string; last_name: string }[]> = {}
     const studentMap: Record<string, { id: string; first_name: string; last_name: string }[]> = {}
 
     for (const link of (teacherLinks ?? [])) {
       if (!teacherMap[link.class_id]) teacherMap[link.class_id] = []
-      if (link.profiles) teacherMap[link.class_id].push(link.profiles as any)
+      const p = tpMap[link.teacher_id]
+      if (p) teacherMap[link.class_id].push(p)
     }
     for (const link of (studentLinks ?? [])) {
       if (!studentMap[link.class_id]) studentMap[link.class_id] = []
-      if (link.profiles) studentMap[link.class_id].push(link.profiles as any)
+      const p = spMap[link.student_id]
+      if (p) studentMap[link.class_id].push(p)
     }
 
     // Build enriched class list
