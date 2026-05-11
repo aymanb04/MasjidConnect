@@ -9,6 +9,7 @@ import { Building2, Users, TrendingUp, Shield, Plus, X, Loader2, ChevronDown, Ch
 import Link from 'next/link'
 import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 import { DeleteUserButton } from '@/components/features/admin/DeleteUserButton'
+import { ReactivateUserButton } from '@/components/features/admin/ReactivateUserButton'
 
 export default function SuperAdminPage() {
   const { profile, loading: profileLoading } = useProfile()
@@ -20,6 +21,9 @@ export default function SuperAdminPage() {
   const [expandedTenant, setExpandedTenant] = useState<string | null>(null)
   const [tenantUsers, setTenantUsers] = useState<Record<string, any[]>>({})
   const [usersLoading, setUsersLoading] = useState<Record<string, boolean>>({})
+  const [showArchivedFor, setShowArchivedFor] = useState<Record<string, boolean>>({})
+  const [archivedUsers, setArchivedUsers] = useState<Record<string, any[]>>({})
+  const [archivedLoading, setArchivedLoading] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (!profile || profile.role !== 'super_admin') return
@@ -62,6 +66,17 @@ export default function SuperAdminPage() {
         setUsersLoading(prev => ({ ...prev, [tenantId]: false }))
         loadData()
       })
+  }
+
+  async function toggleArchivedFor(tenantId: string) {
+    const next = !showArchivedFor[tenantId]
+    setShowArchivedFor(prev => ({ ...prev, [tenantId]: next }))
+    if (!next || archivedUsers[tenantId]) return
+    setArchivedLoading(prev => ({ ...prev, [tenantId]: true }))
+    const { data } = await supabase.from('profiles').select('*')
+      .eq('tenant_id', tenantId).eq('is_active', false).order('last_name')
+    setArchivedUsers(prev => ({ ...prev, [tenantId]: data ?? [] }))
+    setArchivedLoading(prev => ({ ...prev, [tenantId]: false }))
   }
 
   if (profileLoading || loading) return <PageLoader />
@@ -169,13 +184,17 @@ export default function SuperAdminPage() {
                     <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
                       <Users size={14}/> Gebruikers
                     </span>
-                    <Link
-                      href={`/klassen?mosque=${t.id}`}
-                      className="flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700 font-medium"
-                    >
-                      <GraduationCap size={13}/>
-                      {classCount[t.id] ?? 0} klassen →
-                    </Link>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => toggleArchivedFor(t.id)}
+                        className={`text-xs px-2 py-1 rounded-lg border transition-colors ${showArchivedFor[t.id] ? 'border-gray-300 bg-gray-100 text-gray-700' : 'border-border text-gray-400 hover:text-gray-600'}`}>
+                        Gearchiveerd
+                      </button>
+                      <Link href={`/klassen?mosque=${t.id}`}
+                        className="flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700 font-medium">
+                        <GraduationCap size={13}/>
+                        {classCount[t.id] ?? 0} klassen →
+                      </Link>
+                    </div>
                   </div>
                   {usersLoading[t.id] ? (
                     <div className="flex items-center gap-2 py-3 text-sm text-gray-400">
@@ -202,6 +221,40 @@ export default function SuperAdminPage() {
                           </div>
                         )
                       })}
+
+                      {showArchivedFor[t.id] && (
+                        <>
+                          <div className="pt-3 pb-1 border-t border-border">
+                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Gearchiveerd</p>
+                          </div>
+                          {archivedLoading[t.id] ? (
+                            <div className="flex items-center gap-2 py-2 text-sm text-gray-400">
+                              <Loader2 size={13} className="animate-spin"/> Laden…
+                            </div>
+                          ) : (archivedUsers[t.id] ?? []).length === 0 ? (
+                            <p className="text-sm text-gray-400 py-2">Geen gearchiveerde gebruikers.</p>
+                          ) : (archivedUsers[t.id] ?? []).map((u: any) => {
+                            const rb = getRoleBadge(u.role)
+                            return (
+                              <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white transition-colors group border border-transparent hover:border-border opacity-60">
+                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 bg-gray-100 text-gray-400">
+                                  {u.first_name?.[0]}{u.last_name?.[0]}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-medium text-gray-600">{u.first_name} {u.last_name}</div>
+                                  <div className="text-xs text-gray-400">{u.email}</div>
+                                </div>
+                                <span className={`badge ${rb.color}`}>{rb.label}</span>
+                                <ReactivateUserButton userId={u.id} name={`${u.first_name} ${u.last_name}`}
+                                  onReactivated={() => {
+                                    setArchivedUsers(prev => ({ ...prev, [t.id]: (prev[t.id] ?? []).filter(a => a.id !== u.id) }))
+                                    reloadTenantUsers(t.id)
+                                  }}/>
+                              </div>
+                            )
+                          })}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

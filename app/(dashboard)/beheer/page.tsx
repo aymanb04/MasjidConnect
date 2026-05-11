@@ -10,6 +10,7 @@ import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 import { CreateClassButton } from '@/components/features/admin/CreateClassButton'
 import CsvImportButton from '@/components/features/admin/CsvImportButton'
 import { DeleteUserButton } from '@/components/features/admin/DeleteUserButton'
+import { ReactivateUserButton } from '@/components/features/admin/ReactivateUserButton'
 
 export default function BeheerPage() {
   const { profile, loading: profileLoading } = useProfile()
@@ -17,6 +18,10 @@ export default function BeheerPage() {
   const [classes, setClasses]         = useState<any[]>([])
   const [invitations, setInvitations] = useState<any[]>([])
   const [loading, setLoading]         = useState(true)
+
+  const [showArchived, setShowArchived]       = useState(false)
+  const [archivedUsers, setArchivedUsers]     = useState<any[]>([])
+  const [archivedLoading, setArchivedLoading] = useState(false)
 
   const [expandedClass, setExpandedClass]     = useState<string | null>(null)
   const [classStudents, setClassStudents]     = useState<Record<string, any[]>>({})
@@ -44,6 +49,17 @@ export default function BeheerPage() {
     setClasses(c ?? [])
     setInvitations(inv ?? [])
     setLoading(false)
+  }
+
+  async function toggleArchived() {
+    if (showArchived) { setShowArchived(false); return }
+    setShowArchived(true)
+    if (archivedUsers.length) return
+    setArchivedLoading(true)
+    const { data } = await supabase.from('profiles').select('*')
+      .eq('tenant_id', profile!.tenant_id).eq('is_active', false).order('last_name')
+    setArchivedUsers(data ?? [])
+    setArchivedLoading(false)
   }
 
   async function toggleClass(classId: string) {
@@ -201,6 +217,10 @@ export default function BeheerPage() {
               <Users size={17} className="text-primary-600"/> Gebruikers
             </h2>
             <div className="flex gap-2">
+              <button onClick={toggleArchived}
+                className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${showArchived ? 'border-gray-300 bg-gray-100 text-gray-700' : 'border-border text-gray-400 hover:text-gray-600'}`}>
+                Gearchiveerd
+              </button>
               <CsvImportButton tenantId={profile.tenant_id!} onImported={loadData}/>
               <InviteUserButton tenantId={profile.tenant_id!} onInvited={loadData}/>
             </div>
@@ -227,6 +247,37 @@ export default function BeheerPage() {
             })}
             {!users.length && (
               <p className="text-sm text-gray-400 text-center py-4">Nog geen gebruikers.</p>
+            )}
+
+            {showArchived && (
+              <>
+                <div className="pt-3 pb-1 border-t border-border">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Gearchiveerd</p>
+                </div>
+                {archivedLoading ? (
+                  <div className="flex items-center gap-2 py-2 text-sm text-gray-400">
+                    <Loader2 size={13} className="animate-spin"/> Laden…
+                  </div>
+                ) : archivedUsers.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-3">Geen gearchiveerde gebruikers.</p>
+                ) : archivedUsers.map((u: any) => {
+                  const rb = getRoleBadge(u.role)
+                  return (
+                    <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group opacity-60">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 bg-gray-100 text-gray-400">
+                        {u.first_name?.[0]}{u.last_name?.[0]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-600">{u.first_name} {u.last_name}</div>
+                        <div className="text-xs text-gray-400">{u.email}</div>
+                      </div>
+                      <span className={`badge ${rb.color}`}>{rb.label}</span>
+                      <ReactivateUserButton userId={u.id} name={`${u.first_name} ${u.last_name}`}
+                        onReactivated={() => { setArchivedUsers(prev => prev.filter(a => a.id !== u.id)); loadData() }}/>
+                    </div>
+                  )
+                })}
+              </>
             )}
           </div>
         </div>
