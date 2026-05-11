@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
@@ -44,6 +45,7 @@ function formatDate(d: string) {
 
 export default function JaarovergangPage() {
   const { profile, loading: profileLoading } = useProfile()
+  const router = useRouter()
 
   const [schoolYears, setSchoolYears] = useState<SchoolYear[]>([])
   const [loading, setLoading] = useState(true)
@@ -68,7 +70,10 @@ export default function JaarovergangPage() {
 
   useEffect(() => {
     if (!profile) return
-    if (profile.role !== 'admin') return
+    if (profile.role !== 'admin') {
+      router.push('/dashboard')
+      return
+    }
     loadYears()
   }, [profile])
 
@@ -336,9 +341,6 @@ export default function JaarovergangPage() {
   // ── Guards ─────────────────────────────────────────────────────────────────
 
   if (profileLoading || loading) return <PageLoader />
-  if (!profile || profile.role !== 'admin') {
-    return <div className="card p-8 text-center text-gray-400">Geen toegang. Deze pagina is alleen voor admins.</div>
-  }
 
   // ── Render ─────────────────────────────────────────────────────────────────
 

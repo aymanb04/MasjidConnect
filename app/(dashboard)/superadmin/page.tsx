@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
@@ -13,6 +14,7 @@ import { ReactivateUserButton } from '@/components/features/admin/ReactivateUser
 
 export default function SuperAdminPage() {
   const { profile, loading: profileLoading } = useProfile()
+  const router = useRouter()
   const [tenants, setTenants]       = useState<any[]>([])
   const [totalUsers, setTotalUsers] = useState(0)
   const [classCount, setClassCount] = useState<Record<string, number>>({})
@@ -27,7 +29,11 @@ export default function SuperAdminPage() {
   const [archivedLoading, setArchivedLoading] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
-    if (!profile || profile.role !== 'super_admin') return
+    if (!profile) return
+    if (profile.role !== 'super_admin') {
+      router.push('/dashboard')
+      return
+    }
     loadData()
   }, [profile])
 
@@ -81,9 +87,6 @@ export default function SuperAdminPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
-  if (profile?.role !== 'super_admin') {
-    return <div className="card p-8 text-center text-gray-400">Geen toegang.</div>
-  }
 
   const activeTenants  = tenants.filter(t => t.subscription_status === 'active')
   const monthlyRevenue = activeTenants.reduce((sum, t) =>

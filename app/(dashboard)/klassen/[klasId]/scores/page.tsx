@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
@@ -11,6 +11,7 @@ import Link from 'next/link'
 export default function ScoresPage() {
   const { klasId } = useParams()
   const { profile, loading: profileLoading } = useProfile()
+  const router = useRouter()
   const [klas, setKlas]             = useState<any>(null)
   const [students, setStudents]     = useState<any[]>([])
   const [assignments, setAssignments] = useState<any[]>([])
@@ -19,7 +20,10 @@ export default function ScoresPage() {
 
   useEffect(() => {
     if (!profile || !klasId) return
-    if (!['teacher', 'admin', 'super_admin'].includes(profile.role)) return
+    if (!['teacher', 'admin', 'super_admin'].includes(profile.role)) {
+      router.push('/klassen')
+      return
+    }
     loadData()
   }, [profile, klasId])
 

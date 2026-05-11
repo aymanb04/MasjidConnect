@@ -36,29 +36,21 @@ export default function KlassenPage() {
     let data: any[] = []
 
     if (profile!.role === 'student') {
-      // Fetch school years first
-      const { data: years } = await supabase
+      // Students always see only the active year — no year filter tabs
+      const { data: activeYear } = await supabase
         .from('school_years')
-        .select('*')
+        .select('id')
         .eq('tenant_id', profile!.tenant_id)
-        .order('start_date', { ascending: false })
-      const fetchedYears = years ?? []
-      const active = fetchedYears.find((y: any) => y.is_active) ?? null
-      setSchoolYears(fetchedYears)
-      if (active && !activeYearId) {
-        setActiveYearId(active.id)
-        if (!yearFilter) setYearFilter(active.id)
-      }
-
-      const effectiveYearId = requestedYearId || active?.id || null
+        .eq('is_active', true)
+        .maybeSingle()
 
       const { data: d } = await supabase
         .from('class_students')
         .select('classes(*, school_years(name), groups(name))')
         .eq('student_id', profile!.id)
       const all = d?.map((x: any) => x.classes).filter(Boolean) ?? []
-      data = effectiveYearId
-        ? all.filter((c: any) => c.school_year_id === effectiveYearId)
+      data = activeYear
+        ? all.filter((c: any) => c.school_year_id === activeYear.id)
         : all
 
     } else if (profile!.role === 'teacher') {
@@ -167,7 +159,7 @@ export default function KlassenPage() {
 
   const isSuperAdmin = profile?.role === 'super_admin'
   const isAdmin = ['admin', 'super_admin'].includes(profile?.role ?? '')
-  const showYearFilter = !isSuperAdmin && schoolYears.length > 0
+  const showYearFilter = !isSuperAdmin && profile?.role !== 'student' && schoolYears.length > 0
 
   // Filter by mosque (super_admin only)
   const filteredClasses = isSuperAdmin && mosqueFilter

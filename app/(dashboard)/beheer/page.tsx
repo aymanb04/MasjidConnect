@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
@@ -15,6 +16,7 @@ import { ReactivateUserButton } from '@/components/features/admin/ReactivateUser
 
 export default function BeheerPage() {
   const { profile, loading: profileLoading } = useProfile()
+  const router = useRouter()
   const [users, setUsers]             = useState<any[]>([])
   const [classes, setClasses]         = useState<any[]>([])
   const [invitations, setInvitations] = useState<any[]>([])
@@ -32,7 +34,10 @@ export default function BeheerPage() {
 
   useEffect(() => {
     if (!profile) return
-    if (!['admin', 'super_admin'].includes(profile.role)) return
+    if (!['admin', 'super_admin'].includes(profile.role)) {
+      router.push('/dashboard')
+      return
+    }
     loadData()
   }, [profile])
 
@@ -93,9 +98,6 @@ export default function BeheerPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
-  if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
-    return <div className="card p-8 text-center text-gray-400">Geen toegang.</div>
-  }
 
   const teachers = users.filter(u => u.role === 'teacher')
   const students  = users.filter(u => u.role === 'student')
