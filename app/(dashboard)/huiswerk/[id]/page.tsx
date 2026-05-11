@@ -33,13 +33,40 @@ export default function HuiswerkDetailPage() {
     setAssignment(a)
 
     if (profile!.role === 'student') {
-      const { data: sub } = await supabase.from('submissions').select('*, submission_files(*), submission_feedback(score, comment, teacher_id)').eq('assignment_id', id).eq('student_id', profile!.id).single()
-      setMySubmission(sub)
+      const { data: sub } = await supabase
+        .from('submissions')
+        .select('*, submission_files(*)')
+        .eq('assignment_id', id)
+        .eq('student_id', profile!.id)
+        .maybeSingle()
+      if (sub) {
+        const { data: fb } = await supabase
+          .from('submission_feedback')
+          .select('score, comment, teacher_id')
+          .eq('submission_id', sub.id)
+          .maybeSingle()
+        setMySubmission({ ...sub, submission_feedback: fb ? [fb] : [] })
+      } else {
+        setMySubmission(null)
+      }
     }
 
     if (isTeacher && a) {
-      const { data: subs } = await supabase.from('submissions').select('*, profiles!submissions_student_id_fkey(first_name, last_name), submission_files(*), submission_feedback(*)').eq('assignment_id', id)
-      setAllSubmissions(subs ?? [])
+      const { data: subs } = await supabase
+        .from('submissions')
+        .select('*, profiles!submissions_student_id_fkey(first_name, last_name), submission_files(*)')
+        .eq('assignment_id', id)
+      if (subs?.length) {
+        const { data: feedbacks } = await supabase
+          .from('submission_feedback')
+          .select('*')
+          .in('submission_id', subs.map((s: any) => s.id))
+        const fbMap: Record<string, any> = {}
+        feedbacks?.forEach((f: any) => { fbMap[f.submission_id] = f })
+        setAllSubmissions(subs.map((s: any) => ({ ...s, submission_feedback: fbMap[s.id] ? [fbMap[s.id]] : [] })))
+      } else {
+        setAllSubmissions([])
+      }
       const { count } = await supabase.from('class_students').select('*', { count: 'exact', head: true }).eq('class_id', a.class_id)
       setStudentCount(count ?? 0)
     }

@@ -49,15 +49,23 @@ export default function ScoresPage() {
     if (studentList.length && assignmentList.length) {
       const { data: subs } = await supabase
         .from('submissions')
-        .select('student_id, assignment_id, status, submission_feedback(score)')
+        .select('id, student_id, assignment_id, status')
         .in('assignment_id', assignmentList.map((x: any) => x.id))
+
+      const subIds = subs?.map((s: any) => s.id) ?? []
+      const { data: feedbacks } = subIds.length
+        ? await supabase.from('submission_feedback').select('submission_id, score').in('submission_id', subIds)
+        : { data: [] as any[] }
+
+      const fbMap: Record<string, number | null> = {}
+      feedbacks?.forEach((f: any) => { fbMap[f.submission_id] = f.score ?? null })
 
       const map: Record<string, Record<string, { status: string; score: number | null }>> = {}
       subs?.forEach((s: any) => {
         if (!map[s.student_id]) map[s.student_id] = {}
         map[s.student_id][s.assignment_id] = {
           status: s.status,
-          score:  s.submission_feedback?.[0]?.score ?? null,
+          score:  fbMap[s.id] ?? null,
         }
       })
       setScoreMap(map)
