@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { getSupabase } from '@/lib/supabase/singleton'
 import { useRouter } from 'next/navigation'
 import { Upload, X, Loader2, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -17,7 +17,7 @@ export default function ModuleDocumentUpload({ moduleId, onUploaded }: Props) {
   const [dragging, setDragging] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const router  = useRouter()
-  const supabase = createClient()
+  const supabase = getSupabase()
 
   function handleFile(f: File | null) {
     if (!f) return
