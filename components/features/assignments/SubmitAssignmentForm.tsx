@@ -74,7 +74,8 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
       if (subErr) throw subErr
 
       for (const file of files) {
-        const path = `${userId}/${assignmentId}/${Date.now()}_${file.name}`
+        const safeName = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_')
+        const path = `${userId}/${assignmentId}/${Date.now()}_${safeName}`
         const { error: upErr } = await supabase.storage.from('submission-files').upload(path, file)
         if (upErr) throw upErr
         const { data: { publicUrl } } = supabase.storage.from('submission-files').getPublicUrl(path)

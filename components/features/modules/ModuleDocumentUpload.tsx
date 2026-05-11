@@ -32,7 +32,8 @@ export default function ModuleDocumentUpload({ moduleId, onUploaded }: Props) {
     setLoading(true)
     setError('')
     try {
-      const path = `modules/${moduleId}/${Date.now()}_${file.name}`
+      const safeName = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_')
+      const path = `modules/${moduleId}/${Date.now()}_${safeName}`
       const { error: upErr } = await supabase.storage.from('module-documents').upload(path, file)
       if (upErr) {
         setError(upErr.message ?? 'Upload mislukt.')
