@@ -460,21 +460,23 @@ CREATE POLICY "admin_manage_invitations"    ON invitations USING (
 
 -- LESSON MODULES
 CREATE POLICY "super_admin_all_modules"  ON lesson_modules USING (is_super_admin());
-CREATE POLICY "teacher_manage_modules"   ON lesson_modules USING (am_i_teacher_of_class(class_id));
+CREATE POLICY "teacher_manage_modules"   ON lesson_modules
+  USING     (am_i_teacher_of_class(class_id))
+  WITH CHECK (am_i_teacher_of_class(class_id));
 CREATE POLICY "student_view_modules"     ON lesson_modules FOR SELECT USING (
   is_visible = true AND am_i_student_of_class(class_id)
 );
-CREATE POLICY "admin_manage_modules"     ON lesson_modules USING (
-  get_my_role() = 'admin' AND EXISTS (SELECT 1 FROM classes WHERE id = lesson_modules.class_id AND tenant_id = get_my_tenant_id())
-);
+CREATE POLICY "admin_manage_modules"     ON lesson_modules
+  USING     (get_my_role() = 'admin' AND EXISTS (SELECT 1 FROM classes WHERE id = lesson_modules.class_id AND tenant_id = get_my_tenant_id()))
+  WITH CHECK (get_my_role() = 'admin' AND EXISTS (SELECT 1 FROM classes WHERE id = lesson_modules.class_id AND tenant_id = get_my_tenant_id()));
 
 -- MODULE DOCUMENTS
 CREATE POLICY "view_module_docs"   ON module_documents FOR SELECT USING (
   EXISTS (SELECT 1 FROM lesson_modules lm WHERE lm.id = module_documents.module_id AND (am_i_teacher_of_class(lm.class_id) OR am_i_student_of_class(lm.class_id)))
 );
-CREATE POLICY "teacher_manage_docs" ON module_documents USING (
-  EXISTS (SELECT 1 FROM lesson_modules lm WHERE lm.id = module_documents.module_id AND am_i_teacher_of_class(lm.class_id))
-);
+CREATE POLICY "teacher_manage_docs" ON module_documents
+  USING     (EXISTS (SELECT 1 FROM lesson_modules lm WHERE lm.id = module_documents.module_id AND am_i_teacher_of_class(lm.class_id)))
+  WITH CHECK (EXISTS (SELECT 1 FROM lesson_modules lm WHERE lm.id = module_documents.module_id AND am_i_teacher_of_class(lm.class_id)));
 
 -- ATTENDANCE
 CREATE POLICY "super_admin_all_attendance"  ON attendance_sessions USING (is_super_admin());

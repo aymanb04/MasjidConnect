@@ -12,6 +12,7 @@ export default function CreateModuleButton() {
   const router = useRouter()
   const [open, setOpen]       = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState('')
   const [classes, setClasses] = useState<any[]>([])
   const [form, setForm]       = useState({
     class_id: searchParams?.get('klas') ?? '',
@@ -35,12 +36,14 @@ export default function CreateModuleButton() {
   async function handleCreate() {
     if (!form.class_id || !form.title.trim()) return
     setLoading(true)
+    setError('')
     try {
-      await supabase.from('lesson_modules').insert({
+      const { error: err } = await supabase.from('lesson_modules').insert({
         class_id: form.class_id, created_by: profile!.id,
         title: form.title.trim(), description: form.description || null,
         is_visible: form.is_visible,
       })
+      if (err) { setError(err.message); return }
       setOpen(false)
       setForm({ class_id: '', title: '', description: '', is_visible: true })
       router.refresh()
@@ -79,6 +82,9 @@ export default function CreateModuleButton() {
                 <div><div className="text-sm font-medium text-gray-800">Zichtbaar voor leerlingen</div><div className="text-xs text-gray-500">Leerlingen zien dit meteen</div></div>
               </label>
             </div>
+            {error && (
+              <div className="mx-6 mb-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>
+            )}
             <div className="flex gap-3 p-6 border-t border-border">
               <button onClick={() => setOpen(false)} className="btn-secondary flex-1 justify-center">Annuleren</button>
               <button onClick={handleCreate} disabled={loading || !form.class_id || !form.title.trim()} className="btn-primary flex-1 justify-center">
