@@ -399,6 +399,27 @@ CREATE POLICY "student_view_assignments"    ON assignments FOR SELECT USING (
   is_published = true AND am_i_student_of_class(class_id)
 );
 
+-- SUBMISSION FILES
+CREATE POLICY "super_admin_all_submission_files" ON submission_files USING (is_super_admin());
+CREATE POLICY "student_manage_own_files" ON submission_files
+  USING     (EXISTS (SELECT 1 FROM submissions WHERE id = submission_files.submission_id AND student_id = auth.uid()))
+  WITH CHECK (EXISTS (SELECT 1 FROM submissions WHERE id = submission_files.submission_id AND student_id = auth.uid()));
+CREATE POLICY "teacher_view_submission_files" ON submission_files FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM submissions s
+    JOIN assignments a ON a.id = s.assignment_id
+    WHERE s.id = submission_files.submission_id AND am_i_teacher_of_class(a.class_id)
+  )
+);
+CREATE POLICY "admin_view_submission_files" ON submission_files FOR SELECT USING (
+  get_my_role() = 'admin' AND EXISTS (
+    SELECT 1 FROM submissions s
+    JOIN assignments a ON a.id = s.assignment_id
+    JOIN classes c ON c.id = a.class_id
+    WHERE s.id = submission_files.submission_id AND c.tenant_id = get_my_tenant_id()
+  )
+);
+
 -- SUBMISSIONS
 CREATE POLICY "super_admin_all_submissions"  ON submissions USING (is_super_admin());
 CREATE POLICY "student_manage_own"           ON submissions USING (student_id = auth.uid());
@@ -477,6 +498,9 @@ CREATE POLICY "view_module_docs"   ON module_documents FOR SELECT USING (
 CREATE POLICY "teacher_manage_docs" ON module_documents
   USING     (EXISTS (SELECT 1 FROM lesson_modules lm WHERE lm.id = module_documents.module_id AND am_i_teacher_of_class(lm.class_id)))
   WITH CHECK (EXISTS (SELECT 1 FROM lesson_modules lm WHERE lm.id = module_documents.module_id AND am_i_teacher_of_class(lm.class_id)));
+CREATE POLICY "admin_manage_docs" ON module_documents
+  USING     (EXISTS (SELECT 1 FROM lesson_modules lm JOIN classes c ON c.id = lm.class_id WHERE lm.id = module_documents.module_id AND c.tenant_id = get_my_tenant_id() AND get_my_role() = 'admin'))
+  WITH CHECK (EXISTS (SELECT 1 FROM lesson_modules lm JOIN classes c ON c.id = lm.class_id WHERE lm.id = module_documents.module_id AND c.tenant_id = get_my_tenant_id() AND get_my_role() = 'admin'));
 
 -- ATTENDANCE
 CREATE POLICY "super_admin_all_attendance"  ON attendance_sessions USING (is_super_admin());
