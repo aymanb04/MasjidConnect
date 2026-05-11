@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { getRoleBadge, formatDate } from '@/lib/utils'
-import { Users, GraduationCap, Mail, Shield, Archive, ChevronDown, ChevronRight, X, Loader2 } from 'lucide-react'
+import { Users, GraduationCap, Mail, Shield, Archive, ChevronDown, ChevronRight, X, Loader2, Search } from 'lucide-react'
 import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 import { CreateClassButton } from '@/components/features/admin/CreateClassButton'
 import CsvImportButton from '@/components/features/admin/CsvImportButton'
@@ -22,6 +22,8 @@ export default function BeheerPage() {
   const [showArchived, setShowArchived]       = useState(false)
   const [archivedUsers, setArchivedUsers]     = useState<any[]>([])
   const [archivedLoading, setArchivedLoading] = useState(false)
+  const [userSearch, setUserSearch]           = useState('')
+  const [roleFilter, setRoleFilter]           = useState('all')
 
   const [expandedClass, setExpandedClass]     = useState<string | null>(null)
   const [classStudents, setClassStudents]     = useState<Record<string, any[]>>({})
@@ -96,6 +98,21 @@ export default function BeheerPage() {
 
   const teachers = users.filter(u => u.role === 'teacher')
   const students  = users.filter(u => u.role === 'student')
+  const admins    = users.filter(u => u.role === 'admin')
+
+  const filteredUsers = users.filter(u => {
+    if (roleFilter !== 'all' && u.role !== roleFilter) return false
+    if (userSearch) {
+      const q = userSearch.toLowerCase()
+      return `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)
+    }
+    return true
+  })
+  const filteredArchived = archivedUsers.filter(u => {
+    if (!userSearch) return true
+    const q = userSearch.toLowerCase()
+    return `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)
+  })
 
   return (
     <div className="animate-slide-up">
@@ -212,21 +229,60 @@ export default function BeheerPage() {
 
         {/* Gebruikers */}
         <div className="card p-6">
+          {/* Header: title + create actions only */}
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900 flex items-center gap-2">
               <Users size={17} className="text-primary-600"/> Gebruikers
             </h2>
             <div className="flex gap-2">
-              <button onClick={toggleArchived}
-                className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${showArchived ? 'border-gray-300 bg-gray-100 text-gray-700' : 'border-border text-gray-400 hover:text-gray-600'}`}>
-                Gearchiveerd
-              </button>
               <CsvImportButton tenantId={profile.tenant_id!} onImported={loadData}/>
               <InviteUserButton tenantId={profile.tenant_id!} onInvited={loadData}/>
             </div>
           </div>
-          <div className="space-y-1.5">
-            {users.map((u: any) => {
+
+          {/* Filter bar */}
+          <div className="space-y-2 mb-3">
+            <div className="flex gap-1 flex-wrap">
+              {([
+                { key: 'all',     label: 'Alle',        count: users.length    },
+                { key: 'student', label: 'Leerlingen',  count: students.length },
+                { key: 'teacher', label: 'Leerkrachten',count: teachers.length },
+                { key: 'admin',   label: 'Admins',      count: admins.length   },
+              ] as const).map(tab => (
+                <button key={tab.key} onClick={() => setRoleFilter(tab.key)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    roleFilter === tab.key
+                      ? 'bg-primary-50 text-primary-700'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                  }`}>
+                  {tab.label}
+                  <span className={`rounded-full px-1.5 py-0.5 text-xs ${roleFilter === tab.key ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-400'}`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
+                <input type="text" value={userSearch} onChange={e => setUserSearch(e.target.value)}
+                  placeholder="Zoek op naam of e-mail…" className="input pl-8 py-2 text-sm h-9"/>
+              </div>
+              <button onClick={toggleArchived}
+                className={`text-xs px-2.5 rounded-lg border transition-colors flex-shrink-0 ${showArchived ? 'border-gray-300 bg-gray-100 text-gray-700' : 'border-border text-gray-400 hover:text-gray-600'}`}>
+                Gearchiveerd
+              </button>
+            </div>
+          </div>
+
+          {/* Active user list */}
+          <div className="space-y-1">
+            {filteredUsers.length === 0 && !showArchived && (
+              <p className="text-sm text-gray-400 text-center py-6">
+                {userSearch ? 'Geen gebruikers gevonden.' : 'Nog geen gebruikers.'}
+              </p>
+            )}
+            {filteredUsers.map((u: any) => {
               const rb = getRoleBadge(u.role)
               return (
                 <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
@@ -235,20 +291,18 @@ export default function BeheerPage() {
                     {u.first_name?.[0]}{u.last_name?.[0]}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-800">{u.first_name} {u.last_name}</div>
-                    <div className="text-xs text-gray-400">{u.email}</div>
+                    <div className="text-sm font-medium text-gray-800 truncate">{u.first_name} {u.last_name}</div>
+                    <div className="text-xs text-gray-400 truncate">{u.email}</div>
                   </div>
-                  <span className={`badge ${rb.color}`}>{rb.label}</span>
+                  <span className={`badge flex-shrink-0 ${rb.color}`}>{rb.label}</span>
                   {u.id !== profile.id && (
                     <DeleteUserButton userId={u.id} name={`${u.first_name} ${u.last_name}`} onDeleted={loadData}/>
                   )}
                 </div>
               )
             })}
-            {!users.length && (
-              <p className="text-sm text-gray-400 text-center py-4">Nog geen gebruikers.</p>
-            )}
 
+            {/* Archived section */}
             {showArchived && (
               <>
                 <div className="pt-3 pb-1 border-t border-border">
@@ -258,9 +312,11 @@ export default function BeheerPage() {
                   <div className="flex items-center gap-2 py-2 text-sm text-gray-400">
                     <Loader2 size={13} className="animate-spin"/> Laden…
                   </div>
-                ) : archivedUsers.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-3">Geen gearchiveerde gebruikers.</p>
-                ) : archivedUsers.map((u: any) => {
+                ) : filteredArchived.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-3">
+                    {userSearch ? 'Geen resultaten.' : 'Geen gearchiveerde gebruikers.'}
+                  </p>
+                ) : filteredArchived.map((u: any) => {
                   const rb = getRoleBadge(u.role)
                   return (
                     <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group opacity-60">
@@ -268,10 +324,10 @@ export default function BeheerPage() {
                         {u.first_name?.[0]}{u.last_name?.[0]}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-600">{u.first_name} {u.last_name}</div>
-                        <div className="text-xs text-gray-400">{u.email}</div>
+                        <div className="text-sm font-medium text-gray-600 truncate">{u.first_name} {u.last_name}</div>
+                        <div className="text-xs text-gray-400 truncate">{u.email}</div>
                       </div>
-                      <span className={`badge ${rb.color}`}>{rb.label}</span>
+                      <span className={`badge flex-shrink-0 ${rb.color}`}>{rb.label}</span>
                       <ReactivateUserButton userId={u.id} name={`${u.first_name} ${u.last_name}`}
                         onReactivated={() => { setArchivedUsers(prev => prev.filter(a => a.id !== u.id)); loadData() }}/>
                     </div>
