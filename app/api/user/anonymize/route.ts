@@ -33,6 +33,15 @@ export async function POST(request: Request) {
         })
         if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 })
 
+        // Force-revoke all active sessions immediately
+        await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${userId}/logout`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+                'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            },
+        })
+
         return NextResponse.json({ success: true })
     } catch (e: any) {
         return NextResponse.json({ error: e.message }, { status: 500 })
