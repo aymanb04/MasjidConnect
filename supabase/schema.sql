@@ -1,5 +1,15 @@
 -- WARNING: This schema is for context only and is not meant to be run directly.
--- It reflects the live DB state as of 2026-05-10.
+-- It reflects the live DB state as of 2026-05-11.
+--
+-- USER DELETION STRATEGY (GDPR Belgium)
+-- Two actions available via the DeleteUserButton component:
+--   1. Archiveren  → profiles.is_active = false + auth ban (data intact, reversible)
+--   2. GDPR wissen → profiles PII scrubbed (first/last/email/phone/avatar → anon values),
+--                    auth email anonymized + ban. The UUID row is kept so all FK relations
+--                    (submissions, class_students, etc.) stay valid for historical stats.
+--                    Submissions show "Verwijderd" as student name. Irreversible.
+-- lesson_modules are class-owned (RLS: am_i_teacher_of_class) — not creator-owned.
+-- Any teacher assigned to the class can edit existing modules.
 
 -- ============================================================
 -- TABLES
