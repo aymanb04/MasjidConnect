@@ -110,7 +110,7 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
             </div>
             <div className="flex-1">
               <div className="text-xs font-medium text-primary-600 mb-0.5">
-                Beoordeeld door {feedback?.profiles?.first_name ?? 'leerkracht'}
+                Beoordeeld door leerkracht
               </div>
               {scoreDisplay && (
                 <div className="text-2xl font-bold text-primary-800 leading-none">

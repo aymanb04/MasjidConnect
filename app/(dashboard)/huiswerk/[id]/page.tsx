@@ -33,7 +33,7 @@ export default function HuiswerkDetailPage() {
     setAssignment(a)
 
     if (profile!.role === 'student') {
-      const { data: sub } = await supabase.from('submissions').select('*, submission_files(*), submission_feedback(*, profiles!submission_feedback_teacher_id_fkey(first_name, last_name))').eq('assignment_id', id).eq('student_id', profile!.id).single()
+      const { data: sub } = await supabase.from('submissions').select('*, submission_files(*), submission_feedback(score, comment, teacher_id)').eq('assignment_id', id).eq('student_id', profile!.id).single()
       setMySubmission(sub)
     }
 
