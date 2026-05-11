@@ -157,25 +157,25 @@ export default function TeacherSubmissionsView({ submissions, studentCount, assi
                       </p>
 
                       <div className="grid grid-cols-3 gap-3 mb-3">
-                        {maxScore && (
-                          <div className="col-span-1">
-                            <label className="label text-xs">Punten (max {maxScore})</label>
-                            <input
-                              type="number"
-                              min={0}
-                              max={maxScore}
-                              value={fb.score || hasFb?.score || ''}
-                              onChange={e => setFeedbacks(prev => ({ ...prev, [sub.id]: { ...getFb(sub.id), score: e.target.value } }))}
-                              placeholder="0"
-                              className="input"
-                            />
-                          </div>
-                        )}
-                        <div className={maxScore ? 'col-span-2' : 'col-span-3'}>
+                        <div className="col-span-1">
+                          <label className="label text-xs">
+                            {maxScore ? `Punten (max ${maxScore})` : 'Punten'}
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={maxScore ?? undefined}
+                            value={fb.score !== undefined ? fb.score : (hasFb?.score ?? '')}
+                            onChange={e => setFeedbacks(prev => ({ ...prev, [sub.id]: { ...getFb(sub.id), score: e.target.value } }))}
+                            placeholder="0"
+                            className="input"
+                          />
+                        </div>
+                        <div className="col-span-2">
                           <label className="label text-xs">Commentaar</label>
                           <textarea
                             rows={2}
-                            value={fb.comment || hasFb?.comment || ''}
+                            value={fb.comment !== undefined ? fb.comment : (hasFb?.comment ?? '')}
                             onChange={e => setFeedbacks(prev => ({ ...prev, [sub.id]: { ...getFb(sub.id), comment: e.target.value } }))}
                             placeholder="Optioneel commentaar voor de leerling…"
                             className="input resize-none"
