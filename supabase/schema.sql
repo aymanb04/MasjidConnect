@@ -421,6 +421,22 @@ CREATE POLICY "teacher_manage_feedback"   ON submission_feedback USING (teacher_
 CREATE POLICY "student_view_own_feedback" ON submission_feedback FOR SELECT USING (
   EXISTS (SELECT 1 FROM submissions WHERE id = submission_feedback.submission_id AND student_id = auth.uid())
 );
+CREATE POLICY "admin_view_feedback" ON submission_feedback FOR SELECT USING (
+  get_my_role() = 'admin' AND EXISTS (
+    SELECT 1 FROM submissions s
+    JOIN assignments a ON a.id = s.assignment_id
+    JOIN classes c ON c.id = a.class_id
+    WHERE s.id = submission_feedback.submission_id AND c.tenant_id = get_my_tenant_id()
+  )
+);
+CREATE POLICY "teacher_view_class_feedback" ON submission_feedback FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM submissions s
+    JOIN assignments a ON a.id = s.assignment_id
+    JOIN class_teachers ct ON ct.class_id = a.class_id
+    WHERE s.id = submission_feedback.submission_id AND ct.teacher_id = auth.uid()
+  )
+);
 
 -- ANNOUNCEMENTS
 CREATE POLICY "super_admin_all_announcements" ON announcements USING (is_super_admin());
