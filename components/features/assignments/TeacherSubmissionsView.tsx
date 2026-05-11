@@ -31,18 +31,23 @@ export default function TeacherSubmissionsView({ submissions, studentCount, assi
     const fb = getFb(sub.id)
     setSaving(sub.id)
     try {
-      await supabase.from('submission_feedback').upsert({
+      const { error: fbErr } = await supabase.from('submission_feedback').upsert({
         ...(sub.submission_feedback?.[0]?.id ? { id: sub.submission_feedback[0].id } : {}),
         submission_id: sub.id,
         teacher_id: (await supabase.auth.getUser()).data.user!.id,
-        score: fb.score ? parseInt(fb.score) : null,
+        score: fb.score !== '' ? parseInt(fb.score) : null,
         comment: fb.comment || null,
-      }, { onConflict: 'submission_id,teacher_id' })
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'submission_id' })
+
+      if (fbErr) throw fbErr
 
       await supabase.from('submissions').update({ status: 'graded' }).eq('id', sub.id)
 
       setSaved(prev => new Set(prev).add(sub.id))
       router.refresh()
+    } catch (e: any) {
+      alert('Fout bij opslaan: ' + (e.message ?? e))
     } finally {
       setSaving(null)
     }
@@ -165,7 +170,7 @@ export default function TeacherSubmissionsView({ submissions, studentCount, assi
                             type="number"
                             min={0}
                             max={maxScore ?? undefined}
-                            value={fb.score !== undefined ? fb.score : (hasFb?.score ?? '')}
+                            value={feedbacks[sub.id]?.score !== undefined ? feedbacks[sub.id].score : String(hasFb?.score ?? '')}
                             onChange={e => setFeedbacks(prev => ({ ...prev, [sub.id]: { ...getFb(sub.id), score: e.target.value } }))}
                             placeholder="0"
                             className="input"
@@ -175,7 +180,7 @@ export default function TeacherSubmissionsView({ submissions, studentCount, assi
                           <label className="label text-xs">Commentaar</label>
                           <textarea
                             rows={2}
-                            value={fb.comment !== undefined ? fb.comment : (hasFb?.comment ?? '')}
+                            value={feedbacks[sub.id]?.comment !== undefined ? feedbacks[sub.id].comment : (hasFb?.comment ?? '')}
                             onChange={e => setFeedbacks(prev => ({ ...prev, [sub.id]: { ...getFb(sub.id), comment: e.target.value } }))}
                             placeholder="Optioneel commentaar voor de leerling…"
                             className="input resize-none"
