@@ -6,7 +6,7 @@ import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { getDeadlineLabel, getSubmissionStatusBadge } from '@/lib/utils'
-import { ArrowLeft, FileText, BookOpen, Users, Plus, Clock, GraduationCap, Mail, BarChart2 } from 'lucide-react'
+import { ArrowLeft, FileText, BookOpen, Users, Plus, Clock, GraduationCap, Mail, BarChart2, X, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function KlasDetailPage() {
@@ -19,6 +19,10 @@ export default function KlasDetailPage() {
   const [students, setStudents] = useState<any[]>([])
   const [mySubmissions, setMySubmissions] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
+  const [allTeachers, setAllTeachers] = useState<any[]>([])
+  const [addingTeacher, setAddingTeacher] = useState(false)
+  const [selectedTeacherId, setSelectedTeacherId] = useState('')
+  const [savingTeacher, setSavingTeacher] = useState(false)
 
   useEffect(() => {
     if (!profile || !klasId) return
@@ -46,6 +50,11 @@ export default function KlasDetailPage() {
       setStudents(s?.map((x: any) => x.profiles).filter(Boolean) ?? [])
     }
 
+    if (profile!.role === 'admin') {
+      const { data: at } = await supabase.from('profiles').select('id, first_name, last_name').eq('tenant_id', profile!.tenant_id).eq('role', 'teacher').eq('is_active', true).order('last_name')
+      setAllTeachers(at ?? [])
+    }
+
     if (profile!.role === 'student' && a?.length) {
       const { data: subs } = await supabase.from('submissions').select('*').eq('student_id', profile!.id).in('assignment_id', a.map((x: any) => x.id))
       const map: Record<string, any> = {}
@@ -56,10 +65,27 @@ export default function KlasDetailPage() {
     setLoading(false)
   }
 
+  async function assignTeacher() {
+    if (!selectedTeacherId) return
+    setSavingTeacher(true)
+    await getSupabase().from('class_teachers').insert({ class_id: klasId as string, teacher_id: selectedTeacherId })
+    setSavingTeacher(false)
+    setAddingTeacher(false)
+    setSelectedTeacherId('')
+    loadData()
+  }
+
+  async function removeTeacher(teacherId: string) {
+    await getSupabase().from('class_teachers').delete().eq('class_id', klasId as string).eq('teacher_id', teacherId)
+    setTeachers(prev => prev.filter(t => t.id !== teacherId))
+  }
+
   if (profileLoading || loading) return <PageLoader />
   if (!klas) return null
 
   const isTeacher = ['teacher','admin','super_admin'].includes(profile?.role ?? '')
+  const isAdmin = profile?.role === 'admin'
+  const unassignedTeachers = allTeachers.filter(t => !teachers.some(t2 => t2.id === t.id))
 
   return (
     <div className="animate-slide-up">
@@ -132,9 +158,14 @@ export default function KlasDetailPage() {
           <div className="card p-6 h-fit">
             <div className="flex items-center gap-2 mb-4">
               <GraduationCap size={18} className="text-primary-600" />
-              <h2 className="font-semibold text-gray-900">Leerkrachten</h2>
+              <h2 className="font-semibold text-gray-900 flex-1">Leerkrachten</h2>
+              {isAdmin && !addingTeacher && unassignedTeachers.length > 0 && (
+                <button onClick={() => setAddingTeacher(true)} className="text-gray-400 hover:text-primary-600 transition-colors p-0.5" title="Leerkracht toevoegen">
+                  <Plus size={16}/>
+                </button>
+              )}
             </div>
-            {teachers.length === 0 ? (
+            {teachers.length === 0 && !addingTeacher ? (
               <p className="text-sm text-gray-400 text-center py-2">Geen leerkracht toegewezen.</p>
             ) : (
               <div className="space-y-1">
@@ -145,16 +176,31 @@ export default function KlasDetailPage() {
                     </div>
                     <span className="text-sm text-gray-700 flex-1 min-w-0 truncate">{t.first_name} {t.last_name}</span>
                     {t.email && (
-                      <a
-                        href={`mailto:${t.email}`}
-                        className="text-gray-300 hover:text-primary-600 transition-colors p-0.5"
-                        title={`Mail ${t.first_name}`}
-                      >
-                        <Mail size={14} />
+                      <a href={`mailto:${t.email}`} className="text-gray-300 hover:text-primary-600 transition-colors p-0.5 opacity-0 group-hover:opacity-100" title={`Mail ${t.first_name}`}>
+                        <Mail size={14}/>
                       </a>
+                    )}
+                    {isAdmin && (
+                      <button onClick={() => removeTeacher(t.id)} className="text-gray-200 hover:text-red-400 transition-colors p-0.5 opacity-0 group-hover:opacity-100" title="Verwijderen">
+                        <X size={13}/>
+                      </button>
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+            {isAdmin && addingTeacher && (
+              <div className="mt-3 flex gap-2">
+                <select value={selectedTeacherId} onChange={e => setSelectedTeacherId(e.target.value)} className="input flex-1 text-xs py-1.5">
+                  <option value="">Kies leerkracht…</option>
+                  {unassignedTeachers.map(t => <option key={t.id} value={t.id}>{t.first_name} {t.last_name}</option>)}
+                </select>
+                <button onClick={assignTeacher} disabled={!selectedTeacherId || savingTeacher} className="btn-primary text-xs py-1.5 px-3">
+                  {savingTeacher ? <Loader2 size={13} className="animate-spin"/> : 'OK'}
+                </button>
+                <button onClick={() => { setAddingTeacher(false); setSelectedTeacherId('') }} className="btn-secondary text-xs py-1.5 px-3">
+                  <X size={13}/>
+                </button>
               </div>
             )}
           </div>

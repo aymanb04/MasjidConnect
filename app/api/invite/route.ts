@@ -46,8 +46,23 @@ export async function POST(request: Request) {
                 }
             }
 
-            // Teacher: assign to a specific class
-            if (class_id && class_role === 'teacher') {
+            // Teacher: assign to all classes in a group
+            if (group_id && role === 'teacher') {
+                const { data: groupClasses } = await supabaseAdmin
+                    .from('classes')
+                    .select('id')
+                    .eq('group_id', group_id)
+                    .eq('is_archived', false)
+
+                if (groupClasses?.length) {
+                    await supabaseAdmin.from('class_teachers').insert(
+                        groupClasses.map(c => ({ class_id: c.id, teacher_id: data.user!.id }))
+                    )
+                }
+            }
+
+            // Teacher: assign to a specific class (no group selected)
+            if (class_id && !group_id && class_role === 'teacher') {
                 await supabaseAdmin.from('class_teachers').insert({
                     class_id, teacher_id: data.user.id,
                 })

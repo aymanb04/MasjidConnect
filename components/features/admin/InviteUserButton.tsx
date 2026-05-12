@@ -70,7 +70,7 @@ export function InviteUserButton({ tenantId, onInvited }: Props) {
           last_name:  form.last_name.trim(),
           role:       form.role,
           tenant_id:  form.tenant_id,
-          group_id:   isStudent ? (form.group_id || null) : null,
+          group_id:   (isStudent || isTeacher) ? (form.group_id || null) : null,
           class_id:   isTeacher ? (form.class_id || null) : null,
           class_role: form.role,
           invited_by: profile?.id,
@@ -184,22 +184,45 @@ export function InviteUserButton({ tenantId, onInvited }: Props) {
                 </div>
               )}
 
-              {/* Class — teachers only */}
+              {/* Group + class — teachers only */}
               {isTeacher && (
-                <div>
-                  <label className="label">
-                    Klas <span className="text-gray-400">(optioneel)</span>
-                  </label>
-                  <select
-                    value={form.class_id}
-                    onChange={e => setForm(p => ({ ...p, class_id: e.target.value }))}
-                    className="input"
-                    disabled={!form.tenant_id}
-                  >
-                    <option value="">Geen klas</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
+                <>
+                  <div>
+                    <label className="label">
+                      Groep <span className="text-gray-400">(optioneel)</span>
+                    </label>
+                    <select
+                      value={form.group_id}
+                      onChange={e => setForm(p => ({ ...p, group_id: e.target.value, class_id: '' }))}
+                      className="input"
+                      disabled={!form.tenant_id}
+                    >
+                      <option value="">Geen groep</option>
+                      {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                    </select>
+                    {form.group_id && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Leerkracht wordt toegewezen aan alle vakken van deze groep.
+                      </p>
+                    )}
+                  </div>
+                  {!form.group_id && (
+                    <div>
+                      <label className="label">
+                        Of specifieke klas <span className="text-gray-400">(optioneel)</span>
+                      </label>
+                      <select
+                        value={form.class_id}
+                        onChange={e => setForm(p => ({ ...p, class_id: e.target.value }))}
+                        className="input"
+                        disabled={!form.tenant_id}
+                      >
+                        <option value="">Geen klas</option>
+                        {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </>
               )}
 
               {error && (
