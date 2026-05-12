@@ -94,11 +94,11 @@ export default function RoosterPage() {
       ) : (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
-            <div className="flex min-w-max">
+            <div className="grid min-w-max w-full" style={{ gridTemplateColumns: `repeat(${activeDays.length}, minmax(180px, 1fr))` }}>
               {activeDays.map((day, colIdx) => (
                 <div
                   key={day}
-                  className={`flex flex-col w-52 flex-shrink-0 ${colIdx < activeDays.length - 1 ? 'border-r border-border' : ''}`}
+                  className={`flex flex-col ${colIdx < activeDays.length - 1 ? 'border-r border-border' : ''}`}
                 >
                   {/* Day header */}
                   <div className="px-4 py-3 border-b border-border bg-gray-50/60 text-center">
