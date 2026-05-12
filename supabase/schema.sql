@@ -225,6 +225,17 @@ CREATE TABLE public.payments (
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE public.class_sessions (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  class_id    UUID NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
+  tenant_id   UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  day_of_week SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0=Mon … 6=Sun
+  start_time  TIME NOT NULL,
+  end_time    TIME NOT NULL,
+  location    VARCHAR,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE public.audit_logs (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   tenant_id   UUID REFERENCES public.tenants(id),
@@ -335,6 +346,7 @@ ALTER TABLE attendance_sessions  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE attendance_records   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE class_sessions       ENABLE ROW LEVEL SECURITY;
 
 -- TENANTS
 CREATE POLICY "super_admin_all_tenants" ON tenants USING (is_super_admin());
@@ -518,6 +530,18 @@ CREATE POLICY "student_view_own_records"    ON attendance_records FOR SELECT USI
 CREATE POLICY "super_admin_all_payments" ON payments USING (is_super_admin());
 CREATE POLICY "admin_view_own_payments"  ON payments FOR SELECT USING (
   get_my_role() = 'admin' AND tenant_id = get_my_tenant_id()
+);
+
+-- CLASS SESSIONS (ROOSTER)
+CREATE POLICY "super_admin_all_sessions" ON class_sessions USING (is_super_admin());
+CREATE POLICY "admin_manage_sessions"    ON class_sessions
+  USING     (get_my_role() = 'admin' AND tenant_id = get_my_tenant_id())
+  WITH CHECK (get_my_role() = 'admin' AND tenant_id = get_my_tenant_id());
+CREATE POLICY "teacher_view_sessions"    ON class_sessions FOR SELECT USING (
+  am_i_teacher_of_class(class_id)
+);
+CREATE POLICY "student_view_sessions"    ON class_sessions FOR SELECT USING (
+  am_i_student_of_class(class_id)
 );
 
 -- AUDIT LOGS
