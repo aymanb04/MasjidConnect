@@ -7,6 +7,7 @@ import { PageLoader, EmptyState } from '@/components/ui/PageShell'
 import { Clock, Plus, X, Loader2 } from 'lucide-react'
 
 const DAYS = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag']
+const DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo']
 
 function fmt(t: string) { return t.slice(0, 5) }
 
@@ -91,37 +92,51 @@ export default function RoosterPage() {
           subtitle={isAdmin ? 'Voeg lessen toe via de knop hierboven.' : 'Er zijn nog geen lessen ingepland.'}
         />
       ) : (
-        <div className="space-y-4">
-          {activeDays.map(day => (
-            <div key={day} className="card overflow-hidden">
-              <div className="px-5 py-3 border-b border-border bg-gray-50/60">
-                <h2 className="font-semibold text-gray-800 text-sm">{DAYS[day]}</h2>
-              </div>
-              <div className="divide-y divide-border">
-                {byDay[day].map((s: any) => (
-                  <div key={s.id} className="flex items-center gap-4 px-5 py-3.5 group">
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.classes?.color ?? '#1B6B4A' }}/>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-gray-800">{s.classes?.name}</div>
-                      {s.location && <div className="text-xs text-gray-400 mt-0.5">{s.location}</div>}
-                    </div>
-                    <div className="text-sm text-gray-600 flex-shrink-0 tabular-nums font-medium">
-                      {fmt(s.start_time)} – {fmt(s.end_time)}
-                    </div>
-                    {isAdmin && (
-                      <button
-                        onClick={() => deleteSession(s.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-300 hover:text-red-400 transition-all flex-shrink-0"
-                        title="Verwijderen"
-                      >
-                        <X size={14}/>
-                      </button>
-                    )}
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <div className="flex min-w-max">
+              {activeDays.map((day, colIdx) => (
+                <div
+                  key={day}
+                  className={`flex flex-col w-52 flex-shrink-0 ${colIdx < activeDays.length - 1 ? 'border-r border-border' : ''}`}
+                >
+                  {/* Day header */}
+                  <div className="px-4 py-3 border-b border-border bg-gray-50/60 text-center">
+                    <div className="font-semibold text-gray-800 text-sm hidden sm:block">{DAYS[day]}</div>
+                    <div className="font-semibold text-gray-800 text-sm sm:hidden">{DAYS_SHORT[day]}</div>
                   </div>
-                ))}
-              </div>
+
+                  {/* Sessions */}
+                  <div className="flex flex-col gap-2 p-3">
+                    {byDay[day].map((s: any) => (
+                      <div
+                        key={s.id}
+                        className="group relative rounded-xl p-3 border border-border bg-white hover:shadow-sm transition-shadow"
+                        style={{ borderLeftWidth: 3, borderLeftColor: s.classes?.color ?? '#1B6B4A' }}
+                      >
+                        <div className="font-medium text-sm text-gray-800 leading-snug pr-5">{s.classes?.name}</div>
+                        <div className="text-xs tabular-nums text-gray-500 mt-1">
+                          {fmt(s.start_time)} – {fmt(s.end_time)}
+                        </div>
+                        {s.location && (
+                          <div className="text-xs text-gray-400 mt-0.5 truncate">{s.location}</div>
+                        )}
+                        {isAdmin && (
+                          <button
+                            onClick={() => deleteSession(s.id)}
+                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-0.5 text-gray-300 hover:text-red-400 transition-all"
+                            title="Verwijderen"
+                          >
+                            <X size={13}/>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       )}
 
