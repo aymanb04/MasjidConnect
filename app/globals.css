@@ -114,11 +114,6 @@
   .stat-icon {
     @apply w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 sm:w-11 sm:h-11;
   }
-
-  /* iOS safe area */
-  .safe-area-top {
-    padding-top: max(0.75rem, env(safe-area-inset-top));
-  }
 }
 
 /* Framer Motion layout animations */

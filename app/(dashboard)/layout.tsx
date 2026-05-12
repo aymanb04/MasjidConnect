@@ -57,7 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             <main className="flex-1 overflow-y-auto min-w-0">
                 {/* Mobile top bar */}
-                <div className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 md:hidden safe-area-top">
+                <div className="sticky top-0 z-30 flex items-center justify-between px-4 bg-white border-b border-gray-200 md:hidden" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: '0.75rem' }}>
                     <button
                         onClick={() => setSidebarOpen(true)}
                         className="p-1 -ml-1 text-gray-600 hover:text-gray-900"
