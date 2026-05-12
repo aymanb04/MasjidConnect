@@ -101,7 +101,7 @@
     @apply mb-6;
   }
   .page-title {
-    @apply text-2xl font-semibold text-gray-900;
+    @apply text-xl font-semibold text-gray-900 sm:text-2xl;
   }
   .page-subtitle {
     @apply text-sm text-gray-500 mt-1;
@@ -109,10 +109,15 @@
 
   /* Stats card */
   .stat-card {
-    @apply card p-5 flex items-center gap-4;
+    @apply card p-4 flex items-center gap-3 sm:p-5 sm:gap-4;
   }
   .stat-icon {
-    @apply w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0;
+    @apply w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 sm:w-11 sm:h-11;
+  }
+
+  /* iOS safe area */
+  .safe-area-top {
+    padding-top: max(0.75rem, env(safe-area-inset-top));
   }
 }
 

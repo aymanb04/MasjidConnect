@@ -71,7 +71,7 @@ export default function HuiswerkPage() {
 
   return (
     <div className="animate-slide-up">
-      <div className="page-header flex items-start justify-between">
+      <div className="page-header flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="page-title">Huiswerk</h1>
           <p className="page-subtitle">{isTeacher ? `${assignments.length} opdrachten` : `${assignments.filter(a => !mySubmissions[a.id]).length} openstaand`}</p>

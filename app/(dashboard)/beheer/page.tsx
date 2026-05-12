@@ -119,7 +119,7 @@ export default function BeheerPage() {
 
   return (
     <div className="animate-slide-up">
-      <div className="page-header">
+      <div className="page-header flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="page-title">Beheer</h1>
           <p className="page-subtitle">Gebruikers, klassen en uitnodigingen beheren</p>

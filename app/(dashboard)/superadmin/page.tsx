@@ -104,7 +104,7 @@ export default function SuperAdminPage() {
 
   return (
     <div className="animate-slide-up">
-      <div className="page-header flex items-start justify-between">
+      <div className="page-header flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="page-title flex items-center gap-2">
             <Shield size={22} className="text-primary-600"/> Super Admin

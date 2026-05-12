@@ -57,7 +57,7 @@ export default function LesmodulesPage() {
 
   return (
     <div className="animate-slide-up">
-      <div className="page-header flex items-start justify-between">
+      <div className="page-header flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="page-title">Lesmodules</h1>
           <p className="page-subtitle">{modules.length} module{modules.length !== 1 ? 's' : ''} beschikbaar</p>

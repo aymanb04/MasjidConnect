@@ -57,7 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             <main className="flex-1 overflow-y-auto min-w-0">
                 {/* Mobile top bar */}
-                <div className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 md:hidden">
+                <div className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 md:hidden safe-area-top">
                     <button
                         onClick={() => setSidebarOpen(true)}
                         className="p-1 -ml-1 text-gray-600 hover:text-gray-900"
@@ -71,7 +71,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <div className="w-7 flex-shrink-0" />
                 </div>
 
-                <div className="max-w-6xl mx-auto px-6 py-8">
+                <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
                     {children}
                 </div>
             </main>
