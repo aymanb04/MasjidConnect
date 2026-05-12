@@ -81,13 +81,17 @@ export default function ScoresPage() {
   if (profileLoading || loading) return <PageLoader />
   if (!klas) return null
 
-  // Per-student average (graded scores only)
-  function studentAvg(studentId: string) {
-    const scores = assignments
-      .map((a: any) => scoreMap[studentId]?.[a.id]?.score)
-      .filter((s): s is number => s !== null && s !== undefined)
-    if (!scores.length) return null
-    return scores.reduce((a, b) => a + b, 0) / scores.length
+  // Per-student weighted average: sum(earned) / sum(max) as percentage
+  function studentAvg(studentId: string): number | null {
+    let earned = 0, total = 0
+    for (const a of assignments) {
+      const score = scoreMap[studentId]?.[a.id]?.score
+      if (score === null || score === undefined || !a.max_score) continue
+      earned += score
+      total  += a.max_score
+    }
+    if (!total) return null
+    return (earned / total) * 100
   }
 
   // Per-assignment average (graded scores only)
@@ -203,7 +207,7 @@ export default function ScoresPage() {
                       <td className="px-4 py-3 text-center border-l border-border">
                         {avg !== null ? (
                           <span className="text-xs font-semibold text-gray-700">
-                            {Math.round(avg * 10) / 10}
+                            {Math.round(avg * 10) / 10}%
                           </span>
                         ) : (
                           <span className="text-gray-300 text-xs">—</span>
