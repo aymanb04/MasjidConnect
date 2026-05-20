@@ -61,9 +61,13 @@ export function InviteUserButton({ tenantId, onInvited }: Props) {
     setLoading(true)
     setError('')
     try {
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/invite', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token ?? ''}`,
+        },
         body: JSON.stringify({
           email:      form.email.trim().toLowerCase(),
           first_name: form.first_name.trim(),

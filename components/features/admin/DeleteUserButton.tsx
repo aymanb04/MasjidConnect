@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Archive, Loader2 } from 'lucide-react'
+import { supabase } from '@/lib/supabase/singleton'
 
 type Mode = 'idle' | 'confirm-archive' | 'confirm-gdpr' | 'loading-archive' | 'loading-gdpr'
 
@@ -10,9 +11,13 @@ export function DeleteUserButton({ userId, name, onDeleted }: { userId: string; 
 
   async function archive() {
     setMode('loading-archive')
+    const { data: { session } } = await supabase.auth.getSession()
     const res = await fetch('/api/user/archive', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token ?? ''}`,
+      },
       body: JSON.stringify({ userId }),
     })
     if (res.ok) {
@@ -26,9 +31,13 @@ export function DeleteUserButton({ userId, name, onDeleted }: { userId: string; 
 
   async function anonymize() {
     setMode('loading-gdpr')
+    const { data: { session } } = await supabase.auth.getSession()
     const res = await fetch('/api/user/anonymize', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token ?? ''}`,
+      },
       body: JSON.stringify({ userId }),
     })
     if (res.ok) {
