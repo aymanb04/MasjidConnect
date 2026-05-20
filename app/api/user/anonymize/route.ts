@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireRole } from '@/lib/api-auth'
 
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -7,9 +8,25 @@ const supabaseAdmin = createClient(
 )
 
 export async function POST(request: Request) {
+    const auth = await requireRole(request, ['admin', 'super_admin'])
+    if ('error' in auth) return auth.error
+    const { caller } = auth
+
     try {
         const { userId } = await request.json()
         if (!userId) return NextResponse.json({ error: 'userId verplicht' }, { status: 400 })
+
+        const { data: target } = await supabaseAdmin
+            .from('profiles')
+            .select('id, tenant_id')
+            .eq('id', userId)
+            .single()
+
+        if (!target) return NextResponse.json({ error: 'Gebruiker niet gevonden' }, { status: 404 })
+
+        if (caller.role === 'admin' && target.tenant_id !== caller.tenant_id) {
+            return NextResponse.json({ error: 'Geen toegang tot deze gebruiker' }, { status: 403 })
+        }
 
         // Scrub all PII from the profiles row — UUID stays intact so FK relations
         // (submissions, class_students, etc.) remain valid for historical stats

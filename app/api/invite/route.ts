@@ -1,12 +1,20 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireRole } from '@/lib/api-auth'
 
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+const VALID_ROLES = ['student', 'teacher', 'admin']
+const EMAIL_RE   = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 export async function POST(request: Request) {
+    const auth = await requireRole(request, ['admin', 'super_admin'])
+    if ('error' in auth) return auth.error
+    const { caller } = auth
+
     try {
         const {
             email, first_name, last_name, role, tenant_id,
@@ -14,6 +22,19 @@ export async function POST(request: Request) {
             class_id, class_role,   // teacher → assign to this specific class
             invited_by,
         } = await request.json()
+
+        if (!VALID_ROLES.includes(role)) {
+            return NextResponse.json({ error: 'Ongeldig rol' }, { status: 400 })
+        }
+
+        if (!EMAIL_RE.test(email ?? '')) {
+            return NextResponse.json({ error: 'Ongeldig e-mailadres' }, { status: 400 })
+        }
+
+        // Admins can only create users in their own tenant
+        if (caller.role === 'admin' && tenant_id !== caller.tenant_id) {
+            return NextResponse.json({ error: 'Geen toegang tot deze moskee' }, { status: 403 })
+        }
 
         const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
             data: { first_name, last_name, role, tenant_id },
