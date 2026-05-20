@@ -1,551 +1,892 @@
--- WARNING: This schema is for context only and is not meant to be run directly.
--- It reflects the live DB state as of 2026-05-11.
---
--- USER DELETION STRATEGY (GDPR Belgium)
--- Two actions available via the DeleteUserButton component:
---   1. Archiveren  → profiles.is_active = false + auth ban (data intact, reversible)
---   2. GDPR wissen → profiles PII scrubbed (first/last/email/phone/avatar → anon values),
---                    auth email anonymized + ban. The UUID row is kept so all FK relations
---                    (submissions, class_students, etc.) stay valid for historical stats.
---                    Submissions show "Verwijderd" as student name. Irreversible.
--- lesson_modules are class-owned (RLS: am_i_teacher_of_class) — not creator-owned.
--- Any teacher assigned to the class can edit existing modules.
-
--- ============================================================
--- TABLES
--- ============================================================
-
-CREATE TABLE public.tenants (
-  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name                  VARCHAR NOT NULL,
-  slug                  VARCHAR NOT NULL UNIQUE,
-  address               TEXT,
-  city                  VARCHAR,
-  phone                 VARCHAR,
-  email                 VARCHAR,
-  logo_url              TEXT,
-  website_url           TEXT,
-  is_active             BOOLEAN DEFAULT true,
-  subscription_status   VARCHAR DEFAULT 'trial' CHECK (subscription_status IN ('trial','active','inactive','cancelled')),
-  subscription_price    NUMERIC DEFAULT 500.00,
-  subscription_interval VARCHAR DEFAULT 'yearly' CHECK (subscription_interval IN ('monthly','yearly')),
-  trial_ends_at         TIMESTAMPTZ,
-  notes                 TEXT,
-  created_at            TIMESTAMPTZ DEFAULT NOW(),
-  updated_at            TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE public.profiles (
-  id           UUID PRIMARY KEY REFERENCES auth.users(id),
-  tenant_id    UUID REFERENCES public.tenants(id),
-  role         VARCHAR NOT NULL CHECK (role IN ('super_admin','admin','teacher','student')),
-  first_name   VARCHAR NOT NULL,
-  last_name    VARCHAR NOT NULL,
-  email        VARCHAR,
-  avatar_url   TEXT,
-  phone        VARCHAR,
-  is_active    BOOLEAN DEFAULT true,
-  last_seen_at TIMESTAMPTZ,
-  created_at   TIMESTAMPTZ DEFAULT NOW(),
-  updated_at   TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE public.school_years (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id  UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-  name       VARCHAR NOT NULL,
-  start_date DATE NOT NULL,
-  end_date   DATE NOT NULL,
-  is_active  BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE public.groups (
-  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id      UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-  school_year_id UUID NOT NULL REFERENCES public.school_years(id) ON DELETE CASCADE,
-  name           VARCHAR(255) NOT NULL,
-  created_at     TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (tenant_id, school_year_id, name)
-);
-
-CREATE TABLE public.classes (
-  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id      UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-  school_year_id UUID NOT NULL REFERENCES public.school_years(id) ON DELETE CASCADE,
-  group_id       UUID REFERENCES public.groups(id) ON DELETE SET NULL,
-  name           VARCHAR NOT NULL,
-  description    TEXT,
-  color          VARCHAR DEFAULT '#1B6B4A',
-  icon           VARCHAR DEFAULT 'book',
-  is_archived    BOOLEAN DEFAULT false,
-  created_at     TIMESTAMPTZ DEFAULT NOW(),
-  updated_at     TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE public.class_teachers (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  class_id    UUID NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
-  teacher_id  UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  assigned_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (class_id, teacher_id)
-);
-
-CREATE TABLE public.class_students (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  class_id    UUID NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
-  student_id  UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  enrolled_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (class_id, student_id)
-);
-
-CREATE TABLE public.assignments (
-  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  class_id              UUID NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
-  created_by            UUID NOT NULL REFERENCES public.profiles(id),
-  title                 VARCHAR NOT NULL,
-  description           TEXT,
-  due_date              TIMESTAMPTZ,
-  max_score             INTEGER,
-  allow_text_submission BOOLEAN DEFAULT true,
-  allow_file_submission BOOLEAN DEFAULT true,
-  is_published          BOOLEAN DEFAULT true,
-  created_at            TIMESTAMPTZ DEFAULT NOW(),
-  updated_at            TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE public.submissions (
-  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  assignment_id UUID NOT NULL REFERENCES public.assignments(id) ON DELETE CASCADE,
-  student_id    UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  text_content  TEXT,
-  status        VARCHAR DEFAULT 'submitted' CHECK (status IN ('draft','submitted','graded','returned')),
-  submitted_at  TIMESTAMPTZ DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (assignment_id, student_id)
-);
-
-CREATE TABLE public.submission_files (
-  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  submission_id UUID NOT NULL REFERENCES public.submissions(id) ON DELETE CASCADE,
-  file_name     VARCHAR NOT NULL,
-  file_url      TEXT NOT NULL,
-  file_size     INTEGER,
-  file_type     VARCHAR,
-  uploaded_at   TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE public.submission_feedback (
-  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  submission_id UUID NOT NULL REFERENCES public.submissions(id) ON DELETE CASCADE,
-  teacher_id    UUID NOT NULL REFERENCES public.profiles(id),
-  score         INTEGER,
-  comment       TEXT,
-  created_at    TIMESTAMPTZ DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (submission_id)
-);
-
-CREATE TABLE public.lesson_modules (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  class_id    UUID NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
-  created_by  UUID NOT NULL REFERENCES public.profiles(id),
-  title       VARCHAR NOT NULL,
-  description TEXT,
-  is_visible  BOOLEAN DEFAULT true,
-  order_index INTEGER DEFAULT 0,
-  created_at  TIMESTAMPTZ DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE public.module_documents (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  module_id   UUID NOT NULL REFERENCES public.lesson_modules(id) ON DELETE CASCADE,
-  title       VARCHAR NOT NULL,
-  file_name   VARCHAR NOT NULL,
-  file_url    TEXT NOT NULL,
-  file_size   INTEGER,
-  file_type   VARCHAR,
-  order_index INTEGER DEFAULT 0,
-  uploaded_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
 
 CREATE TABLE public.announcements (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id    UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-  class_id     UUID REFERENCES public.classes(id) ON DELETE SET NULL,
-  created_by   UUID NOT NULL REFERENCES public.profiles(id),
-  title        VARCHAR NOT NULL,
-  content      TEXT,
-  is_published BOOLEAN DEFAULT true,
-  published_at TIMESTAMPTZ DEFAULT NOW(),
-  created_at   TIMESTAMPTZ DEFAULT NOW()
+                                      id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                      tenant_id uuid NOT NULL,
+                                      class_id uuid,
+                                      created_by uuid NOT NULL,
+                                      title character varying NOT NULL,
+                                      content text,
+                                      is_published boolean DEFAULT true,
+                                      published_at timestamp with time zone DEFAULT now(),
+                                      created_at timestamp with time zone DEFAULT now(),
+                                      CONSTRAINT announcements_pkey PRIMARY KEY (id),
+                                      CONSTRAINT announcements_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
+                                      CONSTRAINT announcements_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
+                                      CONSTRAINT announcements_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
 );
-
-CREATE TABLE public.invitations (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id   UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-  email       VARCHAR NOT NULL,
-  role        VARCHAR NOT NULL CHECK (role IN ('admin','teacher','student')),
-  class_id    UUID REFERENCES public.classes(id) ON DELETE SET NULL,
-  token       VARCHAR NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex') UNIQUE,
-  invited_by  UUID NOT NULL REFERENCES public.profiles(id),
-  accepted_at TIMESTAMPTZ,
-  expires_at  TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '7 days'),
-  created_at  TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE public.assignments (
+                                    id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                    class_id uuid NOT NULL,
+                                    created_by uuid NOT NULL,
+                                    title character varying NOT NULL,
+                                    description text,
+                                    due_date timestamp with time zone,
+                                    max_score integer,
+                                    allow_text_submission boolean DEFAULT true,
+                                    allow_file_submission boolean DEFAULT true,
+                                    is_published boolean DEFAULT true,
+                                    created_at timestamp with time zone DEFAULT now(),
+                                    updated_at timestamp with time zone DEFAULT now(),
+                                    CONSTRAINT assignments_pkey PRIMARY KEY (id),
+                                    CONSTRAINT assignments_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
+                                    CONSTRAINT assignments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
 );
-
-CREATE TABLE public.attendance_sessions (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  class_id     UUID NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
-  teacher_id   UUID NOT NULL REFERENCES public.profiles(id),
-  session_date DATE NOT NULL,
-  notes        TEXT,
-  created_at   TIMESTAMPTZ DEFAULT NOW()
-);
-
 CREATE TABLE public.attendance_records (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  session_id UUID NOT NULL REFERENCES public.attendance_sessions(id) ON DELETE CASCADE,
-  student_id UUID NOT NULL REFERENCES public.profiles(id),
-  status     VARCHAR DEFAULT 'present' CHECK (status IN ('present','absent','late','excused')),
-  note       TEXT
+                                           id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                           session_id uuid NOT NULL,
+                                           student_id uuid NOT NULL,
+                                           status character varying DEFAULT 'present'::character varying CHECK (status::text = ANY (ARRAY['present'::character varying, 'absent'::character varying, 'late'::character varying, 'excused'::character varying]::text[])),
+                                           note text,
+                                           CONSTRAINT attendance_records_pkey PRIMARY KEY (id),
+                                           CONSTRAINT attendance_records_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.attendance_sessions(id),
+                                           CONSTRAINT attendance_records_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)
 );
-
-CREATE TABLE public.payments (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id    UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-  amount       NUMERIC NOT NULL,
-  currency     VARCHAR DEFAULT 'EUR',
-  status       VARCHAR DEFAULT 'pending' CHECK (status IN ('pending','paid','failed','refunded')),
-  stripe_id    VARCHAR,
-  period_start DATE,
-  period_end   DATE,
-  paid_at      TIMESTAMPTZ,
-  created_at   TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE public.attendance_sessions (
+                                            id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                            class_id uuid NOT NULL,
+                                            teacher_id uuid NOT NULL,
+                                            session_date date NOT NULL,
+                                            notes text,
+                                            created_at timestamp with time zone DEFAULT now(),
+                                            CONSTRAINT attendance_sessions_pkey PRIMARY KEY (id),
+                                            CONSTRAINT attendance_sessions_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
+                                            CONSTRAINT attendance_sessions_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.profiles(id)
 );
-
-CREATE TABLE public.class_sessions (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  class_id    UUID NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
-  tenant_id   UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-  day_of_week SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0=Mon … 6=Sun
-  start_time  TIME NOT NULL,
-  end_time    TIME NOT NULL,
-  location    VARCHAR,
-  created_at  TIMESTAMPTZ DEFAULT NOW()
-);
-
 CREATE TABLE public.audit_logs (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id   UUID REFERENCES public.tenants(id),
-  user_id     UUID REFERENCES public.profiles(id),
-  action      VARCHAR NOT NULL,
-  entity_type VARCHAR,
-  entity_id   UUID,
-  metadata    JSONB,
-  ip_address  INET,
-  created_at  TIMESTAMPTZ DEFAULT NOW()
+                                   id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                   tenant_id uuid,
+                                   user_id uuid,
+                                   action character varying NOT NULL,
+                                   entity_type character varying,
+                                   entity_id uuid,
+                                   metadata jsonb,
+                                   ip_address inet,
+                                   created_at timestamp with time zone DEFAULT now(),
+                                   CONSTRAINT audit_logs_pkey PRIMARY KEY (id),
+                                   CONSTRAINT audit_logs_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
+                                   CONSTRAINT audit_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.class_sessions (
+                                       id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                       class_id uuid NOT NULL,
+                                       tenant_id uuid NOT NULL,
+                                       day_of_week smallint NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6),
+                                       start_time time without time zone NOT NULL,
+                                       end_time time without time zone NOT NULL,
+                                       location character varying,
+                                       created_at timestamp with time zone DEFAULT now(),
+                                       CONSTRAINT class_sessions_pkey PRIMARY KEY (id),
+                                       CONSTRAINT class_sessions_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
+                                       CONSTRAINT class_sessions_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
+);
+CREATE TABLE public.class_students (
+                                       id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                       class_id uuid NOT NULL,
+                                       student_id uuid NOT NULL,
+                                       enrolled_at timestamp with time zone DEFAULT now(),
+                                       CONSTRAINT class_students_pkey PRIMARY KEY (id),
+                                       CONSTRAINT class_students_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
+                                       CONSTRAINT class_students_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.class_teachers (
+                                       id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                       class_id uuid NOT NULL,
+                                       teacher_id uuid NOT NULL,
+                                       assigned_at timestamp with time zone DEFAULT now(),
+                                       CONSTRAINT class_teachers_pkey PRIMARY KEY (id),
+                                       CONSTRAINT class_teachers_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
+                                       CONSTRAINT class_teachers_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.classes (
+                                id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                tenant_id uuid NOT NULL,
+                                school_year_id uuid NOT NULL,
+                                name character varying NOT NULL,
+                                description text,
+                                color character varying DEFAULT '#1B6B4A'::character varying,
+                                icon character varying DEFAULT 'book'::character varying,
+                                is_archived boolean DEFAULT false,
+                                created_at timestamp with time zone DEFAULT now(),
+                                updated_at timestamp with time zone DEFAULT now(),
+                                group_id uuid,
+                                CONSTRAINT classes_pkey PRIMARY KEY (id),
+                                CONSTRAINT classes_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
+                                CONSTRAINT classes_school_year_id_fkey FOREIGN KEY (school_year_id) REFERENCES public.school_years(id),
+                                CONSTRAINT classes_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.groups(id)
+);
+CREATE TABLE public.groups (
+                               id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                               tenant_id uuid NOT NULL,
+                               school_year_id uuid NOT NULL,
+                               name character varying NOT NULL,
+                               created_at timestamp with time zone DEFAULT now(),
+                               CONSTRAINT groups_pkey PRIMARY KEY (id),
+                               CONSTRAINT groups_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
+                               CONSTRAINT groups_school_year_id_fkey FOREIGN KEY (school_year_id) REFERENCES public.school_years(id)
+);
+CREATE TABLE public.invitations (
+                                    id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                    tenant_id uuid NOT NULL,
+                                    email character varying NOT NULL,
+                                    role character varying NOT NULL CHECK (role::text = ANY (ARRAY['admin'::character varying, 'teacher'::character varying, 'student'::character varying]::text[])),
+  class_id uuid,
+  token character varying NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'::text) UNIQUE,
+  invited_by uuid NOT NULL,
+  accepted_at timestamp with time zone,
+  expires_at timestamp with time zone NOT NULL DEFAULT (now() + '7 days'::interval),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT invitations_pkey PRIMARY KEY (id),
+  CONSTRAINT invitations_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
+  CONSTRAINT invitations_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
+  CONSTRAINT invitations_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.lesson_modules (
+                                       id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                       class_id uuid NOT NULL,
+                                       created_by uuid NOT NULL,
+                                       title character varying NOT NULL,
+                                       description text,
+                                       is_visible boolean DEFAULT true,
+                                       order_index integer DEFAULT 0,
+                                       created_at timestamp with time zone DEFAULT now(),
+                                       updated_at timestamp with time zone DEFAULT now(),
+                                       CONSTRAINT lesson_modules_pkey PRIMARY KEY (id),
+                                       CONSTRAINT lesson_modules_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
+                                       CONSTRAINT lesson_modules_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.module_documents (
+                                         id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                         module_id uuid NOT NULL,
+                                         title character varying NOT NULL,
+                                         file_name character varying NOT NULL,
+                                         file_url text NOT NULL,
+                                         file_size integer,
+                                         file_type character varying,
+                                         order_index integer DEFAULT 0,
+                                         uploaded_at timestamp with time zone DEFAULT now(),
+                                         CONSTRAINT module_documents_pkey PRIMARY KEY (id),
+                                         CONSTRAINT module_documents_module_id_fkey FOREIGN KEY (module_id) REFERENCES public.lesson_modules(id)
+);
+CREATE TABLE public.payments (
+                                 id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                 tenant_id uuid NOT NULL,
+                                 amount numeric NOT NULL,
+                                 currency character varying DEFAULT 'EUR'::character varying,
+                                 status character varying DEFAULT 'pending'::character varying CHECK (status::text = ANY (ARRAY['pending'::character varying, 'paid'::character varying, 'failed'::character varying, 'refunded'::character varying]::text[])),
+                                 stripe_id character varying,
+                                 period_start date,
+                                 period_end date,
+                                 paid_at timestamp with time zone,
+                                 created_at timestamp with time zone DEFAULT now(),
+                                 CONSTRAINT payments_pkey PRIMARY KEY (id),
+                                 CONSTRAINT payments_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
+);
+CREATE TABLE public.profiles (
+                                 id uuid NOT NULL,
+                                 tenant_id uuid,
+                                 role character varying NOT NULL CHECK (role::text = ANY (ARRAY['super_admin'::character varying, 'admin'::character varying, 'teacher'::character varying, 'student'::character varying]::text[])),
+  first_name character varying NOT NULL,
+  last_name character varying NOT NULL,
+  avatar_url text,
+  phone character varying,
+  is_active boolean DEFAULT true,
+  last_seen_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  email character varying,
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.school_years (
+                                     id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                     tenant_id uuid NOT NULL,
+                                     name character varying NOT NULL,
+                                     start_date date NOT NULL,
+                                     end_date date NOT NULL,
+                                     is_active boolean DEFAULT true,
+                                     created_at timestamp with time zone DEFAULT now(),
+                                     CONSTRAINT school_years_pkey PRIMARY KEY (id),
+                                     CONSTRAINT school_years_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
+);
+CREATE TABLE public.submission_feedback (
+                                            id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                            submission_id uuid NOT NULL UNIQUE,
+                                            teacher_id uuid NOT NULL,
+                                            score integer,
+                                            comment text,
+                                            created_at timestamp with time zone DEFAULT now(),
+                                            updated_at timestamp with time zone DEFAULT now(),
+                                            CONSTRAINT submission_feedback_pkey PRIMARY KEY (id),
+                                            CONSTRAINT submission_feedback_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id),
+                                            CONSTRAINT submission_feedback_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.submission_files (
+                                         id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                         submission_id uuid NOT NULL,
+                                         file_name character varying NOT NULL,
+                                         file_url text NOT NULL,
+                                         file_size integer,
+                                         file_type character varying,
+                                         uploaded_at timestamp with time zone DEFAULT now(),
+                                         CONSTRAINT submission_files_pkey PRIMARY KEY (id),
+                                         CONSTRAINT submission_files_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id)
+);
+CREATE TABLE public.submissions (
+                                    id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                    assignment_id uuid NOT NULL,
+                                    student_id uuid NOT NULL,
+                                    text_content text,
+                                    status character varying DEFAULT 'submitted'::character varying CHECK (status::text = ANY (ARRAY['draft'::character varying, 'submitted'::character varying, 'graded'::character varying, 'returned'::character varying]::text[])),
+                                    submitted_at timestamp with time zone DEFAULT now(),
+                                    updated_at timestamp with time zone DEFAULT now(),
+                                    CONSTRAINT submissions_pkey PRIMARY KEY (id),
+                                    CONSTRAINT submissions_assignment_id_fkey FOREIGN KEY (assignment_id) REFERENCES public.assignments(id),
+                                    CONSTRAINT submissions_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.tenants (
+                                id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                name character varying NOT NULL,
+                                slug character varying NOT NULL UNIQUE,
+                                address text,
+                                city character varying,
+                                phone character varying,
+                                email character varying,
+                                logo_url text,
+                                is_active boolean DEFAULT true,
+                                subscription_status character varying DEFAULT 'trial'::character varying CHECK (subscription_status::text = ANY (ARRAY['trial'::character varying, 'active'::character varying, 'inactive'::character varying, 'cancelled'::character varying]::text[])),
+                                subscription_price numeric DEFAULT 500.00,
+                                subscription_interval character varying DEFAULT 'yearly'::character varying CHECK (subscription_interval::text = ANY (ARRAY['monthly'::character varying, 'yearly'::character varying]::text[])),
+                                trial_ends_at timestamp with time zone,
+                                notes text,
+                                created_at timestamp with time zone DEFAULT now(),
+                                updated_at timestamp with time zone DEFAULT now(),
+                                website_url text,
+                                CONSTRAINT tenants_pkey PRIMARY KEY (id)
 );
 
--- ============================================================
--- TRIGGER: auto-create profile on auth user creation
--- ============================================================
-
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-DECLARE
-  v_tenant_id UUID := NULL;
-BEGIN
-  IF (NEW.raw_user_meta_data->>'tenant_id') IS NOT NULL
-     AND (NEW.raw_user_meta_data->>'tenant_id') != '' THEN
-    v_tenant_id := (NEW.raw_user_meta_data->>'tenant_id')::UUID;
-  END IF;
-
-  INSERT INTO public.profiles (id, first_name, last_name, role, tenant_id, email)
-  VALUES (
-    NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
-    COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'student'),
-    v_tenant_id,
-    NEW.email
-  )
-  ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
-
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
-
--- ============================================================
--- HELPER FUNCTIONS (used in RLS policies)
--- ============================================================
-
-CREATE OR REPLACE FUNCTION get_my_role()
-RETURNS VARCHAR AS $$
-  SELECT role FROM profiles WHERE id = auth.uid();
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
-
-CREATE OR REPLACE FUNCTION get_my_tenant_id()
-RETURNS UUID AS $$
-  SELECT tenant_id FROM profiles WHERE id = auth.uid();
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
-
-CREATE OR REPLACE FUNCTION is_super_admin()
-RETURNS BOOLEAN AS $$
-  SELECT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'super_admin');
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
-
--- Bypass RLS on junction tables to avoid infinite recursion
-CREATE OR REPLACE FUNCTION am_i_teacher_of_class(cid UUID)
-RETURNS BOOLEAN AS $$
-  SELECT EXISTS (SELECT 1 FROM class_teachers WHERE class_id = cid AND teacher_id = auth.uid())
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
-
-CREATE OR REPLACE FUNCTION am_i_student_of_class(cid UUID)
-RETURNS BOOLEAN AS $$
-  SELECT EXISTS (SELECT 1 FROM class_students WHERE class_id = cid AND student_id = auth.uid())
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
-
-CREATE OR REPLACE FUNCTION am_i_member_of_group(gid UUID)
-RETURNS BOOLEAN AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM classes c
-    JOIN class_teachers ct ON ct.class_id = c.id AND ct.teacher_id = auth.uid()
-    WHERE c.group_id = gid
-    UNION
-    SELECT 1 FROM classes c
-    JOIN class_students cs ON cs.class_id = c.id AND cs.student_id = auth.uid()
-    WHERE c.group_id = gid
-  )
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
-
--- ============================================================
--- ROW LEVEL SECURITY
--- ============================================================
-
-ALTER TABLE tenants              ENABLE ROW LEVEL SECURITY;
-ALTER TABLE profiles             ENABLE ROW LEVEL SECURITY;
-ALTER TABLE school_years         ENABLE ROW LEVEL SECURITY;
-ALTER TABLE groups               ENABLE ROW LEVEL SECURITY;
-ALTER TABLE classes              ENABLE ROW LEVEL SECURITY;
-ALTER TABLE class_teachers       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE class_students       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE assignments          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE submissions          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE submission_files     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE submission_feedback  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE lesson_modules       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE module_documents     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE announcements        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE invitations          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE attendance_sessions  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE attendance_records   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE payments             ENABLE ROW LEVEL SECURITY;
-ALTER TABLE audit_logs           ENABLE ROW LEVEL SECURITY;
-ALTER TABLE class_sessions       ENABLE ROW LEVEL SECURITY;
-
--- TENANTS
-CREATE POLICY "super_admin_all_tenants" ON tenants USING (is_super_admin());
-CREATE POLICY "admin_view_own_tenant"   ON tenants FOR SELECT USING (id = get_my_tenant_id());
-
--- PROFILES
-CREATE POLICY "super_admin_all_profiles"  ON profiles USING (is_super_admin());
-CREATE POLICY "view_same_tenant_profiles" ON profiles FOR SELECT USING (tenant_id = get_my_tenant_id() OR id = auth.uid());
-CREATE POLICY "update_own_profile"        ON profiles FOR UPDATE USING (id = auth.uid());
-CREATE POLICY "admin_manage_profiles"     ON profiles USING (get_my_role() = 'admin' AND tenant_id = get_my_tenant_id());
-
--- SCHOOL YEARS
-CREATE POLICY "super_admin_all_years"  ON school_years USING (is_super_admin());
-CREATE POLICY "tenant_view_own_years"  ON school_years FOR SELECT USING (tenant_id = get_my_tenant_id());
-CREATE POLICY "admin_manage_years"     ON school_years USING (get_my_role() = 'admin' AND tenant_id = get_my_tenant_id());
-
--- GROUPS
-CREATE POLICY "super_admin_all_groups" ON groups USING (is_super_admin());
-CREATE POLICY "admin_manage_groups"    ON groups USING (get_my_role() = 'admin' AND tenant_id = get_my_tenant_id());
-CREATE POLICY "member_view_groups"     ON groups FOR SELECT USING (
-  tenant_id = get_my_tenant_id() AND (get_my_role() = 'admin' OR am_i_member_of_group(id))
-);
-
--- CLASSES
-CREATE POLICY "super_admin_all_classes" ON classes USING (is_super_admin());
-CREATE POLICY "admin_manage_classes"    ON classes USING (get_my_role() = 'admin' AND tenant_id = get_my_tenant_id());
-CREATE POLICY "member_view_own_classes" ON classes FOR SELECT USING (
-  tenant_id = get_my_tenant_id() AND (
-    get_my_role() = 'admin' OR
-    am_i_teacher_of_class(id) OR
-    am_i_student_of_class(id)
-  )
-);
-
--- CLASS TEACHERS
-CREATE POLICY "super_admin_class_teachers"  ON class_teachers USING (is_super_admin());
-CREATE POLICY "admin_manage_class_teachers" ON class_teachers USING (is_super_admin() OR get_my_role() = 'admin');
-CREATE POLICY "view_class_teachers"         ON class_teachers FOR SELECT USING (
-  is_super_admin() OR get_my_role() = 'admin' OR
-  teacher_id = auth.uid() OR
-  am_i_student_of_class(class_id)
-);
-
--- CLASS STUDENTS
-CREATE POLICY "super_admin_class_students"  ON class_students USING (is_super_admin());
-CREATE POLICY "admin_manage_class_students" ON class_students USING (is_super_admin() OR get_my_role() = 'admin');
-CREATE POLICY "view_class_students"         ON class_students FOR SELECT USING (
-  is_super_admin() OR get_my_role() = 'admin' OR
-  student_id = auth.uid() OR
-  am_i_teacher_of_class(class_id)
-);
-
--- ASSIGNMENTS
-CREATE POLICY "super_admin_all_assignments" ON assignments USING (is_super_admin());
-CREATE POLICY "admin_manage_assignments"    ON assignments USING (
-  get_my_role() = 'admin' AND EXISTS (SELECT 1 FROM classes WHERE id = assignments.class_id AND tenant_id = get_my_tenant_id())
-);
-CREATE POLICY "teacher_manage_assignments"  ON assignments USING (
-  am_i_teacher_of_class(class_id)
-);
-CREATE POLICY "student_view_assignments"    ON assignments FOR SELECT USING (
-  is_published = true AND am_i_student_of_class(class_id)
-);
-
--- SUBMISSION FILES
-CREATE POLICY "super_admin_all_submission_files" ON submission_files USING (is_super_admin());
-CREATE POLICY "student_manage_own_files" ON submission_files
-  USING     (EXISTS (SELECT 1 FROM submissions WHERE id = submission_files.submission_id AND student_id = auth.uid()))
-  WITH CHECK (EXISTS (SELECT 1 FROM submissions WHERE id = submission_files.submission_id AND student_id = auth.uid()));
-CREATE POLICY "teacher_view_submission_files" ON submission_files FOR SELECT USING (
-  EXISTS (
-    SELECT 1 FROM submissions s
-    JOIN assignments a ON a.id = s.assignment_id
-    WHERE s.id = submission_files.submission_id AND am_i_teacher_of_class(a.class_id)
-  )
-);
-CREATE POLICY "admin_view_submission_files" ON submission_files FOR SELECT USING (
-  get_my_role() = 'admin' AND EXISTS (
-    SELECT 1 FROM submissions s
-    JOIN assignments a ON a.id = s.assignment_id
-    JOIN classes c ON c.id = a.class_id
-    WHERE s.id = submission_files.submission_id AND c.tenant_id = get_my_tenant_id()
-  )
-);
-
--- SUBMISSIONS
-CREATE POLICY "super_admin_all_submissions"  ON submissions USING (is_super_admin());
-CREATE POLICY "student_manage_own"           ON submissions USING (student_id = auth.uid());
-CREATE POLICY "teacher_view_submissions"     ON submissions FOR SELECT USING (am_i_teacher_of_class(
-  (SELECT class_id FROM assignments WHERE id = submissions.assignment_id)
-));
-CREATE POLICY "teacher_update_submissions"   ON submissions FOR UPDATE USING (am_i_teacher_of_class(
-  (SELECT class_id FROM assignments WHERE id = submissions.assignment_id)
-));
-CREATE POLICY "admin_view_submissions"       ON submissions FOR SELECT USING (
-  get_my_role() = 'admin' AND EXISTS (
-    SELECT 1 FROM assignments a JOIN classes c ON c.id = a.class_id
-    WHERE a.id = submissions.assignment_id AND c.tenant_id = get_my_tenant_id()
-  )
-);
-
--- SUBMISSION FEEDBACK
-CREATE POLICY "super_admin_all_feedback"  ON submission_feedback USING (is_super_admin());
-CREATE POLICY "teacher_manage_feedback"   ON submission_feedback USING (teacher_id = auth.uid());
-CREATE POLICY "student_view_own_feedback" ON submission_feedback FOR SELECT USING (
-  EXISTS (SELECT 1 FROM submissions WHERE id = submission_feedback.submission_id AND student_id = auth.uid())
-);
-CREATE POLICY "admin_view_feedback" ON submission_feedback FOR SELECT USING (
-  get_my_role() = 'admin' AND EXISTS (
-    SELECT 1 FROM submissions s
-    JOIN assignments a ON a.id = s.assignment_id
-    JOIN classes c ON c.id = a.class_id
-    WHERE s.id = submission_feedback.submission_id AND c.tenant_id = get_my_tenant_id()
-  )
-);
-CREATE POLICY "teacher_view_class_feedback" ON submission_feedback FOR SELECT USING (
-  EXISTS (
-    SELECT 1 FROM submissions s
-    JOIN assignments a ON a.id = s.assignment_id
-    JOIN class_teachers ct ON ct.class_id = a.class_id
-    WHERE s.id = submission_feedback.submission_id AND ct.teacher_id = auth.uid()
-  )
-);
-
--- ANNOUNCEMENTS
-CREATE POLICY "super_admin_all_announcements" ON announcements USING (is_super_admin());
-CREATE POLICY "admin_manage_announcements"    ON announcements USING (
-  get_my_role() = 'admin' AND tenant_id = get_my_tenant_id()
-);
-CREATE POLICY "teacher_manage_own_announcements" ON announcements USING (
-  get_my_role() = 'teacher' AND created_by = auth.uid() AND tenant_id = get_my_tenant_id()
-);
-CREATE POLICY "view_tenant_announcements" ON announcements FOR SELECT USING (
-  tenant_id = get_my_tenant_id() AND (
-    class_id IS NULL OR am_i_teacher_of_class(class_id) OR am_i_student_of_class(class_id)
-  )
-);
-
--- INVITATIONS
-CREATE POLICY "super_admin_all_invitations" ON invitations USING (is_super_admin());
-CREATE POLICY "admin_manage_invitations"    ON invitations USING (
-  get_my_role() = 'admin' AND tenant_id = get_my_tenant_id()
-);
-
--- LESSON MODULES
-CREATE POLICY "super_admin_all_modules"  ON lesson_modules USING (is_super_admin());
-CREATE POLICY "teacher_manage_modules"   ON lesson_modules
-  USING     (am_i_teacher_of_class(class_id))
-  WITH CHECK (am_i_teacher_of_class(class_id));
-CREATE POLICY "student_view_modules"     ON lesson_modules FOR SELECT USING (
-  is_visible = true AND am_i_student_of_class(class_id)
-);
-CREATE POLICY "admin_manage_modules"     ON lesson_modules
-  USING     (get_my_role() = 'admin' AND EXISTS (SELECT 1 FROM classes WHERE id = lesson_modules.class_id AND tenant_id = get_my_tenant_id()))
-  WITH CHECK (get_my_role() = 'admin' AND EXISTS (SELECT 1 FROM classes WHERE id = lesson_modules.class_id AND tenant_id = get_my_tenant_id()));
-
--- MODULE DOCUMENTS
-CREATE POLICY "view_module_docs"   ON module_documents FOR SELECT USING (
-  EXISTS (SELECT 1 FROM lesson_modules lm WHERE lm.id = module_documents.module_id AND (am_i_teacher_of_class(lm.class_id) OR am_i_student_of_class(lm.class_id)))
-);
-CREATE POLICY "teacher_manage_docs" ON module_documents
-  USING     (EXISTS (SELECT 1 FROM lesson_modules lm WHERE lm.id = module_documents.module_id AND am_i_teacher_of_class(lm.class_id)))
-  WITH CHECK (EXISTS (SELECT 1 FROM lesson_modules lm WHERE lm.id = module_documents.module_id AND am_i_teacher_of_class(lm.class_id)));
-CREATE POLICY "admin_manage_docs" ON module_documents
-  USING     (EXISTS (SELECT 1 FROM lesson_modules lm JOIN classes c ON c.id = lm.class_id WHERE lm.id = module_documents.module_id AND c.tenant_id = get_my_tenant_id() AND get_my_role() = 'admin'))
-  WITH CHECK (EXISTS (SELECT 1 FROM lesson_modules lm JOIN classes c ON c.id = lm.class_id WHERE lm.id = module_documents.module_id AND c.tenant_id = get_my_tenant_id() AND get_my_role() = 'admin'));
-
--- ATTENDANCE
-CREATE POLICY "super_admin_all_attendance"  ON attendance_sessions USING (is_super_admin());
-CREATE POLICY "teacher_manage_attendance"   ON attendance_sessions USING (teacher_id = auth.uid());
-CREATE POLICY "admin_view_attendance"       ON attendance_sessions FOR SELECT USING (
-  get_my_role() = 'admin' AND EXISTS (SELECT 1 FROM classes WHERE id = attendance_sessions.class_id AND tenant_id = get_my_tenant_id())
-);
-CREATE POLICY "super_admin_all_records"     ON attendance_records USING (is_super_admin());
-CREATE POLICY "teacher_manage_records"      ON attendance_records USING (
-  EXISTS (SELECT 1 FROM attendance_sessions WHERE id = attendance_records.session_id AND teacher_id = auth.uid())
-);
-CREATE POLICY "student_view_own_records"    ON attendance_records FOR SELECT USING (student_id = auth.uid());
-
--- PAYMENTS
-CREATE POLICY "super_admin_all_payments" ON payments USING (is_super_admin());
-CREATE POLICY "admin_view_own_payments"  ON payments FOR SELECT USING (
-  get_my_role() = 'admin' AND tenant_id = get_my_tenant_id()
-);
-
--- CLASS SESSIONS (ROOSTER)
-CREATE POLICY "super_admin_all_sessions" ON class_sessions USING (is_super_admin());
-CREATE POLICY "admin_manage_sessions"    ON class_sessions
-  USING     (get_my_role() = 'admin' AND tenant_id = get_my_tenant_id())
-  WITH CHECK (get_my_role() = 'admin' AND tenant_id = get_my_tenant_id());
-CREATE POLICY "teacher_view_sessions"    ON class_sessions FOR SELECT USING (
-  am_i_teacher_of_class(class_id)
-);
-CREATE POLICY "student_view_sessions"    ON class_sessions FOR SELECT USING (
-  am_i_student_of_class(class_id)
-);
-
--- AUDIT LOGS
-CREATE POLICY "super_admin_all_logs" ON audit_logs USING (is_super_admin());
-CREATE POLICY "admin_view_own_logs"  ON audit_logs FOR SELECT USING (
-  get_my_role() = 'admin' AND tenant_id = get_my_tenant_id()
-);
+---POLICIES---
+[
+  {
+    "schemaname": "public",
+    "tablename": "announcements",
+    "policyname": "admin_manage_announcements",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(((get_my_role())::text = 'admin'::text) AND (tenant_id = get_my_tenant_id()))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "announcements",
+    "policyname": "announcements_delete",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "DELETE",
+    "qual": "((created_by = auth.uid()) OR ((( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())))::text = ANY ((ARRAY['admin'::character varying, 'super_admin'::character varying])::text[])))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "announcements",
+    "policyname": "announcements_insert",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "((created_by = auth.uid()) AND (tenant_id = ( SELECT profiles.tenant_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) AND (((( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())))::text = ANY ((ARRAY['admin'::character varying, 'super_admin'::character varying])::text[])) OR ((class_id IS NOT NULL) AND (class_id IN ( SELECT class_teachers.class_id\n   FROM class_teachers\n  WHERE (class_teachers.teacher_id = auth.uid()))))))"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "announcements",
+    "policyname": "announcements_read",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "((tenant_id = ( SELECT profiles.tenant_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) AND ((class_id IS NULL) OR (class_id IN ( SELECT class_students.class_id\n   FROM class_students\n  WHERE (class_students.student_id = auth.uid())\nUNION\n SELECT class_teachers.class_id\n   FROM class_teachers\n  WHERE (class_teachers.teacher_id = auth.uid())))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "announcements",
+    "policyname": "student_read_announcements",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "((tenant_id = get_my_tenant_id()) AND ((class_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM class_students\n  WHERE ((class_students.class_id = announcements.class_id) AND (class_students.student_id = auth.uid()))))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "announcements",
+    "policyname": "super_admin_all_announcements",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "announcements",
+    "policyname": "teacher_delete_own_announcements",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "DELETE",
+    "qual": "(((get_my_role())::text = 'teacher'::text) AND (created_by = auth.uid()))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "announcements",
+    "policyname": "teacher_post_announcements",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(((get_my_role())::text = 'teacher'::text) AND (tenant_id = get_my_tenant_id()) AND (class_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM class_teachers\n  WHERE ((class_teachers.class_id = announcements.class_id) AND (class_teachers.teacher_id = auth.uid())))) AND (created_by = auth.uid()))"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "announcements",
+    "policyname": "teacher_read_announcements",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "((tenant_id = get_my_tenant_id()) AND ((class_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM class_teachers\n  WHERE ((class_teachers.class_id = announcements.class_id) AND (class_teachers.teacher_id = auth.uid()))))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "assignments",
+    "policyname": "student_view_assignments",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "((is_published = true) AND (EXISTS ( SELECT 1\n   FROM class_students\n  WHERE ((class_students.class_id = assignments.class_id) AND (class_students.student_id = auth.uid())))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "assignments",
+    "policyname": "super_admin_all_assignments",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "assignments",
+    "policyname": "teacher_manage_assignments",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "((EXISTS ( SELECT 1\n   FROM (class_teachers ct\n     JOIN classes c ON ((c.id = ct.class_id)))\n  WHERE ((ct.teacher_id = auth.uid()) AND (assignments.class_id = c.id) AND (c.tenant_id = get_my_tenant_id())))) OR (((get_my_role())::text = 'admin'::text) AND (EXISTS ( SELECT 1\n   FROM classes\n  WHERE ((classes.id = assignments.class_id) AND (classes.tenant_id = get_my_tenant_id()))))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "audit_logs",
+    "policyname": "super_admin_all_logs",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "class_sessions",
+    "policyname": "admin_manage_sessions",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(((get_my_role())::text = 'admin'::text) AND (tenant_id = get_my_tenant_id()))",
+    "with_check": "(((get_my_role())::text = 'admin'::text) AND (tenant_id = get_my_tenant_id()))"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "class_sessions",
+    "policyname": "student_view_sessions",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "am_i_student_of_class(class_id)",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "class_sessions",
+    "policyname": "super_admin_all_sessions",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "class_sessions",
+    "policyname": "teacher_view_sessions",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "am_i_teacher_of_class(class_id)",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "class_students",
+    "policyname": "admin_manage_class_students",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(is_super_admin() OR (((get_my_role())::text = 'admin'::text) AND (EXISTS ( SELECT 1\n   FROM classes\n  WHERE ((classes.id = class_students.class_id) AND (classes.tenant_id = get_my_tenant_id()))))))",
+    "with_check": "(is_super_admin() OR (((get_my_role())::text = 'admin'::text) AND (EXISTS ( SELECT 1\n   FROM classes\n  WHERE ((classes.id = class_students.class_id) AND (classes.tenant_id = get_my_tenant_id()))))))"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "class_students",
+    "policyname": "super_admin_class_students",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "class_students",
+    "policyname": "teacher_view_class_students",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "((EXISTS ( SELECT 1\n   FROM (class_teachers ct\n     JOIN classes c ON ((c.id = ct.class_id)))\n  WHERE ((ct.teacher_id = auth.uid()) AND (ct.class_id = class_students.class_id) AND (c.tenant_id = get_my_tenant_id())))) OR ((get_my_role())::text = 'admin'::text))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "class_students",
+    "policyname": "view_class_students",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(is_super_admin() OR ((get_my_role())::text = 'admin'::text) OR (student_id = auth.uid()) OR am_i_teacher_of_class(class_id))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "class_teachers",
+    "policyname": "admin_manage_class_teachers",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(is_super_admin() OR (((get_my_role())::text = 'admin'::text) AND (EXISTS ( SELECT 1\n   FROM classes\n  WHERE ((classes.id = class_teachers.class_id) AND (classes.tenant_id = get_my_tenant_id()))))))",
+    "with_check": "(is_super_admin() OR (((get_my_role())::text = 'admin'::text) AND (EXISTS ( SELECT 1\n   FROM classes\n  WHERE ((classes.id = class_teachers.class_id) AND (classes.tenant_id = get_my_tenant_id()))))))"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "class_teachers",
+    "policyname": "super_admin_class_teachers",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "class_teachers",
+    "policyname": "view_class_teachers",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(is_super_admin() OR ((get_my_role())::text = 'admin'::text) OR (teacher_id = auth.uid()) OR am_i_student_of_class(class_id))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "classes",
+    "policyname": "admin_manage_classes",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(((get_my_role())::text = 'admin'::text) AND (tenant_id = get_my_tenant_id()))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "classes",
+    "policyname": "member_view_own_classes",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "((tenant_id = get_my_tenant_id()) AND (((get_my_role())::text = 'admin'::text) OR am_i_teacher_of_class(id) OR am_i_student_of_class(id)))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "classes",
+    "policyname": "super_admin_all_classes",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "groups",
+    "policyname": "admin_manage_groups",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(((get_my_role())::text = 'admin'::text) AND (tenant_id = get_my_tenant_id()))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "groups",
+    "policyname": "member_view_groups",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "((tenant_id = get_my_tenant_id()) AND (((get_my_role())::text = 'admin'::text) OR am_i_member_of_group(id)))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "groups",
+    "policyname": "super_admin_all_groups",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "invitations",
+    "policyname": "admin_manage_invitations",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(((get_my_role())::text = ANY ((ARRAY['admin'::character varying, 'super_admin'::character varying])::text[])) AND ((tenant_id = get_my_tenant_id()) OR is_super_admin()))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "lesson_modules",
+    "policyname": "admin_manage_modules",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(((get_my_role())::text = 'admin'::text) AND (EXISTS ( SELECT 1\n   FROM classes\n  WHERE ((classes.id = lesson_modules.class_id) AND (classes.tenant_id = get_my_tenant_id())))))",
+    "with_check": "(((get_my_role())::text = 'admin'::text) AND (EXISTS ( SELECT 1\n   FROM classes\n  WHERE ((classes.id = lesson_modules.class_id) AND (classes.tenant_id = get_my_tenant_id())))))"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "lesson_modules",
+    "policyname": "student_view_visible_modules",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "((is_visible = true) AND (EXISTS ( SELECT 1\n   FROM class_students\n  WHERE ((class_students.class_id = lesson_modules.class_id) AND (class_students.student_id = auth.uid())))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "lesson_modules",
+    "policyname": "super_admin_all_modules",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "lesson_modules",
+    "policyname": "teacher_manage_modules",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "((EXISTS ( SELECT 1\n   FROM class_teachers\n  WHERE ((class_teachers.class_id = lesson_modules.class_id) AND (class_teachers.teacher_id = auth.uid())))) OR (((get_my_role())::text = 'admin'::text) AND (EXISTS ( SELECT 1\n   FROM classes\n  WHERE ((classes.id = lesson_modules.class_id) AND (classes.tenant_id = get_my_tenant_id()))))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "module_documents",
+    "policyname": "admin_manage_docs",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(EXISTS ( SELECT 1\n   FROM (lesson_modules lm\n     JOIN classes c ON ((c.id = lm.class_id)))\n  WHERE ((lm.id = module_documents.module_id) AND (c.tenant_id = get_my_tenant_id()) AND ((get_my_role())::text = 'admin'::text))))",
+    "with_check": "(EXISTS ( SELECT 1\n   FROM (lesson_modules lm\n     JOIN classes c ON ((c.id = lm.class_id)))\n  WHERE ((lm.id = module_documents.module_id) AND (c.tenant_id = get_my_tenant_id()) AND ((get_my_role())::text = 'admin'::text))))"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "module_documents",
+    "policyname": "student_view_docs",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(EXISTS ( SELECT 1\n   FROM (lesson_modules lm\n     JOIN class_students cs ON ((cs.class_id = lm.class_id)))\n  WHERE ((lm.id = module_documents.module_id) AND (cs.student_id = auth.uid()) AND (lm.is_visible = true))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "module_documents",
+    "policyname": "teacher_manage_docs",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "((EXISTS ( SELECT 1\n   FROM (lesson_modules lm\n     JOIN class_teachers ct ON ((ct.class_id = lm.class_id)))\n  WHERE ((lm.id = module_documents.module_id) AND (ct.teacher_id = auth.uid())))) OR ((get_my_role())::text = ANY ((ARRAY['admin'::character varying, 'super_admin'::character varying])::text[])))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "payments",
+    "policyname": "admin_view_own_payments",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "((tenant_id = get_my_tenant_id()) AND ((get_my_role())::text = 'admin'::text))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "payments",
+    "policyname": "super_admin_all_payments",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "profiles",
+    "policyname": "admin_manage_profiles",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(((get_my_role())::text = 'admin'::text) AND (tenant_id = get_my_tenant_id()))",
+    "with_check": "(((get_my_role())::text = 'admin'::text) AND (tenant_id = get_my_tenant_id()) AND ((role)::text = ANY ((ARRAY['student'::character varying, 'teacher'::character varying, 'admin'::character varying])::text[])))"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "profiles",
+    "policyname": "super_admin_all_profiles",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "profiles",
+    "policyname": "update_own_profile",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "UPDATE",
+    "qual": "(id = auth.uid())",
+    "with_check": "((id = auth.uid()) AND ((role)::text = (( SELECT profiles_1.role\n   FROM profiles profiles_1\n  WHERE (profiles_1.id = auth.uid())))::text) AND (tenant_id = ( SELECT profiles_1.tenant_id\n   FROM profiles profiles_1\n  WHERE (profiles_1.id = auth.uid()))))"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "profiles",
+    "policyname": "view_own_profile",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(id = auth.uid())",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "profiles",
+    "policyname": "view_same_tenant_profiles",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(tenant_id = get_my_tenant_id())",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "school_years",
+    "policyname": "admin_manage_years",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(((get_my_role())::text = 'admin'::text) AND (tenant_id = get_my_tenant_id()))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "school_years",
+    "policyname": "super_admin_all_years",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "school_years",
+    "policyname": "tenant_members_view_years",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(tenant_id = get_my_tenant_id())",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "submission_feedback",
+    "policyname": "admin_view_feedback",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(((get_my_role())::text = 'admin'::text) AND (EXISTS ( SELECT 1\n   FROM ((submissions s\n     JOIN assignments a ON ((a.id = s.assignment_id)))\n     JOIN classes c ON ((c.id = a.class_id)))\n  WHERE ((s.id = submission_feedback.submission_id) AND (c.tenant_id = get_my_tenant_id())))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "submission_feedback",
+    "policyname": "student_view_own_feedback",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(EXISTS ( SELECT 1\n   FROM submissions\n  WHERE ((submissions.id = submission_feedback.submission_id) AND (submissions.student_id = auth.uid()))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "submission_feedback",
+    "policyname": "teacher_manage_feedback",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(((teacher_id = auth.uid()) OR ((get_my_role())::text = 'admin'::text)) AND (EXISTS ( SELECT 1\n   FROM ((submissions s\n     JOIN assignments a ON ((a.id = s.assignment_id)))\n     JOIN classes c ON ((c.id = a.class_id)))\n  WHERE ((s.id = submission_feedback.submission_id) AND (c.tenant_id = get_my_tenant_id())))))",
+    "with_check": "(((teacher_id = auth.uid()) OR ((get_my_role())::text = 'admin'::text)) AND (EXISTS ( SELECT 1\n   FROM ((submissions s\n     JOIN assignments a ON ((a.id = s.assignment_id)))\n     JOIN classes c ON ((c.id = a.class_id)))\n  WHERE ((s.id = submission_feedback.submission_id) AND (c.tenant_id = get_my_tenant_id())))))"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "submission_feedback",
+    "policyname": "teacher_view_class_feedback",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(EXISTS ( SELECT 1\n   FROM ((submissions s\n     JOIN assignments a ON ((a.id = s.assignment_id)))\n     JOIN class_teachers ct ON ((ct.class_id = a.class_id)))\n  WHERE ((s.id = submission_feedback.submission_id) AND (ct.teacher_id = auth.uid()))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "submission_files",
+    "policyname": "admin_view_submission_files",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(((get_my_role())::text = 'admin'::text) AND (EXISTS ( SELECT 1\n   FROM ((submissions s\n     JOIN assignments a ON ((a.id = s.assignment_id)))\n     JOIN classes c ON ((c.id = a.class_id)))\n  WHERE ((s.id = submission_files.submission_id) AND (c.tenant_id = get_my_tenant_id())))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "submission_files",
+    "policyname": "student_manage_own_files",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(EXISTS ( SELECT 1\n   FROM submissions\n  WHERE ((submissions.id = submission_files.submission_id) AND (submissions.student_id = auth.uid()))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "submission_files",
+    "policyname": "super_admin_all_submission_files",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "submission_files",
+    "policyname": "teacher_view_submission_files",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "((EXISTS ( SELECT 1\n   FROM ((submissions s\n     JOIN assignments a ON ((a.id = s.assignment_id)))\n     JOIN class_teachers ct ON ((ct.class_id = a.class_id)))\n  WHERE ((s.id = submission_files.submission_id) AND (ct.teacher_id = auth.uid())))) OR ((get_my_role())::text = ANY ((ARRAY['admin'::character varying, 'super_admin'::character varying])::text[])))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "submissions",
+    "policyname": "student_manage_own_submissions",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(student_id = auth.uid())",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "submissions",
+    "policyname": "super_admin_all_submissions",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "submissions",
+    "policyname": "teacher_update_submissions",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "UPDATE",
+    "qual": "((EXISTS ( SELECT 1\n   FROM (assignments a\n     JOIN class_teachers ct ON ((ct.class_id = a.class_id)))\n  WHERE ((a.id = submissions.assignment_id) AND (ct.teacher_id = auth.uid())))) OR ((get_my_role())::text = 'admin'::text))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "submissions",
+    "policyname": "teacher_view_submissions",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "((EXISTS ( SELECT 1\n   FROM (assignments a\n     JOIN class_teachers ct ON ((ct.class_id = a.class_id)))\n  WHERE ((a.id = submissions.assignment_id) AND (ct.teacher_id = auth.uid())))) OR ((get_my_role())::text = 'admin'::text))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "tenants",
+    "policyname": "admin_view_own_tenant",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(id = get_my_tenant_id())",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "tenants",
+    "policyname": "super_admin_all_tenants",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_super_admin()",
+    "with_check": null
+  }
+]
