@@ -284,8 +284,19 @@ Ran a full codebase + live RLS policy audit. Live policies queried directly from
 - Disabled the image optimizer (`images: { unoptimized: true }` in `next.config.js`) — `next/image` is not used anywhere in the codebase, so the `/_next/image` endpoint was an unnecessary DoS surface.
 - Remaining audit warnings are in dev tooling (`eslint-config-next`, `@supabase/ssr`) or CVEs that don't apply to this architecture (RSC, middleware, i18n — all unused or disabled).
 
+**Security headers (committed to git — 82e2a8a):**
+- Added HTTP security headers to `next.config.js` for all routes: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`.
+
+**Deadline enforcement at DB level (applied in Supabase SQL editor):**
+- Split the broad `student_manage_own_submissions` ALL policy into four separate policies: SELECT, INSERT, UPDATE, DELETE.
+- INSERT policy enforces `WITH CHECK (due_date IS NULL OR now() < due_date)` — students cannot create submissions after the deadline regardless of client-side validation.
+
+**Known gap — not fixed (profiles IDOR):**
+- `view_same_tenant_profiles` RLS policy exposes phone and email to all members of the same mosque. Fixing this would require rewriting the teacher list query on the class detail page (which fetches teachers by `tenant_id`). Documented as a known gap; not an immediate risk since all users within a mosque know each other.
+
 **Remaining open items from audit (not yet fixed):**
 - No brute-force protection on login / forgot-password. Low priority — Supabase has basic IP-based rate limiting and users are a controlled mosque audience.
+- Audit logging (anonymize, delete, role changes, score edits) — not implemented; future feature.
 
 ---
 
@@ -332,6 +343,8 @@ Minor note: `CsvImportButton.tsx` line 85 aliases `klas` and `class` as valid CS
 ## 16. Git History (recent, newest first)
 
 ```
+82e2a8a add security headers
+e9aef2f update project status
 38eb9b7 update next to 14.2.35, disable unused image optimizer
 2378ac4 gdpr anonymize: scrub submission text and delete uploaded files
 2048156 fix open redirect in auth callback
