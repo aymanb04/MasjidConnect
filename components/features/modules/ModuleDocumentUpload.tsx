@@ -41,13 +41,11 @@ export default function ModuleDocumentUpload({ moduleId, onUploaded }: Props) {
         return
       }
 
-      const { data: { publicUrl } } = supabase.storage.from('module-documents').getPublicUrl(path)
-
       await supabase.from('module_documents').insert({
         module_id: moduleId,
         title: title.trim(),
         file_name: file.name,
-        file_url: publicUrl,
+        file_url: path,
         file_size: file.size,
         file_type: file.type,
       })

@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase/singleton'
 import { useRouter } from 'next/navigation'
 import { Upload, X, CheckCircle2, Loader2, FileText, RotateCcw, Star, Clock } from 'lucide-react'
 import { formatFileSize, getFileIcon, getSubmissionStatusBadge, cn } from '@/lib/utils'
+import { SignedFileLink } from '@/components/SignedFileLink'
 
 interface Props {
   assignmentId: string
@@ -78,10 +79,9 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
         const path = `${userId}/${assignmentId}/${Date.now()}_${safeName}`
         const { error: upErr } = await supabase.storage.from('submission-files').upload(path, file)
         if (upErr) throw upErr
-        const { data: { publicUrl } } = supabase.storage.from('submission-files').getPublicUrl(path)
         await supabase.from('submission_files').insert({
           submission_id: submission.id,
-          file_name: file.name, file_url: publicUrl,
+          file_name: file.name, file_url: path,
           file_size: file.size, file_type: file.type,
         })
       }
@@ -145,7 +145,7 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
           <p className="text-xs text-gray-500 font-medium mb-2">Ingediende bestanden</p>
           <div className="space-y-2">
             {sub.submission_files.map((f: any) => (
-              <a key={f.id} href={f.file_url} target="_blank" rel="noopener noreferrer"
+              <SignedFileLink key={f.id} bucket="submission-files" path={f.file_url}
                 className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-border hover:border-primary-200 transition-colors group">
                 <span className="text-lg">{getFileIcon(f.file_type)}</span>
                 <div className="flex-1 min-w-0">
@@ -153,7 +153,7 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
                   {f.file_size && <div className="text-xs text-gray-400">{formatFileSize(f.file_size)}</div>}
                 </div>
                 <span className="text-xs text-primary-600 group-hover:underline">Bekijken</span>
-              </a>
+              </SignedFileLink>
             ))}
           </div>
         </div>

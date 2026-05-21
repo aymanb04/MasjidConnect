@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase/singleton'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, Clock, Download, MessageSquare, Star, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { formatFileSize, getFileIcon, getSubmissionStatusBadge, formatDateTime, cn } from '@/lib/utils'
+import { SignedFileLink } from '@/components/SignedFileLink'
 
 interface Props {
   submissions: any[]
@@ -141,7 +142,7 @@ export default function TeacherSubmissionsView({ submissions, studentCount, assi
                         <p className="text-xs font-medium text-gray-500 mb-1.5">Bestanden ({sub.submission_files.length})</p>
                         <div className="space-y-2">
                           {sub.submission_files.map((f: any) => (
-                            <a key={f.id} href={f.file_url} target="_blank" rel="noopener noreferrer"
+                            <SignedFileLink key={f.id} bucket="submission-files" path={f.file_url}
                               className="flex items-center gap-3 p-3 bg-white border border-border rounded-xl hover:border-primary-200 transition-colors group">
                               <span className="text-base">{getFileIcon(f.file_type)}</span>
                               <div className="flex-1 min-w-0">
@@ -149,7 +150,7 @@ export default function TeacherSubmissionsView({ submissions, studentCount, assi
                                 {f.file_size && <div className="text-xs text-gray-400">{formatFileSize(f.file_size)}</div>}
                               </div>
                               <Download size={14} className="text-primary-600 group-hover:text-primary-700" />
-                            </a>
+                            </SignedFileLink>
                           ))}
                         </div>
                       </div>

@@ -9,6 +9,7 @@ import { getFileIcon, formatFileSize } from '@/lib/utils'
 import { ArrowLeft, BookOpen, FileText } from 'lucide-react'
 import Link from 'next/link'
 import ModuleDocumentUpload from '@/components/features/modules/ModuleDocumentUpload'
+import { SignedFileLink } from '@/components/SignedFileLink'
 
 export default function ModuleDetailPage() {
   const { id } = useParams()
@@ -62,7 +63,7 @@ export default function ModuleDetailPage() {
         ) : (
           <div className="space-y-2">
             {docs.map((doc: any) => (
-              <a key={doc.id} href={doc.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-3.5 border border-border rounded-xl hover:border-primary-200 hover:bg-primary-50/30 transition-all group">
+              <SignedFileLink key={doc.id} bucket="module-documents" path={doc.file_url} className="flex items-center gap-4 p-3.5 border border-border rounded-xl hover:border-primary-200 hover:bg-primary-50/30 transition-all group">
                 <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 text-lg">{getFileIcon(doc.file_type)}</div>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm text-gray-800 group-hover:text-primary-700 transition-colors">{doc.title}</div>
@@ -72,7 +73,7 @@ export default function ModuleDetailPage() {
                   </div>
                 </div>
                 <span className="text-xs text-primary-600 font-medium group-hover:underline flex-shrink-0">Openen →</span>
-              </a>
+              </SignedFileLink>
             ))}
           </div>
         )}
