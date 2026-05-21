@@ -43,6 +43,41 @@ export async function POST(request: Request) {
             .eq('id', userId)
         if (profileErr) return NextResponse.json({ error: profileErr.message }, { status: 400 })
 
+        // Scrub text content from all submissions (may contain personal statements)
+        await supabaseAdmin
+            .from('submissions')
+            .update({ text_content: null })
+            .eq('student_id', userId)
+
+        // Delete uploaded submission files from storage + remove DB records
+        const { data: submissions } = await supabaseAdmin
+            .from('submissions')
+            .select('id')
+            .eq('student_id', userId)
+
+        const submissionIds = submissions?.map(s => s.id) ?? []
+
+        const { data: submissionFiles } = submissionIds.length
+            ? await supabaseAdmin
+                .from('submission_files')
+                .select('id, file_url')
+                .in('submission_id', submissionIds)
+            : { data: [] }
+
+        if (submissionFiles?.length) {
+            const paths = submissionFiles.map(f => {
+                // Handle both stored paths and legacy full public URLs
+                const marker = '/object/public/submission-files/'
+                const idx = f.file_url.indexOf(marker)
+                return idx !== -1 ? f.file_url.slice(idx + marker.length) : f.file_url
+            })
+            await supabaseAdmin.storage.from('submission-files').remove(paths)
+            await supabaseAdmin
+                .from('submission_files')
+                .delete()
+                .in('id', submissionFiles.map(f => f.id))
+        }
+
         // Anonymize auth email + ban permanently so no login is ever possible
         const { error: authErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
             email:        `anon-${userId}@deleted.invalid`,
