@@ -275,8 +275,11 @@ Ran a full codebase + live RLS policy audit. Live policies queried directly from
 **Open redirect fix (committed to git):**
 - `/api/auth/callback` now validates the `next` param — must start with `/` and not `//`. Falls back to `/dashboard` otherwise.
 
+**GDPR anonymize fix (committed to git):**
+- `submissions.text_content` now set to null for all of the user's submissions.
+- All `submission_files` records fetched, files deleted from storage (handles both path and legacy public URL format), DB records deleted.
+
 **Remaining open items from audit (not yet fixed):**
-- GDPR anonymize does not scrub `submissions.text_content` or storage files.
 - No brute-force protection on login / forgot-password.
 - `next@14.2.5` has known CVEs — should be updated.
 
@@ -325,6 +328,7 @@ Minor note: `CsvImportButton.tsx` line 85 aliases `klas` and `class` as valid CS
 ## 16. Git History (recent, newest first)
 
 ```
+2378ac4 gdpr anonymize: scrub submission text and delete uploaded files
 2048156 fix open redirect in auth callback
 7154436 switch file storage to private buckets with signed URLs
 6d5cb3d pass session token in admin fetch calls
