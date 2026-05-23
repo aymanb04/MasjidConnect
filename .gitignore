@@ -6,3 +6,7 @@ out/
 build/
 *.log
 .DS_Store
+
+# Dev-only scripts (contain hardcoded demo passwords)
+supabase/seed.ts
+supabase/reset.sql
