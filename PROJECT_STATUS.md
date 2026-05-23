@@ -1,5 +1,5 @@
 # MasjidConnect — Project Status
-**Last updated: 2026-05-21**
+**Last updated: 2026-05-23**
 **Author of this document: Claude (Sonnet 4.6) — generated at end of session**
 
 ---
@@ -241,7 +241,38 @@ Prioritised based on what's partially prepared in DB:
 
 ---
 
-## 14. What Was Discussed This Session (2026-05-21)
+## 14. What Was Discussed This Session (2026-05-23)
+
+### Schema sync + demo seed
+
+**`supabase/schema.sql` rewritten (committed — d255a46):**
+- Previously a mix of raw CREATE TABLE statements + a JSON dump of policies. Now a proper SQL reference file with `CREATE OR REPLACE FUNCTION`, `CREATE TABLE`, `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`, and `CREATE POLICY` statements throughout.
+- Includes all 9 helper functions (`get_my_role`, `get_my_tenant_id`, `is_super_admin`, `am_i_student_of_class`, `am_i_teacher_of_class`, `am_i_member_of_group`, `handle_new_user`, `handle_user_deleted`, `update_updated_at`) with full definitions.
+- Reflects the split of `student_manage_own_submissions` (ALL) into 4 separate policies applied in the previous session: SELECT, INSERT (with deadline enforcement), UPDATE, DELETE.
+- Inline comments on all security-critical policies.
+
+**Demo seed tooling created (gitignored — not committed):**
+- `supabase/reset.sql` — run in Supabase SQL Editor to wipe all tables + auth users cleanly before re-seeding.
+- `supabase/seed.ts` — TypeScript script (`npx tsx supabase/seed.ts`) that creates a full demo dataset using the service role key. Creates auth users with known passwords directly via `supabase.auth.admin.createUser()` — no invite emails needed. Reads `.env.local` automatically without requiring dotenv.
+- Both files added to `.gitignore` (contain hardcoded demo passwords) and excluded from `tsconfig.json`.
+
+**Demo dataset (De Kroon — first client):**
+- Tenant: De Kroon, Antwerpen, Turnhoutsebaan 100
+- 1 super admin (`superadmin@masjidconnect.be` / `SuperAdmin1234!`)
+- 1 admin (`admin@dekroon.be` / `Admin1234!`)
+- 3 teachers (`ahmed.benali`, `fatima.yilmaz`, `omar.elidrissi` @dekroon.be / `Teacher1234!`)
+- 26 students across 3 groups (@dekroon.be / `Student1234!`)
+- 3 groups, 9 classes (Arabisch + Islam + Koran × 3 groups), school year 2025-2026
+- 9 rooster sessions (Groep 1+2 Saturday, Groep 3 Sunday)
+- 18 assignments (9 past-due, 9 active), 78 submissions, 54 graded with feedback, 4 announcements
+
+**To re-seed from scratch:**
+1. Run `supabase/reset.sql` in Supabase SQL Editor
+2. `npx tsx supabase/seed.ts`
+
+---
+
+## 14b. What Was Discussed This Session (2026-05-21)
 
 ### Full security audit
 
