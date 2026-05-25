@@ -46,7 +46,7 @@ export default function CreateTenantButton({ onCreated }: { onCreated?: () => vo
               <div><label className="label">Naam *</label><input type="text" value={form.name} onChange={e => handleNameChange(e.target.value)} placeholder="Moskee Al-Nour Antwerpen" className="input"/></div>
               <div><label className="label">URL slug *</label>
                 <div className="flex items-center">
-                  <span className="px-3 py-2.5 bg-gray-100 border border-r-0 border-border rounded-l-xl text-sm text-gray-500">masjidconnect.be/</span>
+                  <span className="px-3 py-2.5 bg-gray-100 border border-r-0 border-border rounded-l-xl text-sm text-gray-500">masjid-connect.be/</span>
                   <input type="text" value={form.slug} onChange={e => setForm(p => ({ ...p, slug: e.target.value }))} className="input rounded-l-none" placeholder="al-nour-antwerpen"/>
                 </div>
               </div>
