@@ -17,8 +17,12 @@
 --            bodies. CREATE OR REPLACE — no breaking change, no policy drops.
 --
 --   PART B — Rewrites every RLS policy that calls these functions or auth.uid()
---            bare. Pattern: DROP POLICY + CREATE POLICY with wrapped expressions.
---            65 policies total.
+--            bare. Pattern: DROP POLICY + CREATE POLICY with wrapped expressions
+--            AND scoped TO authenticated. 65 policies total.
+--
+--   Note: The TO authenticated clause makes this script idempotent with 7c
+--         (supabase/7c_rls_scope_to_authenticated.sql). Re-running 7b alone
+--         no longer undoes 7c's scoping — the policies stay correct.
 --
 -- Safety:
 --   Whole script runs in a single transaction (BEGIN/COMMIT). Either every
@@ -102,24 +106,24 @@ $$;
 -- ─── tenants ────────────────────────────────────────────────
 DROP POLICY IF EXISTS "admin_view_own_tenant" ON public.tenants;
 CREATE POLICY "admin_view_own_tenant" ON public.tenants
-  FOR SELECT USING (id = (SELECT get_my_tenant_id()));
+  FOR SELECT TO authenticated USING (id = (SELECT get_my_tenant_id()));
 
 DROP POLICY IF EXISTS "super_admin_all_tenants" ON public.tenants;
 CREATE POLICY "super_admin_all_tenants" ON public.tenants
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 -- ─── profiles ───────────────────────────────────────────────
 DROP POLICY IF EXISTS "view_own_profile" ON public.profiles;
 CREATE POLICY "view_own_profile" ON public.profiles
-  FOR SELECT USING (id = (SELECT auth.uid()));
+  FOR SELECT TO authenticated USING (id = (SELECT auth.uid()));
 
 DROP POLICY IF EXISTS "view_same_tenant_profiles" ON public.profiles;
 CREATE POLICY "view_same_tenant_profiles" ON public.profiles
-  FOR SELECT USING (tenant_id = (SELECT get_my_tenant_id()));
+  FOR SELECT TO authenticated USING (tenant_id = (SELECT get_my_tenant_id()));
 
 DROP POLICY IF EXISTS "update_own_profile" ON public.profiles;
 CREATE POLICY "update_own_profile" ON public.profiles
-  FOR UPDATE
+  FOR UPDATE TO authenticated
   USING (id = (SELECT auth.uid()))
   WITH CHECK (
     id = (SELECT auth.uid())
@@ -129,7 +133,7 @@ CREATE POLICY "update_own_profile" ON public.profiles
 
 DROP POLICY IF EXISTS "admin_manage_profiles" ON public.profiles;
 CREATE POLICY "admin_manage_profiles" ON public.profiles
-  FOR ALL
+  FOR ALL TO authenticated
   USING (
     (SELECT get_my_role())::text = 'admin'
     AND tenant_id = (SELECT get_my_tenant_id())
@@ -142,47 +146,47 @@ CREATE POLICY "admin_manage_profiles" ON public.profiles
 
 DROP POLICY IF EXISTS "super_admin_all_profiles" ON public.profiles;
 CREATE POLICY "super_admin_all_profiles" ON public.profiles
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 -- ─── school_years ───────────────────────────────────────────
 DROP POLICY IF EXISTS "tenant_members_view_years" ON public.school_years;
 CREATE POLICY "tenant_members_view_years" ON public.school_years
-  FOR SELECT USING (tenant_id = (SELECT get_my_tenant_id()));
+  FOR SELECT TO authenticated USING (tenant_id = (SELECT get_my_tenant_id()));
 
 DROP POLICY IF EXISTS "admin_manage_years" ON public.school_years;
 CREATE POLICY "admin_manage_years" ON public.school_years
-  FOR ALL USING (
+  FOR ALL TO authenticated USING (
     (SELECT get_my_role())::text = 'admin'
     AND tenant_id = (SELECT get_my_tenant_id())
   );
 
 DROP POLICY IF EXISTS "super_admin_all_years" ON public.school_years;
 CREATE POLICY "super_admin_all_years" ON public.school_years
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 -- ─── groups ─────────────────────────────────────────────────
 DROP POLICY IF EXISTS "member_view_groups" ON public.groups;
 CREATE POLICY "member_view_groups" ON public.groups
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     tenant_id = (SELECT get_my_tenant_id())
     AND ((SELECT get_my_role())::text = 'admin' OR am_i_member_of_group(id))
   );
 
 DROP POLICY IF EXISTS "admin_manage_groups" ON public.groups;
 CREATE POLICY "admin_manage_groups" ON public.groups
-  FOR ALL USING (
+  FOR ALL TO authenticated USING (
     (SELECT get_my_role())::text = 'admin'
     AND tenant_id = (SELECT get_my_tenant_id())
   );
 
 DROP POLICY IF EXISTS "super_admin_all_groups" ON public.groups;
 CREATE POLICY "super_admin_all_groups" ON public.groups
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 -- ─── classes ────────────────────────────────────────────────
 DROP POLICY IF EXISTS "member_view_own_classes" ON public.classes;
 CREATE POLICY "member_view_own_classes" ON public.classes
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     tenant_id = (SELECT get_my_tenant_id())
     AND (
       (SELECT get_my_role())::text = 'admin'
@@ -193,19 +197,19 @@ CREATE POLICY "member_view_own_classes" ON public.classes
 
 DROP POLICY IF EXISTS "admin_manage_classes" ON public.classes;
 CREATE POLICY "admin_manage_classes" ON public.classes
-  FOR ALL USING (
+  FOR ALL TO authenticated USING (
     (SELECT get_my_role())::text = 'admin'
     AND tenant_id = (SELECT get_my_tenant_id())
   );
 
 DROP POLICY IF EXISTS "super_admin_all_classes" ON public.classes;
 CREATE POLICY "super_admin_all_classes" ON public.classes
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 -- ─── class_teachers ─────────────────────────────────────────
 DROP POLICY IF EXISTS "view_class_teachers" ON public.class_teachers;
 CREATE POLICY "view_class_teachers" ON public.class_teachers
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     (SELECT is_super_admin())
     OR (SELECT get_my_role())::text = 'admin'
     OR teacher_id = (SELECT auth.uid())
@@ -214,7 +218,7 @@ CREATE POLICY "view_class_teachers" ON public.class_teachers
 
 DROP POLICY IF EXISTS "admin_manage_class_teachers" ON public.class_teachers;
 CREATE POLICY "admin_manage_class_teachers" ON public.class_teachers
-  FOR ALL
+  FOR ALL TO authenticated
   USING (
     (SELECT is_super_admin())
     OR (
@@ -240,12 +244,12 @@ CREATE POLICY "admin_manage_class_teachers" ON public.class_teachers
 
 DROP POLICY IF EXISTS "super_admin_class_teachers" ON public.class_teachers;
 CREATE POLICY "super_admin_class_teachers" ON public.class_teachers
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 -- ─── class_students ─────────────────────────────────────────
 DROP POLICY IF EXISTS "view_class_students" ON public.class_students;
 CREATE POLICY "view_class_students" ON public.class_students
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     (SELECT is_super_admin())
     OR (SELECT get_my_role())::text = 'admin'
     OR student_id = (SELECT auth.uid())
@@ -257,7 +261,7 @@ CREATE POLICY "view_class_students" ON public.class_students
 -- it here anyway so the auth.uid() wrap doesn't get missed if it's kept.
 DROP POLICY IF EXISTS "teacher_view_class_students" ON public.class_students;
 CREATE POLICY "teacher_view_class_students" ON public.class_students
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     EXISTS (
       SELECT 1 FROM class_teachers ct
       JOIN classes c ON c.id = ct.class_id
@@ -270,7 +274,7 @@ CREATE POLICY "teacher_view_class_students" ON public.class_students
 
 DROP POLICY IF EXISTS "admin_manage_class_students" ON public.class_students;
 CREATE POLICY "admin_manage_class_students" ON public.class_students
-  FOR ALL
+  FOR ALL TO authenticated
   USING (
     (SELECT is_super_admin())
     OR (
@@ -296,20 +300,20 @@ CREATE POLICY "admin_manage_class_students" ON public.class_students
 
 DROP POLICY IF EXISTS "super_admin_class_students" ON public.class_students;
 CREATE POLICY "super_admin_class_students" ON public.class_students
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 -- ─── class_sessions (rooster) ───────────────────────────────
 DROP POLICY IF EXISTS "student_view_sessions" ON public.class_sessions;
 CREATE POLICY "student_view_sessions" ON public.class_sessions
-  FOR SELECT USING (am_i_student_of_class(class_id));
+  FOR SELECT TO authenticated USING (am_i_student_of_class(class_id));
 
 DROP POLICY IF EXISTS "teacher_view_sessions" ON public.class_sessions;
 CREATE POLICY "teacher_view_sessions" ON public.class_sessions
-  FOR SELECT USING (am_i_teacher_of_class(class_id));
+  FOR SELECT TO authenticated USING (am_i_teacher_of_class(class_id));
 
 DROP POLICY IF EXISTS "admin_manage_sessions" ON public.class_sessions;
 CREATE POLICY "admin_manage_sessions" ON public.class_sessions
-  FOR ALL
+  FOR ALL TO authenticated
   USING (
     (SELECT get_my_role())::text = 'admin'
     AND tenant_id = (SELECT get_my_tenant_id())
@@ -321,12 +325,12 @@ CREATE POLICY "admin_manage_sessions" ON public.class_sessions
 
 DROP POLICY IF EXISTS "super_admin_all_sessions" ON public.class_sessions;
 CREATE POLICY "super_admin_all_sessions" ON public.class_sessions
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 -- ─── announcements ──────────────────────────────────────────
 DROP POLICY IF EXISTS "announcements_read" ON public.announcements;
 CREATE POLICY "announcements_read" ON public.announcements
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     tenant_id = (SELECT tenant_id FROM profiles WHERE id = (SELECT auth.uid()))
     AND (
       class_id IS NULL
@@ -342,7 +346,7 @@ CREATE POLICY "announcements_read" ON public.announcements
 
 DROP POLICY IF EXISTS "student_read_announcements" ON public.announcements;
 CREATE POLICY "student_read_announcements" ON public.announcements
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     tenant_id = (SELECT get_my_tenant_id())
     AND (
       class_id IS NULL
@@ -356,7 +360,7 @@ CREATE POLICY "student_read_announcements" ON public.announcements
 
 DROP POLICY IF EXISTS "teacher_read_announcements" ON public.announcements;
 CREATE POLICY "teacher_read_announcements" ON public.announcements
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     tenant_id = (SELECT get_my_tenant_id())
     AND (
       class_id IS NULL
@@ -370,7 +374,7 @@ CREATE POLICY "teacher_read_announcements" ON public.announcements
 
 DROP POLICY IF EXISTS "announcements_insert" ON public.announcements;
 CREATE POLICY "announcements_insert" ON public.announcements
-  FOR INSERT WITH CHECK (
+  FOR INSERT TO authenticated WITH CHECK (
     created_by = (SELECT auth.uid())
     AND tenant_id = (SELECT tenant_id FROM profiles WHERE id = (SELECT auth.uid()))
     AND (
@@ -388,7 +392,7 @@ CREATE POLICY "announcements_insert" ON public.announcements
 
 DROP POLICY IF EXISTS "teacher_post_announcements" ON public.announcements;
 CREATE POLICY "teacher_post_announcements" ON public.announcements
-  FOR INSERT WITH CHECK (
+  FOR INSERT TO authenticated WITH CHECK (
     (SELECT get_my_role())::text = 'teacher'
     AND tenant_id = (SELECT get_my_tenant_id())
     AND class_id IS NOT NULL
@@ -402,7 +406,7 @@ CREATE POLICY "teacher_post_announcements" ON public.announcements
 
 DROP POLICY IF EXISTS "announcements_delete" ON public.announcements;
 CREATE POLICY "announcements_delete" ON public.announcements
-  FOR DELETE USING (
+  FOR DELETE TO authenticated USING (
     created_by = (SELECT auth.uid())
     OR (SELECT role FROM profiles WHERE id = (SELECT auth.uid()))::text
        = ANY (ARRAY['admin', 'super_admin'])
@@ -410,26 +414,26 @@ CREATE POLICY "announcements_delete" ON public.announcements
 
 DROP POLICY IF EXISTS "teacher_delete_own_announcements" ON public.announcements;
 CREATE POLICY "teacher_delete_own_announcements" ON public.announcements
-  FOR DELETE USING (
+  FOR DELETE TO authenticated USING (
     (SELECT get_my_role())::text = 'teacher'
     AND created_by = (SELECT auth.uid())
   );
 
 DROP POLICY IF EXISTS "admin_manage_announcements" ON public.announcements;
 CREATE POLICY "admin_manage_announcements" ON public.announcements
-  FOR ALL USING (
+  FOR ALL TO authenticated USING (
     (SELECT get_my_role())::text = 'admin'
     AND tenant_id = (SELECT get_my_tenant_id())
   );
 
 DROP POLICY IF EXISTS "super_admin_all_announcements" ON public.announcements;
 CREATE POLICY "super_admin_all_announcements" ON public.announcements
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 -- ─── assignments ────────────────────────────────────────────
 DROP POLICY IF EXISTS "student_view_assignments" ON public.assignments;
 CREATE POLICY "student_view_assignments" ON public.assignments
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     is_published = true
     AND EXISTS (
       SELECT 1 FROM class_students
@@ -440,7 +444,7 @@ CREATE POLICY "student_view_assignments" ON public.assignments
 
 DROP POLICY IF EXISTS "teacher_manage_assignments" ON public.assignments;
 CREATE POLICY "teacher_manage_assignments" ON public.assignments
-  FOR ALL USING (
+  FOR ALL TO authenticated USING (
     EXISTS (
       SELECT 1 FROM class_teachers ct
       JOIN classes c ON c.id = ct.class_id
@@ -460,16 +464,16 @@ CREATE POLICY "teacher_manage_assignments" ON public.assignments
 
 DROP POLICY IF EXISTS "super_admin_all_assignments" ON public.assignments;
 CREATE POLICY "super_admin_all_assignments" ON public.assignments
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 -- ─── submissions ────────────────────────────────────────────
 DROP POLICY IF EXISTS "student_view_own_submissions" ON public.submissions;
 CREATE POLICY "student_view_own_submissions" ON public.submissions
-  FOR SELECT USING (student_id = (SELECT auth.uid()));
+  FOR SELECT TO authenticated USING (student_id = (SELECT auth.uid()));
 
 DROP POLICY IF EXISTS "student_insert_submission" ON public.submissions;
 CREATE POLICY "student_insert_submission" ON public.submissions
-  FOR INSERT WITH CHECK (
+  FOR INSERT TO authenticated WITH CHECK (
     student_id = (SELECT auth.uid())
     AND EXISTS (
       SELECT 1 FROM assignments
@@ -480,17 +484,17 @@ CREATE POLICY "student_insert_submission" ON public.submissions
 
 DROP POLICY IF EXISTS "student_update_own_submissions" ON public.submissions;
 CREATE POLICY "student_update_own_submissions" ON public.submissions
-  FOR UPDATE
+  FOR UPDATE TO authenticated
   USING (student_id = (SELECT auth.uid()))
   WITH CHECK (student_id = (SELECT auth.uid()));
 
 DROP POLICY IF EXISTS "student_delete_own_submissions" ON public.submissions;
 CREATE POLICY "student_delete_own_submissions" ON public.submissions
-  FOR DELETE USING (student_id = (SELECT auth.uid()));
+  FOR DELETE TO authenticated USING (student_id = (SELECT auth.uid()));
 
 DROP POLICY IF EXISTS "teacher_view_submissions" ON public.submissions;
 CREATE POLICY "teacher_view_submissions" ON public.submissions
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     EXISTS (
       SELECT 1 FROM assignments a
       JOIN class_teachers ct ON ct.class_id = a.class_id
@@ -502,7 +506,7 @@ CREATE POLICY "teacher_view_submissions" ON public.submissions
 
 DROP POLICY IF EXISTS "teacher_update_submissions" ON public.submissions;
 CREATE POLICY "teacher_update_submissions" ON public.submissions
-  FOR UPDATE USING (
+  FOR UPDATE TO authenticated USING (
     EXISTS (
       SELECT 1 FROM assignments a
       JOIN class_teachers ct ON ct.class_id = a.class_id
@@ -514,12 +518,12 @@ CREATE POLICY "teacher_update_submissions" ON public.submissions
 
 DROP POLICY IF EXISTS "super_admin_all_submissions" ON public.submissions;
 CREATE POLICY "super_admin_all_submissions" ON public.submissions
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 -- ─── submission_feedback ────────────────────────────────────
 DROP POLICY IF EXISTS "student_view_own_feedback" ON public.submission_feedback;
 CREATE POLICY "student_view_own_feedback" ON public.submission_feedback
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     EXISTS (
       SELECT 1 FROM submissions
       WHERE submissions.id = submission_feedback.submission_id
@@ -529,7 +533,7 @@ CREATE POLICY "student_view_own_feedback" ON public.submission_feedback
 
 DROP POLICY IF EXISTS "teacher_view_class_feedback" ON public.submission_feedback;
 CREATE POLICY "teacher_view_class_feedback" ON public.submission_feedback
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     EXISTS (
       SELECT 1 FROM submissions s
       JOIN assignments a ON a.id = s.assignment_id
@@ -541,7 +545,7 @@ CREATE POLICY "teacher_view_class_feedback" ON public.submission_feedback
 
 DROP POLICY IF EXISTS "admin_view_feedback" ON public.submission_feedback;
 CREATE POLICY "admin_view_feedback" ON public.submission_feedback
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     (SELECT get_my_role())::text = 'admin'
     AND EXISTS (
       SELECT 1 FROM submissions s
@@ -554,7 +558,7 @@ CREATE POLICY "admin_view_feedback" ON public.submission_feedback
 
 DROP POLICY IF EXISTS "teacher_manage_feedback" ON public.submission_feedback;
 CREATE POLICY "teacher_manage_feedback" ON public.submission_feedback
-  FOR ALL
+  FOR ALL TO authenticated
   USING (
     (teacher_id = (SELECT auth.uid()) OR (SELECT get_my_role())::text = 'admin')
     AND EXISTS (
@@ -579,7 +583,7 @@ CREATE POLICY "teacher_manage_feedback" ON public.submission_feedback
 -- ─── submission_files ───────────────────────────────────────
 DROP POLICY IF EXISTS "student_manage_own_files" ON public.submission_files;
 CREATE POLICY "student_manage_own_files" ON public.submission_files
-  FOR ALL USING (
+  FOR ALL TO authenticated USING (
     EXISTS (
       SELECT 1 FROM submissions
       WHERE submissions.id = submission_files.submission_id
@@ -589,7 +593,7 @@ CREATE POLICY "student_manage_own_files" ON public.submission_files
 
 DROP POLICY IF EXISTS "teacher_view_submission_files" ON public.submission_files;
 CREATE POLICY "teacher_view_submission_files" ON public.submission_files
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     EXISTS (
       SELECT 1 FROM submissions s
       JOIN assignments a ON a.id = s.assignment_id
@@ -602,7 +606,7 @@ CREATE POLICY "teacher_view_submission_files" ON public.submission_files
 
 DROP POLICY IF EXISTS "admin_view_submission_files" ON public.submission_files;
 CREATE POLICY "admin_view_submission_files" ON public.submission_files
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     (SELECT get_my_role())::text = 'admin'
     AND EXISTS (
       SELECT 1 FROM submissions s
@@ -615,12 +619,12 @@ CREATE POLICY "admin_view_submission_files" ON public.submission_files
 
 DROP POLICY IF EXISTS "super_admin_all_submission_files" ON public.submission_files;
 CREATE POLICY "super_admin_all_submission_files" ON public.submission_files
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 -- ─── lesson_modules ─────────────────────────────────────────
 DROP POLICY IF EXISTS "student_view_visible_modules" ON public.lesson_modules;
 CREATE POLICY "student_view_visible_modules" ON public.lesson_modules
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     is_visible = true
     AND EXISTS (
       SELECT 1 FROM class_students
@@ -631,7 +635,7 @@ CREATE POLICY "student_view_visible_modules" ON public.lesson_modules
 
 DROP POLICY IF EXISTS "teacher_manage_modules" ON public.lesson_modules;
 CREATE POLICY "teacher_manage_modules" ON public.lesson_modules
-  FOR ALL USING (
+  FOR ALL TO authenticated USING (
     EXISTS (
       SELECT 1 FROM class_teachers
       WHERE class_teachers.class_id = lesson_modules.class_id
@@ -649,7 +653,7 @@ CREATE POLICY "teacher_manage_modules" ON public.lesson_modules
 
 DROP POLICY IF EXISTS "admin_manage_modules" ON public.lesson_modules;
 CREATE POLICY "admin_manage_modules" ON public.lesson_modules
-  FOR ALL
+  FOR ALL TO authenticated
   USING (
     (SELECT get_my_role())::text = 'admin'
     AND EXISTS (
@@ -669,12 +673,12 @@ CREATE POLICY "admin_manage_modules" ON public.lesson_modules
 
 DROP POLICY IF EXISTS "super_admin_all_modules" ON public.lesson_modules;
 CREATE POLICY "super_admin_all_modules" ON public.lesson_modules
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 -- ─── module_documents ───────────────────────────────────────
 DROP POLICY IF EXISTS "student_view_docs" ON public.module_documents;
 CREATE POLICY "student_view_docs" ON public.module_documents
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     EXISTS (
       SELECT 1 FROM lesson_modules lm
       JOIN class_students cs ON cs.class_id = lm.class_id
@@ -686,7 +690,7 @@ CREATE POLICY "student_view_docs" ON public.module_documents
 
 DROP POLICY IF EXISTS "teacher_manage_docs" ON public.module_documents;
 CREATE POLICY "teacher_manage_docs" ON public.module_documents
-  FOR ALL USING (
+  FOR ALL TO authenticated USING (
     EXISTS (
       SELECT 1 FROM lesson_modules lm
       JOIN class_teachers ct ON ct.class_id = lm.class_id
@@ -698,7 +702,7 @@ CREATE POLICY "teacher_manage_docs" ON public.module_documents
 
 DROP POLICY IF EXISTS "admin_manage_docs" ON public.module_documents;
 CREATE POLICY "admin_manage_docs" ON public.module_documents
-  FOR ALL
+  FOR ALL TO authenticated
   USING (
     EXISTS (
       SELECT 1 FROM lesson_modules lm
@@ -721,7 +725,7 @@ CREATE POLICY "admin_manage_docs" ON public.module_documents
 -- ─── invitations ────────────────────────────────────────────
 DROP POLICY IF EXISTS "admin_manage_invitations" ON public.invitations;
 CREATE POLICY "admin_manage_invitations" ON public.invitations
-  FOR ALL USING (
+  FOR ALL TO authenticated USING (
     (SELECT get_my_role())::text = ANY (ARRAY['admin', 'super_admin'])
     AND (tenant_id = (SELECT get_my_tenant_id()) OR (SELECT is_super_admin()))
   );
@@ -729,19 +733,19 @@ CREATE POLICY "admin_manage_invitations" ON public.invitations
 -- ─── audit_logs ─────────────────────────────────────────────
 DROP POLICY IF EXISTS "super_admin_all_logs" ON public.audit_logs;
 CREATE POLICY "super_admin_all_logs" ON public.audit_logs
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 -- ─── payments ───────────────────────────────────────────────
 DROP POLICY IF EXISTS "admin_view_own_payments" ON public.payments;
 CREATE POLICY "admin_view_own_payments" ON public.payments
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     tenant_id = (SELECT get_my_tenant_id())
     AND (SELECT get_my_role())::text = 'admin'
   );
 
 DROP POLICY IF EXISTS "super_admin_all_payments" ON public.payments;
 CREATE POLICY "super_admin_all_payments" ON public.payments
-  FOR ALL USING ((SELECT is_super_admin()));
+  FOR ALL TO authenticated USING ((SELECT is_super_admin()));
 
 COMMIT;
 
