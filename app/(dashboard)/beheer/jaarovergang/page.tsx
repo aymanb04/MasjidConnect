@@ -272,6 +272,10 @@ export default function JaarovergangPage() {
 
     setRollingOver(true)
 
+    // Track every entity we create so we can roll back on partial failure.
+    const createdGroupIds: string[] = []
+    const createdClassIds: string[] = []
+
     try {
       for (const cls of currentClasses) {
         // a. Find or create group in target year
@@ -301,6 +305,7 @@ export default function JaarovergangPage() {
               .single()
             if (groupError) throw new Error(`Groep aanmaken mislukt: ${groupError.message}`)
             newGroupId = newGroup.id
+            createdGroupIds.push(newGroupId)
           }
         }
 
@@ -321,6 +326,7 @@ export default function JaarovergangPage() {
         if (classError) throw new Error(`Klas aanmaken mislukt: ${classError.message}`)
 
         const newClassId = newClass.id
+        createdClassIds.push(newClassId)
 
         // c. Copy teachers
         if (cls.teachers.length > 0) {
@@ -342,7 +348,28 @@ export default function JaarovergangPage() {
 
       setRolloverDone(true)
     } catch (err: any) {
-      alert('Fout bij jaarovergang: ' + err.message)
+      // Attempt to clean up all entities we created before the failure so the
+      // DB is not left in a half-migrated state. FK order: junction tables
+      // (class_students, class_teachers) must be deleted before their parent
+      // classes, and classes before their parent groups.
+      try {
+        if (createdClassIds.length) {
+          await supabase.from('class_students').delete().in('class_id', createdClassIds)
+          await supabase.from('class_teachers').delete().in('class_id', createdClassIds)
+          await supabase.from('classes').delete().in('id', createdClassIds)
+        }
+        if (createdGroupIds.length) {
+          await supabase.from('groups').delete().in('id', createdGroupIds)
+        }
+        alert('Fout bij jaarovergang — aanmaak ongedaan gemaakt: ' + err.message)
+      } catch (cleanupErr: any) {
+        // Cleanup itself failed — warn the admin that manual cleanup may be needed.
+        alert(
+          'Fout bij jaarovergang én bij het ongedaan maken:\n\n' +
+          err.message + '\n\n' +
+          'Controleer de klassen in het doeljaar en verwijder eventuele deels aangemaakte klassen handmatig.'
+        )
+      }
     } finally {
       setRollingOver(false)
     }
