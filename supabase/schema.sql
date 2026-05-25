@@ -1,8 +1,22 @@
 -- MasjidConnect — Supabase Schema
--- Last synced: 2026-05-23
--- Source of truth: pg_policies + information_schema.routines
+-- Last synced: 2026-05-25
+-- Source of truth: pg_policies + pg_constraint + pg_indexes
 -- WARNING: This file is a reference/documentation copy. Do NOT run it as-is
 --          against a live database (no idempotency guards, no migration order).
+--
+-- 2026-05-25 resync added:
+--   - ON DELETE CASCADE / SET NULL on all FKs (matches live state)
+--   - Missing UNIQUE constraints: groups(tenant,year,name),
+--     attendance_sessions(class,date), attendance_records(session,student),
+--     class_students/class_teachers/submissions junction uniqueness
+--   - profiles.is_anonymized column (replaces 'Verwijderd' first_name sentinel)
+--   - submission_feedback.score CHECK constraint
+--   - New INDEXES section enumerating all FK + lookup indexes
+--
+-- Known live-DB cleanup pending in this file (intentionally not represented):
+--   - Live DB still has duplicate UNIQUE policies on class_students (broad
+--     view_class_students vs narrow teacher_view_class_students). Pure
+--     redundancy, not a bug — defer until next RLS audit pass.
 
 -- ============================================================
 -- HELPER FUNCTIONS
@@ -137,22 +151,24 @@ CREATE TABLE public.tenants (
 );
 
 CREATE TABLE public.profiles (
-  id           uuid             NOT NULL,
-  tenant_id    uuid,
-  role         character varying NOT NULL
+  id             uuid             NOT NULL,
+  tenant_id      uuid,
+  role           character varying NOT NULL
     CHECK (role IN ('super_admin', 'admin', 'teacher', 'student')),
-  first_name   character varying NOT NULL,
-  last_name    character varying NOT NULL,
-  email        character varying,
-  phone        character varying,
-  avatar_url   text,
-  is_active    boolean          DEFAULT true,
-  last_seen_at timestamp with time zone,
-  created_at   timestamp with time zone DEFAULT now(),
-  updated_at   timestamp with time zone DEFAULT now(),
+  first_name     character varying NOT NULL,
+  last_name      character varying NOT NULL,
+  email          character varying,
+  phone          character varying,
+  avatar_url     text,
+  is_active      boolean          DEFAULT true,
+  -- GDPR: true after anonymize. Prevents reactivation of erased users.
+  is_anonymized  boolean          NOT NULL DEFAULT false,
+  last_seen_at   timestamp with time zone,
+  created_at     timestamp with time zone DEFAULT now(),
+  updated_at     timestamp with time zone DEFAULT now(),
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
-  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id),
-  CONSTRAINT profiles_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE,
+  CONSTRAINT profiles_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE
 );
 
 CREATE TABLE public.school_years (
@@ -164,7 +180,7 @@ CREATE TABLE public.school_years (
   is_active  boolean          DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT school_years_pkey PRIMARY KEY (id),
-  CONSTRAINT school_years_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
+  CONSTRAINT school_years_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE
 );
 
 CREATE TABLE public.groups (
@@ -174,8 +190,10 @@ CREATE TABLE public.groups (
   name           character varying NOT NULL,
   created_at     timestamp with time zone DEFAULT now(),
   CONSTRAINT groups_pkey PRIMARY KEY (id),
-  CONSTRAINT groups_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
-  CONSTRAINT groups_school_year_id_fkey FOREIGN KEY (school_year_id) REFERENCES public.school_years(id)
+  -- One group name per tenant per school year (e.g. only one "Groep 1" in 2025-2026)
+  CONSTRAINT groups_tenant_id_school_year_id_name_key UNIQUE (tenant_id, school_year_id, name),
+  CONSTRAINT groups_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE,
+  CONSTRAINT groups_school_year_id_fkey FOREIGN KEY (school_year_id) REFERENCES public.school_years(id) ON DELETE CASCADE
 );
 
 CREATE TABLE public.classes (
@@ -191,9 +209,10 @@ CREATE TABLE public.classes (
   created_at     timestamp with time zone DEFAULT now(),
   updated_at     timestamp with time zone DEFAULT now(),
   CONSTRAINT classes_pkey PRIMARY KEY (id),
-  CONSTRAINT classes_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
-  CONSTRAINT classes_school_year_id_fkey FOREIGN KEY (school_year_id) REFERENCES public.school_years(id),
-  CONSTRAINT classes_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.groups(id)
+  CONSTRAINT classes_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE,
+  CONSTRAINT classes_school_year_id_fkey FOREIGN KEY (school_year_id) REFERENCES public.school_years(id) ON DELETE CASCADE,
+  -- Group deletion does not delete the class; FK is nulled and class becomes ungrouped
+  CONSTRAINT classes_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.groups(id) ON DELETE SET NULL
 );
 
 CREATE TABLE public.class_teachers (
@@ -202,8 +221,10 @@ CREATE TABLE public.class_teachers (
   teacher_id  uuid NOT NULL,
   assigned_at timestamp with time zone DEFAULT now(),
   CONSTRAINT class_teachers_pkey PRIMARY KEY (id),
-  CONSTRAINT class_teachers_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
-  CONSTRAINT class_teachers_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.profiles(id)
+  -- One row per (class, teacher) — prevents duplicate enrollments under concurrent invites
+  CONSTRAINT class_teachers_class_id_teacher_id_key UNIQUE (class_id, teacher_id),
+  CONSTRAINT class_teachers_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE CASCADE,
+  CONSTRAINT class_teachers_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.profiles(id) ON DELETE CASCADE
 );
 
 CREATE TABLE public.class_students (
@@ -212,8 +233,10 @@ CREATE TABLE public.class_students (
   student_id  uuid NOT NULL,
   enrolled_at timestamp with time zone DEFAULT now(),
   CONSTRAINT class_students_pkey PRIMARY KEY (id),
-  CONSTRAINT class_students_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
-  CONSTRAINT class_students_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)
+  -- One row per (class, student) — prevents duplicate enrollments under concurrent invites
+  CONSTRAINT class_students_class_id_student_id_key UNIQUE (class_id, student_id),
+  CONSTRAINT class_students_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE CASCADE,
+  CONSTRAINT class_students_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id) ON DELETE CASCADE
 );
 
 -- Rooster (weekly schedule) — day_of_week: 0=Sun … 6=Sat
@@ -227,8 +250,8 @@ CREATE TABLE public.class_sessions (
   location     character varying,
   created_at   timestamp with time zone DEFAULT now(),
   CONSTRAINT class_sessions_pkey PRIMARY KEY (id),
-  CONSTRAINT class_sessions_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
-  CONSTRAINT class_sessions_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
+  CONSTRAINT class_sessions_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE CASCADE,
+  CONSTRAINT class_sessions_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE
 );
 
 CREATE TABLE public.announcements (
@@ -242,8 +265,8 @@ CREATE TABLE public.announcements (
   published_at timestamp with time zone DEFAULT now(),
   created_at   timestamp with time zone DEFAULT now(),
   CONSTRAINT announcements_pkey PRIMARY KEY (id),
-  CONSTRAINT announcements_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
-  CONSTRAINT announcements_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
+  CONSTRAINT announcements_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE,
+  CONSTRAINT announcements_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE CASCADE,
   CONSTRAINT announcements_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
 );
 
@@ -261,7 +284,7 @@ CREATE TABLE public.assignments (
   created_at            timestamp with time zone DEFAULT now(),
   updated_at            timestamp with time zone DEFAULT now(),
   CONSTRAINT assignments_pkey PRIMARY KEY (id),
-  CONSTRAINT assignments_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
+  CONSTRAINT assignments_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE CASCADE,
   CONSTRAINT assignments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
 );
 
@@ -275,20 +298,22 @@ CREATE TABLE public.submissions (
   submitted_at  timestamp with time zone DEFAULT now(),
   updated_at    timestamp with time zone DEFAULT now(),
   CONSTRAINT submissions_pkey PRIMARY KEY (id),
-  CONSTRAINT submissions_assignment_id_fkey FOREIGN KEY (assignment_id) REFERENCES public.assignments(id),
+  -- One submission per student per assignment (required by client-side upsert onConflict)
+  CONSTRAINT submissions_assignment_id_student_id_key UNIQUE (assignment_id, student_id),
+  CONSTRAINT submissions_assignment_id_fkey FOREIGN KEY (assignment_id) REFERENCES public.assignments(id) ON DELETE CASCADE,
   CONSTRAINT submissions_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)
 );
 
 CREATE TABLE public.submission_feedback (
   id            uuid    NOT NULL DEFAULT uuid_generate_v4(),
-  submission_id uuid    NOT NULL UNIQUE,
+  submission_id uuid    NOT NULL UNIQUE,    -- one feedback row per submission, period
   teacher_id    uuid    NOT NULL,
-  score         integer,
+  score         integer CHECK (score IS NULL OR score >= 0),
   comment       text,
   created_at    timestamp with time zone DEFAULT now(),
   updated_at    timestamp with time zone DEFAULT now(),
   CONSTRAINT submission_feedback_pkey PRIMARY KEY (id),
-  CONSTRAINT submission_feedback_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id),
+  CONSTRAINT submission_feedback_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id) ON DELETE CASCADE,
   CONSTRAINT submission_feedback_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.profiles(id)
 );
 
@@ -301,7 +326,7 @@ CREATE TABLE public.submission_files (
   file_type     character varying,
   uploaded_at   timestamp with time zone DEFAULT now(),
   CONSTRAINT submission_files_pkey PRIMARY KEY (id),
-  CONSTRAINT submission_files_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id)
+  CONSTRAINT submission_files_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id) ON DELETE CASCADE
 );
 
 CREATE TABLE public.lesson_modules (
@@ -315,7 +340,7 @@ CREATE TABLE public.lesson_modules (
   created_at  timestamp with time zone DEFAULT now(),
   updated_at  timestamp with time zone DEFAULT now(),
   CONSTRAINT lesson_modules_pkey PRIMARY KEY (id),
-  CONSTRAINT lesson_modules_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
+  CONSTRAINT lesson_modules_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE CASCADE,
   CONSTRAINT lesson_modules_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
 );
 
@@ -330,7 +355,7 @@ CREATE TABLE public.module_documents (
   order_index integer          DEFAULT 0,
   uploaded_at timestamp with time zone DEFAULT now(),
   CONSTRAINT module_documents_pkey PRIMARY KEY (id),
-  CONSTRAINT module_documents_module_id_fkey FOREIGN KEY (module_id) REFERENCES public.lesson_modules(id)
+  CONSTRAINT module_documents_module_id_fkey FOREIGN KEY (module_id) REFERENCES public.lesson_modules(id) ON DELETE CASCADE
 );
 
 -- Attendance feature: DB tables exist, UI not yet built. No RLS policies yet.
@@ -342,7 +367,9 @@ CREATE TABLE public.attendance_sessions (
   notes        text,
   created_at   timestamp with time zone DEFAULT now(),
   CONSTRAINT attendance_sessions_pkey PRIMARY KEY (id),
-  CONSTRAINT attendance_sessions_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
+  -- Only one attendance session per class per day
+  CONSTRAINT attendance_sessions_class_id_session_date_key UNIQUE (class_id, session_date),
+  CONSTRAINT attendance_sessions_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE CASCADE,
   CONSTRAINT attendance_sessions_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.profiles(id)
 );
 
@@ -354,7 +381,9 @@ CREATE TABLE public.attendance_records (
     CHECK (status IN ('present', 'absent', 'late', 'excused')),
   note       text,
   CONSTRAINT attendance_records_pkey PRIMARY KEY (id),
-  CONSTRAINT attendance_records_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.attendance_sessions(id),
+  -- One attendance record per student per session
+  CONSTRAINT attendance_records_session_id_student_id_key UNIQUE (session_id, student_id),
+  CONSTRAINT attendance_records_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.attendance_sessions(id) ON DELETE CASCADE,
   CONSTRAINT attendance_records_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)
 );
 
@@ -371,7 +400,7 @@ CREATE TABLE public.invitations (
   expires_at  timestamp with time zone NOT NULL DEFAULT (now() + '7 days'::interval),
   created_at  timestamp with time zone DEFAULT now(),
   CONSTRAINT invitations_pkey PRIMARY KEY (id),
-  CONSTRAINT invitations_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
+  CONSTRAINT invitations_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE,
   CONSTRAINT invitations_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id),
   CONSTRAINT invitations_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES public.profiles(id)
 );
@@ -404,8 +433,46 @@ CREATE TABLE public.payments (
   paid_at             timestamp with time zone,
   created_at          timestamp with time zone DEFAULT now(),
   CONSTRAINT payments_pkey PRIMARY KEY (id),
-  CONSTRAINT payments_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
+  CONSTRAINT payments_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE
 );
+
+-- ============================================================
+-- INDEXES
+-- PostgreSQL only auto-indexes PRIMARY KEY and UNIQUE constraints.
+-- Foreign-key columns are NOT auto-indexed, so we create explicit indexes
+-- on every FK column that is filtered on by the app's hot-path queries.
+-- ============================================================
+
+-- profiles
+CREATE INDEX IF NOT EXISTS idx_profiles_tenant         ON public.profiles(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_tenant_active  ON public.profiles(tenant_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_profiles_role           ON public.profiles(role);
+
+-- classes
+CREATE INDEX IF NOT EXISTS idx_classes_tenant          ON public.classes(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_classes_school_year     ON public.classes(school_year_id);
+
+-- junction tables
+CREATE INDEX IF NOT EXISTS idx_class_students_class    ON public.class_students(class_id);
+CREATE INDEX IF NOT EXISTS idx_class_students_student  ON public.class_students(student_id);
+CREATE INDEX IF NOT EXISTS idx_class_teachers_class    ON public.class_teachers(class_id);
+CREATE INDEX IF NOT EXISTS idx_class_teachers_teacher  ON public.class_teachers(teacher_id);
+
+-- assignments / submissions / files
+CREATE INDEX IF NOT EXISTS idx_assignments_class       ON public.assignments(class_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_assignment  ON public.submissions(assignment_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_student     ON public.submissions(student_id);
+CREATE INDEX IF NOT EXISTS idx_submission_files_submission ON public.submission_files(submission_id);
+
+-- content
+CREATE INDEX IF NOT EXISTS idx_lesson_modules_class    ON public.lesson_modules(class_id);
+CREATE INDEX IF NOT EXISTS idx_announcements_tenant_id ON public.announcements(tenant_id);
+
+-- invitations / audit
+CREATE INDEX IF NOT EXISTS idx_invitations_email       ON public.invitations(email);
+CREATE INDEX IF NOT EXISTS idx_invitations_token       ON public.invitations(token);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant       ON public.audit_logs(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user         ON public.audit_logs(user_id);
 
 -- ============================================================
 -- ROW LEVEL SECURITY
