@@ -28,8 +28,27 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Geen toegang tot deze gebruiker' }, { status: 403 })
         }
 
-        // Scrub all PII from the profiles row — UUID stays intact so FK relations
-        // (submissions, class_students, etc.) remain valid for historical stats
+        // ── Step 1: Ban auth account + revoke sessions FIRST ──────────────────
+        // This must happen before any data scrubbing so the user can never log in
+        // during the window between profile erasure and auth account closure.
+        const { error: authErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+            email:        `anon-${userId}@deleted.invalid`,
+            ban_duration: '876000h',
+        })
+        if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 })
+
+        // Force-revoke all active sessions immediately
+        await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${userId}/logout`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+                'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            },
+        })
+
+        // ── Step 2: Scrub PII from the profiles row ────────────────────────────
+        // UUID stays intact so FK relations (submissions, class_students, etc.)
+        // remain valid for historical stats.
         const { error: profileErr } = await supabaseAdmin
             .from('profiles')
             .update({
@@ -43,13 +62,13 @@ export async function POST(request: Request) {
             .eq('id', userId)
         if (profileErr) return NextResponse.json({ error: profileErr.message }, { status: 400 })
 
-        // Scrub text content from all submissions (may contain personal statements)
+        // ── Step 3: Scrub submission text content ──────────────────────────────
         await supabaseAdmin
             .from('submissions')
             .update({ text_content: null })
             .eq('student_id', userId)
 
-        // Delete uploaded submission files from storage + remove DB records
+        // ── Step 4: Delete uploaded files from storage + remove DB records ─────
         const { data: submissions } = await supabaseAdmin
             .from('submissions')
             .select('id')
@@ -71,28 +90,24 @@ export async function POST(request: Request) {
                 const idx = f.file_url.indexOf(marker)
                 return idx !== -1 ? f.file_url.slice(idx + marker.length) : f.file_url
             })
-            await supabaseAdmin.storage.from('submission-files').remove(paths)
+
+            // Storage deletion is a GDPR requirement — return an error if it fails
+            // so the caller knows the erasure is incomplete.
+            const { error: storageErr } = await supabaseAdmin.storage
+                .from('submission-files')
+                .remove(paths)
+            if (storageErr) {
+                return NextResponse.json(
+                    { error: `Bestanden konden niet worden verwijderd: ${storageErr.message}` },
+                    { status: 500 }
+                )
+            }
+
             await supabaseAdmin
                 .from('submission_files')
                 .delete()
                 .in('id', submissionFiles.map(f => f.id))
         }
-
-        // Anonymize auth email + ban permanently so no login is ever possible
-        const { error: authErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-            email:        `anon-${userId}@deleted.invalid`,
-            ban_duration: '876000h',
-        })
-        if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 })
-
-        // Force-revoke all active sessions immediately
-        await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${userId}/logout`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-                'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            },
-        })
 
         return NextResponse.json({ success: true })
     } catch (e: any) {
