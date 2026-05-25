@@ -10,3 +10,6 @@ build/
 # Dev-only scripts (contain hardcoded demo passwords)
 supabase/seed.ts
 supabase/reset.sql
+
+# Internal operational notes (not for git history)
+SECURITY_TODO.md
