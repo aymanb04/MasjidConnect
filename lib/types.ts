@@ -54,6 +54,8 @@ export interface Profile {
   avatar_url?: string
   phone?: string
   is_active: boolean
+  // GDPR erasure flag — set by /api/user/anonymize. Irreversible.
+  is_anonymized: boolean
   last_seen_at?: string
   created_at: string
   updated_at: string

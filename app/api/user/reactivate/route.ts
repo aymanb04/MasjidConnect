@@ -18,7 +18,7 @@ export async function POST(request: Request) {
 
         const { data: target } = await supabaseAdmin
             .from('profiles')
-            .select('id, tenant_id, first_name')
+            .select('id, tenant_id, is_anonymized')
             .eq('id', userId)
             .single()
 
@@ -28,8 +28,11 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Geen toegang tot deze gebruiker' }, { status: 403 })
         }
 
-        // Prevent reactivating anonymized users (GDPR erasure is irreversible)
-        if (target.first_name === 'Verwijderd') {
+        // GDPR erasure is irreversible. The is_anonymized column is the source of
+        // truth — previously we relied on first_name='Verwijderd' as a sentinel,
+        // which would falsely block legitimate users with that name and silently
+        // break if the anonymize routine ever changed the placeholder string.
+        if (target.is_anonymized) {
             return NextResponse.json({ error: 'Geanonimiseerde gebruikers kunnen niet worden hersteld' }, { status: 400 })
         }
 
