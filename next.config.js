@@ -4,14 +4,33 @@ const nextConfig = {
     unoptimized: true,
   },
   async headers() {
+    // Content-Security-Policy notes:
+    // - 'unsafe-inline' on script-src is required by Next.js (hydration scripts)
+    // - 'unsafe-eval' is required by Next.js webpack runtime in both dev and prod
+    // - connect-src includes both supabase.co (REST/Auth) and supabase.in (Realtime WSS)
+    // - frame-ancestors 'none' supersedes X-Frame-Options but both are kept for
+    //   compatibility with older browsers that don't understand CSP
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.supabase.in wss://*.supabase.in",
+      "font-src 'self'",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; ')
+
     return [
       {
         source: '/(.*)',
         headers: [
-          { key: 'X-Frame-Options',        value: 'DENY' },
-          { key: 'X-Content-Type-Options',  value: 'nosniff' },
-          { key: 'Referrer-Policy',         value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy',      value: 'camera=(), microphone=(), geolocation=()' },
+          { key: 'Content-Security-Policy',  value: csp },
+          { key: 'X-Frame-Options',          value: 'DENY' },
+          { key: 'X-Content-Type-Options',   value: 'nosniff' },
+          { key: 'Referrer-Policy',          value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy',       value: 'camera=(), microphone=(), geolocation=()' },
         ],
       },
     ]
