@@ -52,6 +52,11 @@ export async function POST(request: Request) {
         }
 
         if (data.user) {
+            // Enrollment writes use upsert with ignoreDuplicates so concurrent CSV
+            // imports / double-clicks cannot create duplicate junction rows.
+            // Relies on the UNIQUE constraints (class_id, student_id) on
+            // class_students and (class_id, teacher_id) on class_teachers.
+
             // Student: enroll in every class that belongs to the selected group
             if (group_id && role === 'student') {
                 const { data: groupClasses } = await supabaseAdmin
@@ -61,8 +66,9 @@ export async function POST(request: Request) {
                     .eq('is_archived', false)
 
                 if (groupClasses?.length) {
-                    await supabaseAdmin.from('class_students').insert(
-                        groupClasses.map(c => ({ class_id: c.id, student_id: data.user!.id }))
+                    await supabaseAdmin.from('class_students').upsert(
+                        groupClasses.map(c => ({ class_id: c.id, student_id: data.user!.id })),
+                        { onConflict: 'class_id,student_id', ignoreDuplicates: true }
                     )
                 }
             }
@@ -76,24 +82,27 @@ export async function POST(request: Request) {
                     .eq('is_archived', false)
 
                 if (groupClasses?.length) {
-                    await supabaseAdmin.from('class_teachers').insert(
-                        groupClasses.map(c => ({ class_id: c.id, teacher_id: data.user!.id }))
+                    await supabaseAdmin.from('class_teachers').upsert(
+                        groupClasses.map(c => ({ class_id: c.id, teacher_id: data.user!.id })),
+                        { onConflict: 'class_id,teacher_id', ignoreDuplicates: true }
                     )
                 }
             }
 
             // Teacher: assign to a specific class (no group selected)
             if (class_id && !group_id && class_role === 'teacher') {
-                await supabaseAdmin.from('class_teachers').insert({
-                    class_id, teacher_id: data.user.id,
-                })
+                await supabaseAdmin.from('class_teachers').upsert(
+                    { class_id, teacher_id: data.user.id },
+                    { onConflict: 'class_id,teacher_id', ignoreDuplicates: true }
+                )
             }
 
             // Fallback: student assigned to a single class (no group)
             if (class_id && !group_id && class_role === 'student') {
-                await supabaseAdmin.from('class_students').insert({
-                    class_id, student_id: data.user.id,
-                })
+                await supabaseAdmin.from('class_students').upsert(
+                    { class_id, student_id: data.user.id },
+                    { onConflict: 'class_id,student_id', ignoreDuplicates: true }
+                )
             }
         }
 
