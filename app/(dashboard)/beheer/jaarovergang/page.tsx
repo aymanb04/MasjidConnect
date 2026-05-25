@@ -118,9 +118,17 @@ export default function JaarovergangPage() {
   async function activateYear(year: SchoolYear) {
     setActivating(year.id)
     try {
-      await supabase.from('school_years').update({ is_active: false }).eq('tenant_id', profile!.tenant_id)
+      // Activate the target year FIRST.
+      // Previous order (deactivate all → activate one) left zero active years
+      // between the two queries — a failure on step 2 took the whole app offline.
+      // New order: if step 2 fails, at worst two years are briefly both active,
+      // which is a recoverable state (just call activateYear again).
       const { error } = await supabase.from('school_years').update({ is_active: true }).eq('id', year.id)
       if (error) throw error
+      await supabase.from('school_years')
+        .update({ is_active: false })
+        .eq('tenant_id', profile!.tenant_id)
+        .neq('id', year.id)
       await loadYears()
     } catch (e: any) {
       alert('Fout bij activeren: ' + e.message)
