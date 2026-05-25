@@ -61,7 +61,11 @@ export default function ResetPasswordPage() {
     async function handleReset(e: React.FormEvent) {
         e.preventDefault()
         if (password !== confirm) { setError('Wachtwoorden komen niet overeen.'); return }
-        if (password.length < 8)  { setError('Wachtwoord moet minstens 8 tekens bevatten.'); return }
+        if (password.length < 10) { setError('Wachtwoord moet minstens 10 tekens bevatten.'); return }
+        if (!/\d/.test(password) || !/[a-zA-Z]/.test(password)) {
+            setError('Wachtwoord moet minstens één cijfer en één letter bevatten.')
+            return
+        }
 
         setLoading(true)
         setError('')
@@ -139,7 +143,7 @@ export default function ResetPasswordPage() {
                     <>
                         <div className="mb-8">
                             <h1 className="text-2xl font-semibold text-gray-900">Nieuw wachtwoord</h1>
-                            <p className="text-gray-500 mt-1.5 text-sm">Kies een sterk wachtwoord van minstens 8 tekens.</p>
+                            <p className="text-gray-500 mt-1.5 text-sm">Minstens 10 tekens, met een cijfer en een letter.</p>
                         </div>
 
                         <form onSubmit={handleReset} className="space-y-4">
@@ -148,7 +152,7 @@ export default function ResetPasswordPage() {
                                 <div className="relative">
                                     <input type={showPass ? 'text' : 'password'} value={password}
                                            onChange={e => setPassword(e.target.value)}
-                                           placeholder="Minstens 8 tekens" required className="input pr-10"/>
+                                           placeholder="Minstens 10 tekens" required className="input pr-10"/>
                                     <button type="button" onClick={() => setShowPass(!showPass)}
                                             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                         {showPass ? <EyeOff size={16}/> : <Eye size={16}/>}
