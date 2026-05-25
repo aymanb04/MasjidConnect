@@ -2,13 +2,16 @@
 
 Digitaal platform voor moskee-onderwijs — gebouwd met Next.js 14 + Supabase.
 
+**Productie:** [https://masjid-connect.be](https://masjid-connect.be)
+
 ## Stack
 
 - **Frontend + Backend**: Next.js 14 (App Router)
 - **Database + Auth + Storage**: Supabase
 - **Styling**: Tailwind CSS
 - **Animaties**: Framer Motion
-- **Hosting**: Vercel (gratis)
+- **Hosting**: Vercel
+- **Domein**: `masjid-connect.be` (Combell registrar, DNS via Combell, A-records naar Vercel)
 
 ---
 
@@ -84,10 +87,25 @@ supabase/
 
 ## Deployen op Vercel
 
-1. Push naar GitHub
-2. Importeer in [vercel.com](https://vercel.com)
-3. Voeg environment variabelen toe
-4. Deploy — klaar!
+Productie draait op Vercel via `masjid-connect.be`.
+
+### Environment variabelen (Production op Vercel)
+| Key | Value |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role key (server-only) |
+| `NEXT_PUBLIC_SITE_URL` | `https://masjid-connect.be` |
+
+### DNS (Combell)
+A-records voor zowel apex als `www` naar Vercel's anycast IP (zie Vercel
+Domains panel voor het actuele adres). **Geen AAAA-records** — die wijzen
+naar Combell-servers en breken IPv6-clients. Mail-records (MX, SPF, DKIM,
+CNAMEs voor `autoconfig`/`autodiscover`/`mail`) blijven op Mailprotect.
+
+### Supabase Auth
+- Site URL: `https://masjid-connect.be`
+- Redirect URLs: bevat `https://masjid-connect.be/**` plus `http://localhost:3000/**` voor lokale dev
 
 ---
 
