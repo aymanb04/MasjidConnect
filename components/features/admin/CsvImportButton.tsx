@@ -15,6 +15,8 @@ interface Props {
     onImported: () => void
 }
 
+const MAX_IMPORT_ROWS = 500
+
 const SYSTEM_FIELDS = [
     { key: 'voornaam',   label: 'Voornaam',   required: true  },
     { key: 'achternaam', label: 'Achternaam', required: true  },
@@ -124,6 +126,12 @@ export default function CsvImportButton({ tenantId, onImported }: Props) {
         })).filter(r => r.email && r.email.includes('@'))
 
         if (!mapped.length) { setError('Geen geldige e-mailadressen gevonden.'); return }
+
+        if (mapped.length > MAX_IMPORT_ROWS) {
+            setError(`Te veel rijen (${mapped.length}). Maximum is ${MAX_IMPORT_ROWS} per import. Splits het bestand op in meerdere bestanden.`)
+            return
+        }
+
         setMappedRows(mapped)
         setError('')
         setStep('preview')
@@ -144,17 +152,26 @@ export default function CsvImportButton({ tenantId, onImported }: Props) {
         setLoading(true)
         const importResults: ImportResult[] = []
 
+        // Fetch the session once before the loop — calling getSession() per row
+        // is unnecessary overhead and risks using a stale token mid-import if the
+        // tab is open long enough for a token refresh to occur between calls.
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) {
+            setError('Sessie verlopen. Herlaad de pagina en probeer opnieuw.')
+            setLoading(false)
+            return
+        }
+
         for (const row of mappedRows) {
             try {
                 const role  = normalizeRole(row.rol)
                 const group = row.groep ? findGroup(row.groep) : null
 
-                const { data: { session } } = await supabase.auth.getSession()
                 const res = await fetch('/api/invite', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${session?.access_token ?? ''}`,
+                        'Authorization': `Bearer ${session.access_token}`,
                     },
                     body: JSON.stringify({
                         email:      row.email.toLowerCase(),
