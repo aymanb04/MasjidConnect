@@ -38,6 +38,13 @@ export async function requireRole(
         return { error: NextResponse.json({ error: 'Profiel niet gevonden' }, { status: 403 }) }
     }
 
+    // Defense-in-depth: Supabase auth ban is the primary guard for archived
+    // users, but we double-check is_active here so a valid JWT that somehow
+    // survives a ban (edge case / clock skew) cannot reach privileged routes.
+    if (!profile.is_active) {
+        return { error: NextResponse.json({ error: 'Account gedeactiveerd' }, { status: 403 }) }
+    }
+
     if (!allowedRoles.includes(profile.role)) {
         return { error: NextResponse.json({ error: 'Geen toegang' }, { status: 403 }) }
     }
