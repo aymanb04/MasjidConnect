@@ -49,15 +49,19 @@ export async function POST(request: Request) {
         // ── Step 2: Scrub PII from the profiles row ────────────────────────────
         // UUID stays intact so FK relations (submissions, class_students, etc.)
         // remain valid for historical stats.
+        // is_anonymized=true marks this row as GDPR-erased so reactivation is
+        // blocked (cannot rely on first_name='Verwijderd' as a sentinel —
+        // someone could legitimately have that name).
         const { error: profileErr } = await supabaseAdmin
             .from('profiles')
             .update({
-                first_name: 'Verwijderd',
-                last_name:  '',
-                email:      `anon-${userId}@deleted.invalid`,
-                avatar_url: null,
-                phone:      null,
-                is_active:  false,
+                first_name:    'Verwijderd',
+                last_name:     '',
+                email:         `anon-${userId}@deleted.invalid`,
+                avatar_url:    null,
+                phone:         null,
+                is_active:     false,
+                is_anonymized: true,
             })
             .eq('id', userId)
         if (profileErr) return NextResponse.json({ error: profileErr.message }, { status: 400 })
