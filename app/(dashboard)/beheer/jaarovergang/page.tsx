@@ -182,7 +182,9 @@ export default function JaarovergangPage() {
 
     const [{ data: teacherProfiles }, { data: studentProfiles }] = await Promise.all([
       teacherIds.length ? supabase.from('profiles').select('id, first_name, last_name').in('id', teacherIds) : Promise.resolve({ data: [] }),
-      studentIds.length ? supabase.from('profiles').select('id, first_name, last_name').in('id', studentIds) : Promise.resolve({ data: [] }),
+      // Filter by is_active=true so archived/departed students are excluded from
+      // the rollover list automatically and not pre-selected by mistake.
+      studentIds.length ? supabase.from('profiles').select('id, first_name, last_name').in('id', studentIds).eq('is_active', true) : Promise.resolve({ data: [] }),
     ])
 
     const tpMap = Object.fromEntries((teacherProfiles ?? []).map((p: any) => [p.id, p]))
