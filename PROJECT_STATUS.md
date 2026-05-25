@@ -22,7 +22,8 @@ Each mosque is a **tenant**. Users belong to a tenant and have one of four roles
 | Styling | Tailwind CSS |
 | Icons | Lucide React |
 | File Storage | Supabase Storage |
-| Hosting | (not confirmed in sessions) |
+| Hosting | Vercel |
+| Domain | `masjid-connect.be` (registered via Combell, DNS at Combell, A → Vercel IP) |
 | Language | TypeScript |
 
 ---
@@ -66,9 +67,16 @@ Each mosque is a **tenant**. Users belong to a tenant and have one of four roles
 | `attendance_sessions` | (Table exists in DB, feature not yet built in UI) |
 | `rooster_sessions` | Weekly schedule sessions per class |
 
-### Pending DB migrations (must be run manually in Supabase SQL editor)
-1. **`announcements` table + RLS policies** — table may not exist in live DB yet
-2. **`website_url` column on `tenants`** — column may not exist in live DB yet
+### DB migrations status
+Schema is in sync with the live DB as of 2026-05-25 (see `supabase/schema.sql`
+header). All previously-pending items (announcements, website_url, indexes,
+UNIQUE constraints, is_anonymized, score CHECK, RLS perf wrapping) are applied.
+
+Migration scripts in `supabase/` that may still need running on a fresh DB:
+- `7b_rls_auth_uid_wrap.sql` — wraps `auth.uid()` + helpers in `(SELECT ...)`
+  for RLS perf. Idempotent. Applied to live DB on 2026-05-25.
+- `7c_rls_scope_to_authenticated.sql` — `ALTER POLICY ... TO authenticated`
+  for all 65 policies. Applied to live DB on 2026-05-25.
 
 ---
 
@@ -110,8 +118,8 @@ All privileged routes verify the caller's session via `lib/api-auth.ts` before e
 |---|---|---|---|
 | `/api/invite` | POST | admin, super_admin | Create auth user + send invite email. Handles group enrollment (student → all classes of group) and teacher assignment (to group or specific class). Admin locked to own tenant. Role validated server-side (super_admin blocked). |
 | `/api/user/archive` | POST | admin, super_admin | Sets `is_active=false`, bans auth account, force-revokes all sessions. Admin locked to own tenant. Reversible. |
-| `/api/user/reactivate` | POST | admin, super_admin | Sets `is_active=true`, lifts auth ban. Admin locked to own tenant. Blocked for anonymized users. |
-| `/api/user/anonymize` | POST | admin, super_admin | GDPR erasure: scrubs PII (name→"Verwijderd", email→anon UUID, phone→null, avatar→null), updates auth email to match, bans permanently. UUID row kept for FK integrity. Admin locked to own tenant. Irreversible. |
+| `/api/user/reactivate` | POST | admin, super_admin | Sets `is_active=true`, lifts auth ban. Admin locked to own tenant. Blocked when `profiles.is_anonymized = true` (GDPR erasure is irreversible). |
+| `/api/user/anonymize` | POST | admin, super_admin | GDPR erasure: bans auth user FIRST, then scrubs PII (name→"Verwijderd", email→anon UUID, phone→null, avatar→null), sets `is_anonymized=true`, deletes submission files and DB rows, nullifies submission text. UUID row kept for FK integrity. Admin locked to own tenant. Irreversible. |
 | `/api/user/delete` | DELETE | super_admin only | Hard delete via admin SDK. Kept for internal/dev use only. |
 | `/api/auth/callback` | GET | public | Supabase auth callback handler. |
 
@@ -241,7 +249,75 @@ Prioritised based on what's partially prepared in DB:
 
 ---
 
-## 14. What Was Discussed This Session (2026-05-23)
+## 14. What Was Discussed This Session (2026-05-25)
+
+### Second security + scalability audit
+Full follow-up audit on top of the 2026-05-21 + 2026-05-23 work. Findings
+ranged from concurrency bugs (duplicate enrollments) to RLS performance
+issues (per-row `auth.uid()` eval) to operational gaps (no migrations,
+no rate limiting). Captured in local-only `SECURITY_TODO.md` punch list.
+
+### Code commits this session
+Listed newest first. All branched from master, no force pushes.
+
+| Hash | What |
+|---|---|
+| `66e7d69` | Update hardcoded domain references to `masjid-connect.be` (3 UI strings). |
+| `6d2e94d` | Bake `TO authenticated` into 7b CREATE POLICY so re-running can't undo 7c. |
+| `3588530` | 7c migration: scope all 65 RLS policies `TO authenticated`. |
+| `70214b2` | Use `is_anonymized` column instead of `first_name='Verwijderd'` sentinel. |
+| `9d87351` | Switch `/api/invite` enrollment to `upsert + ignoreDuplicates`. |
+| `1a88359` | Full `schema.sql` resync with live DB (CASCADE on 17 FKs, missing UNIQUEs, score CHECK, `is_anonymized`, indexes). |
+| `835dbe3` | 7b migration: wrap `auth.uid()` and helpers in `(SELECT ...)` for RLS perf. |
+| `62344a2` | Reset password: min 10 chars, must contain letter + digit. |
+| `a6f8bbf` | CSV import: 500-row cap, hoist `getSession()` out of the loop. |
+| `da9c056` | Rollover: rollback all created groups+classes on partial failure. |
+| `21d4972` | Rollover: exclude archived students by filtering `is_active=true`. |
+| `e39eeeb` | `activateYear`: activate target first, then deactivate others. |
+| `298dc5a` | Added `Content-Security-Policy` header to `next.config.js`. |
+| `b6de38b` | `requireRole` rejects `is_active=false` profiles with 403. |
+| `06c9006` | Anonymize: ban auth user FIRST, return 500 on storage delete failure. |
+
+### DB changes applied to live DB (via Supabase SQL editor)
+- 3 new indexes: `idx_profiles_tenant_active`, `idx_submission_files_submission`, `idx_announcements_tenant_id`
+- `score_non_negative` CHECK on `submission_feedback`
+- `is_anonymized` boolean column on `profiles` (backfilled from `first_name='Verwijderd'`)
+- Dropped 5 duplicate UNIQUE constraints (class_students/teachers, submissions, submission_feedback)
+- 6 helper functions rewritten to use `(SELECT auth.uid())` internally
+- All 65 RLS policies recreated with wrapped expressions and `TO authenticated` scope
+
+### Supabase Dashboard changes
+- ✅ Email sign-up disabled (Authentication → Providers → Email)
+- ✅ Password policy: min 10 chars, letter + digit required
+- ✅ Auth rate limits tightened (token verifications 10/5min, sign-ins 15/5min)
+- ⏳ Custom SMTP (Resend) — blocker before live, deferred
+
+### Domain setup
+- Domain `masjid-connect.be` purchased at Combell
+- DNS: A records → `216.198.79.1` (Vercel anycast), AAAA records deleted
+- Vercel domain validated, SSL cert issued
+- `NEXT_PUBLIC_SITE_URL=https://masjid-connect.be` set in Vercel env vars
+- Supabase Auth Site URL + Redirect URLs updated to new domain
+
+### Performance Advisor impact
+Started: 0 errors, 275 warnings, 20 info.
+After 7b + 7c: 0 errors, ~55 warnings (4/5 of warnings were role multiplication).
+Remaining warnings are real same-role policy duplicates (consolidation deferred —
+risky refactor, tracked in SECURITY_TODO as 7c-bis).
+
+### Items still pending (see `SECURITY_TODO.md`)
+- 2d. Custom SMTP via Resend
+- 3.  API rate limiting via Upstash (irreversible-anonymize is the big risk)
+- 4.  Server-side file type validation
+- 5.  Dependency upgrades (next 14→16, @supabase/ssr 0.3→0.10)
+- 7a. Supabase CLI / `supabase/migrations/` setup
+- 7c-bis. Consolidate remaining same-role policy duplicates
+- 7d. CSV import → durable job queue
+- 7f. PITR backups (paid Supabase add-on)
+
+---
+
+## 14b. What Was Discussed This Session (2026-05-23)
 
 ### Schema sync + demo seed
 
