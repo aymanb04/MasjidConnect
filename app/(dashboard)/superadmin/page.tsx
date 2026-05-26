@@ -27,6 +27,8 @@ export default function SuperAdminPage() {
   const [showArchivedFor, setShowArchivedFor] = useState<Record<string, boolean>>({})
   const [archivedUsers, setArchivedUsers] = useState<Record<string, any[]>>({})
   const [archivedLoading, setArchivedLoading] = useState<Record<string, boolean>>({})
+  const [feedback, setFeedback]               = useState<any[]>([])
+  const [feedbackLoading, setFeedbackLoading] = useState(true)
 
   useEffect(() => {
     if (!profile) return
@@ -49,6 +51,27 @@ export default function SuperAdminPage() {
     setTotalUsers(count ?? 0)
     setClassCount(map)
     setLoading(false)
+    loadFeedback()
+  }
+
+  async function loadFeedback() {
+    setFeedbackLoading(true)
+    const { data } = await supabase
+      .from('feedback')
+      .select('*')
+      .order('created_at', { ascending: false })
+    setFeedback(data ?? [])
+    setFeedbackLoading(false)
+  }
+
+  async function markRead(id: string) {
+    setFeedback(prev => prev.map(f => f.id === id ? { ...f, is_read: true } : f))
+    await supabase.from('feedback').update({ is_read: true }).eq('id', id)
+  }
+
+  async function deleteFeedback(id: string) {
+    setFeedback(prev => prev.filter(f => f.id !== id))
+    await supabase.from('feedback').delete().eq('id', id)
   }
 
   async function toggleTenant(tenantId: string) {
