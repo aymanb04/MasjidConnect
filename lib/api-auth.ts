@@ -10,6 +10,7 @@ export type CallerProfile = {
     id: string
     role: string
     tenant_id: string
+    is_active: boolean
 }
 
 export async function requireRole(
@@ -30,7 +31,7 @@ export async function requireRole(
 
     const { data: profile } = await supabaseAdmin
         .from('profiles')
-        .select('id, role, tenant_id')
+        .select('id, role, tenant_id, is_active')
         .eq('id', user.id)
         .single()
 
