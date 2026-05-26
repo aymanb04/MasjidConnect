@@ -140,7 +140,9 @@ All privileged routes verify the caller's session via `lib/api-auth.ts` before e
 | `ReactivateUserButton` | `components/features/admin/` | Reactivate archived users. Sends auth token. |
 | `CreateClassButton` | `components/features/admin/` | Create a new class/subject, assign to a group. |
 | `CreateTenantButton` | `components/features/admin/` | Super admin: create a new mosque tenant. |
-| `AnnouncementsCard` | `components/features/announcements/` | School-wide announcements. Teachers/admins post, all roles read. |
+| `AnnouncementsCard` | `components/features/announcements/` | Announcements with class filter tabs + class badge. Teachers must pick a class; admins can post school-wide. |
+| `MoveStudentModal` | `components/features/admin/` | Move a student between classes. Toggles removals + additions, saves in one go. |
+| `FeedbackButton` | `components/features/feedback/` | Floating bottom-right button on all dashboard pages. Type picker + textarea + Ctrl+Enter. |
 | `Sidebar` | `components/layout/` | Responsive sidebar. Shows mosque logo + website link. Mobile-responsive with hamburger. |
 
 ---
@@ -239,11 +241,11 @@ Prioritised based on what's partially prepared in DB:
 
 | # | Feature | DB ready? | Notes |
 |---|---|---|---|
-| 1 | Aanwezigheidsregistratie | Yes (`attendance_sessions` table exists) | Teachers mark attendance per session, admins see reports |
+| 1 | Aanwezigheidsregistratie | ✅ Done | `/aanwezigheid` — mark/view attendance per class |
 | 2 | Rooster export (ICS/Google Calendar) | Partially | Rooster UI done, export not implemented |
 | 3 | Ouderportaal | No | Parent account linked to child, see homework/scores/attendance |
 | 4 | In-app berichtensysteem | No | Replace WhatsApp usage |
-| 5 | Voortgangsrapporten / Rapportkaarten | No | PDF export per student |
+| 5 | Voortgangsrapporten / Rapportkaarten | ✅ Done | `/klassen/[klasId]/rapporten` — PDF upload per student per semester |
 | 6 | Certificaten & diploma's | No | Teacher assigns certificate on module completion |
 | 7 | Kiosk / aanmeldscherm | No | Tablet QR-code check-in at mosque entrance |
 | 8 | Native mobile app | No | After PWA proves value |
@@ -263,8 +265,17 @@ Examens per semester was deferred pending mosque confirmation.
 
 | Commit | What |
 |---|---|
-| `93cc1c0` | All 5 features + api-auth.ts bug fix (see below) |
-| `ca88ffa` | Fix CREATE POLICY syntax (FOR before TO) in migration 8 |
+| `9dfd987` | fix: fetch is_active in requireRole so active check actually works |
+| `e506817` | chore: add TypeScript interfaces for new tables |
+| `9c2c2db` | chore: migration 8 — feedback, student_reports, attendance RLS |
+| `c7e0b39` | feat: class filter and badge on announcements |
+| `1f6e462` | feat: move student between classes from beheer |
+| `4dce908` | feat: rapport upload page per klas |
+| `c8257cd` | feat: aanwezigheid module for marking and viewing attendance |
+| `b582f2c` | feat: floating feedback button on all dashboard pages |
+| `c10188e` | feat: load feedback data in superadmin |
+| `dec58e2` | feat: feedback inbox UI in superadmin panel |
+| `29f67ff` | docs: update PROJECT_STATUS.md |
 
 **Features built:**
 
@@ -283,7 +294,9 @@ Examens per semester was deferred pending mosque confirmation.
    - Students: see own reports per semester, download.
    - Storage: private `student-reports` bucket, path `{tenantId}/{studentId}/{classId}_s{semester}.{ext}` (fixed path = upsert replaces old file automatically).
 
-5. **Floating feedback button** — `FeedbackButton` on all dashboard pages (bottom-right). Type: Bug / Suggestie / Vraag. Saves to `feedback` table. Optional Discord webhook via `DISCORD_FEEDBACK_WEBHOOK_URL` env var. Super_admin can read all feedback (future: show in superadmin panel).
+5. **Floating feedback button** — `FeedbackButton` on all dashboard pages (bottom-right). Type: Bug / Suggestie / Vraag. Saves to `feedback` table. Optional Discord webhook via `DISCORD_FEEDBACK_WEBHOOK_URL` env var.
+
+6. **Feedback inbox in superadmin** — Card below the mosque list on `/superadmin`. Shows type badge, message, sender name/role, page path, relative timestamp. Unread rows highlighted. Mark-as-read + delete per entry. Unread count badge in header.
 
 **Bug fix — `lib/api-auth.ts`:**
 `is_active` was not included in the `.select()` string, so `!profile.is_active` evaluated to `!undefined === true`, causing every privileged API route (`/api/invite`, `/api/user/*`) to return 403 for all callers since commit `b6de38b` (2026-05-25). Fixed by adding `is_active` to the select and to `CallerProfile` type.
@@ -300,7 +313,6 @@ Examens per semester was deferred pending mosque confirmation.
 **Still pending (deferred):**
 - Examens per semester — pending mosque confirmation
 - Discord webhook setup for feedback button (optional, `DISCORD_FEEDBACK_WEBHOOK_URL`)
-- Show feedback inbox in superadmin panel
 - All items from `SECURITY_TODO.md` (custom SMTP, rate limiting, etc.)
 
 ---
@@ -506,35 +518,25 @@ Minor note: `CsvImportButton.tsx` line 85 aliases `klas` and `class` as valid CS
 ## 16. Git History (recent, newest first)
 
 ```
-82e2a8a add security headers
-e9aef2f update project status
-38eb9b7 update next to 14.2.35, disable unused image optimizer
-2378ac4 gdpr anonymize: scrub submission text and delete uploaded files
-2048156 fix open redirect in auth callback
-7154436 switch file storage to private buckets with signed URLs
-6d5cb3d pass session token in admin fetch calls
-72daeec require authentication on all API routes
-0c95865 fix rls: scope class management to own tenant, lock profile role/tenant on update
-a5ff2ac fix teacher-to-class assignment flow
-e56a327 rooster: stretch columns to fill card width
-d0f846a rooster: switch to horizontal week calendar layout
-446bb2c fix score average: weighted percentage instead of raw point mean
-7cb4e6d add Rooster (weekly schedule) feature
-db692dd fix iOS PWA safe area
-67ee49a add PWA icons
-6972583 add PWA manifest and fix mobile responsiveness
-39a3f56 fix ModuleDocumentUpload: use singleton client
-9de28e8 add missing RLS policies for submission_files and module_documents
-59d7567 fix: huiswerk group disambiguation, jaarovergang UX
-33d5305 fix: jaarovergang uses separate profile queries
-eb8f204 feat: agenda, privacy, historiek, jaarovergang
-f9de528 fix: add missing admin and teacher RLS policies for submission_feedback
-5e848bb fix: feedback upsert used wrong conflict target
-cd3e5b4 fix: simplify submission_feedback query
-8c1d16e fix submission form: score context, deadline enforcement
-cb498e8 Simplify announcements to school-wide; add tenant edit modal
-3adc6e8 beheer: search, role filter tabs, cleaner layout
-28a1e06 GDPR-compliant user lifecycle: archive + anonymize
+29f67ff docs: update PROJECT_STATUS.md for 2026-05-26 session
+dec58e2 feat: feedback inbox UI in superadmin panel
+c10188e feat: load feedback data in superadmin
+b582f2c feat: floating feedback button on all dashboard pages
+c8257cd feat: aanwezigheid module for marking and viewing attendance
+4dce908 feat: rapport upload page per klas
+1f6e462 feat: move student between classes from beheer
+c7e0b39 feat: class filter and badge on announcements
+9c2c2db chore: migration 8 — feedback, student_reports, attendance RLS
+e506817 chore: add TypeScript interfaces for new tables
+9dfd987 fix: fetch is_active in requireRole so active check actually works
+5c6c882 docs: reflect masjid-connect.be deployment and 2026-05-25 audit work
+66e7d69 fix: update hardcoded domain references to masjid-connect.be
+6d2e94d chore: bake TO authenticated into 7b's CREATE POLICY statements
+3588530 chore: add 7c migration — scope all RLS policies to authenticated role
+835dbe3 chore: add 7b RLS perf migration — wrap auth.uid() and helper fns
+70214b2 security: use is_anonymized column instead of 'Verwijderd' sentinel
+9d87351 fix: use upsert with ignoreDuplicates for class/teacher enrollment
+1a88359 chore: resync schema.sql with live database
 ```
 
 ---
