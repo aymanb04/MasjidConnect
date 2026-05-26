@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { formatDate, getRoleBadge } from '@/lib/utils'
-import { Building2, Users, TrendingUp, Shield, Plus, X, Loader2, ChevronDown, ChevronRight, GraduationCap, Pencil } from 'lucide-react'
+import { Building2, Users, TrendingUp, Shield, Plus, X, Loader2, ChevronDown, ChevronRight, GraduationCap, Pencil, MessageSquare, CheckCheck, Trash2, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 import { DeleteUserButton } from '@/components/features/admin/DeleteUserButton'
@@ -304,6 +304,109 @@ export default function SuperAdminPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── Feedback inbox ── */}
+      <div className="card overflow-hidden mt-8">
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <MessageSquare size={16} className="text-primary-600"/>
+            <h2 className="font-semibold text-gray-900">Feedback inbox</h2>
+            {feedback.filter(f => !f.is_read).length > 0 && (
+              <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full bg-primary-100 text-primary-700">
+                {feedback.filter(f => !f.is_read).length} nieuw
+              </span>
+            )}
+          </div>
+          <button
+            onClick={loadFeedback}
+            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            Vernieuwen
+          </button>
+        </div>
+
+        {feedbackLoading ? (
+          <div className="flex items-center gap-2 px-6 py-8 text-sm text-gray-400">
+            <Loader2 size={14} className="animate-spin"/> Laden…
+          </div>
+        ) : feedback.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-gray-300">
+            <MessageSquare size={28}/>
+            <p className="text-sm">Nog geen feedback ontvangen.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {feedback.map((f: any) => {
+              const typeConfig: Record<string, { label: string; emoji: string; color: string }> = {
+                bug:       { label: 'Bug',       emoji: '🐛', color: 'bg-red-50 text-red-700 border-red-100' },
+                suggestie: { label: 'Suggestie', emoji: '💡', color: 'bg-amber-50 text-amber-700 border-amber-100' },
+                vraag:     { label: 'Vraag',     emoji: '❓', color: 'bg-blue-50 text-blue-700 border-blue-100' },
+              }
+              const tc = typeConfig[f.type] ?? typeConfig['vraag']
+              const mins = Math.floor((Date.now() - new Date(f.created_at).getTime()) / 60000)
+              const relTime = mins < 60
+                ? `${mins}m geleden`
+                : mins < 1440
+                  ? `${Math.floor(mins / 60)}u geleden`
+                  : `${Math.floor(mins / 1440)}d geleden`
+
+              return (
+                <div
+                  key={f.id}
+                  className={`flex items-start gap-4 px-6 py-4 transition-colors ${
+                    f.is_read ? 'bg-white' : 'bg-primary-50/30'
+                  }`}
+                >
+                  {/* Type badge */}
+                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border flex-shrink-0 mt-0.5 ${tc.color}`}>
+                    {tc.emoji} {tc.label}
+                  </span>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm ${f.is_read ? 'text-gray-600' : 'text-gray-900 font-medium'}`}>
+                      {f.message}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
+                      <span className="text-xs text-gray-400">
+                        {f.user_name ?? 'Onbekend'}
+                        {f.user_role && ` · ${f.user_role}`}
+                      </span>
+                      {f.page_url && (
+                        <span className="flex items-center gap-0.5 text-xs text-gray-400">
+                          <ExternalLink size={10}/>
+                          {f.page_url.replace(/^https?:\/\/[^/]+/, '')}
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-300">{relTime}</span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {!f.is_read && (
+                      <button
+                        onClick={() => markRead(f.id)}
+                        title="Markeer als gelezen"
+                        className="p-1.5 rounded-lg text-gray-300 hover:text-primary-500 hover:bg-primary-50 transition-colors"
+                      >
+                        <CheckCheck size={14}/>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => deleteFeedback(f.id)}
+                      title="Verwijderen"
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 size={14}/>
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {showAdd && (
