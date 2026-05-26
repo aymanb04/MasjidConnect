@@ -194,6 +194,60 @@ export interface Announcement {
   class?: Pick<Class, 'id' | 'name' | 'color'>
 }
 
+export interface AttendanceSession {
+  id: string
+  class_id: string
+  teacher_id: string
+  session_date: string
+  notes?: string
+  created_at: string
+  // joined
+  class?: Pick<Class, 'id' | 'name' | 'color'>
+  teacher?: Pick<Profile, 'id' | 'first_name' | 'last_name'>
+  records?: AttendanceRecord[]
+}
+
+export interface AttendanceRecord {
+  id: string
+  session_id: string
+  student_id: string
+  status: AttendanceStatus
+  note?: string
+  // joined
+  student?: Pick<Profile, 'id' | 'first_name' | 'last_name'>
+}
+
+export interface StudentReport {
+  id: string
+  tenant_id: string
+  student_id: string
+  class_id: string
+  school_year_id: string
+  uploaded_by: string
+  semester: 1 | 2
+  file_name: string
+  file_url: string
+  file_size?: number
+  file_type?: string
+  created_at: string
+  // joined
+  student?: Pick<Profile, 'id' | 'first_name' | 'last_name'>
+  uploader?: Pick<Profile, 'id' | 'first_name' | 'last_name'>
+}
+
+export interface Feedback {
+  id: string
+  tenant_id?: string
+  user_id: string
+  user_name?: string
+  user_role?: string
+  type: 'bug' | 'suggestie' | 'vraag'
+  message: string
+  page_url?: string
+  is_read: boolean
+  created_at: string
+}
+
 // ============================================================
 // UI / utility types
 // ============================================================
