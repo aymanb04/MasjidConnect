@@ -1,5 +1,5 @@
 # MasjidConnect — Project Status
-**Last updated: 2026-05-23**
+**Last updated: 2026-05-26**
 **Author of this document: Claude (Sonnet 4.6) — generated at end of session**
 
 ---
@@ -64,7 +64,10 @@ Each mosque is a **tenant**. Users belong to a tenant and have one of four roles
 | `module_documents` | Files attached to a lesson module |
 | `announcements` | School-wide announcements (pending migration — table may not exist in live DB yet) |
 | `invitations` | Log of sent invites |
-| `attendance_sessions` | (Table exists in DB, feature not yet built in UI) |
+| `attendance_sessions` | Attendance session per class per day (teacher_id, session_date) |
+| `attendance_records` | Per-student attendance record per session (status: present/absent/late/excused) |
+| `student_reports` | PDF report per student per class per semester (1 per slot, private storage) |
+| `feedback` | Bug reports / suggestions from users; readable by super_admin only |
 | `rooster_sessions` | Weekly schedule sessions per class |
 
 ### DB migrations status
@@ -106,6 +109,8 @@ Migration scripts in `supabase/` that may still need running on a fresh DB:
 | `/beheer` | Admin, Super admin | User management. Role filter tabs (Alle/Leerlingen/Leerkrachten/Admins), search bar, archived toggle. Invite users, CSV import, archive/reactivate. |
 | `/beheer/jaarovergang` | Admin | Year transition tool. Copies classes + students to a new school year. |
 | `/superadmin` | Super admin only | Multi-tenant overview. Expandable tenant rows, per-tenant user lists, archive/reactivate, archived toggle. |
+| `/aanwezigheid` | All roles | Attendance. Teachers mark today's attendance per student; admins see history per class with drill-down; students see own records. |
+| `/klassen/[klasId]/rapporten` | All roles | Report cards per student. Teachers/admins upload PDF per semester; students download own. |
 | `/privacy` | All roles | Privacy policy page. |
 
 ---
@@ -246,6 +251,57 @@ Prioritised based on what's partially prepared in DB:
 | 10 | Meertaligheid | No | NL/FR/AR (RTL for Arabic) |
 | 11 | Quran-voortgang tracker | No | Track memorisation (hifz) per student |
 | 12 | API / Integraties | No | Google Classroom, webhooks, open API |
+
+---
+
+## 14. What Was Discussed This Session (2026-05-26)
+
+### New feature batch — mosque wishlist
+
+Five features implemented from `-aankondigingen per klas (filter).txt`.
+Examens per semester was deferred pending mosque confirmation.
+
+| Commit | What |
+|---|---|
+| `93cc1c0` | All 5 features + api-auth.ts bug fix (see below) |
+| `ca88ffa` | Fix CREATE POLICY syntax (FOR before TO) in migration 8 |
+
+**Features built:**
+
+1. **Aankondigingen per klas** — `AnnouncementsCard` updated: class filter tabs appear when class-specific announcements exist; create form has class dropdown (teachers must pick a class, admins can post school-wide); class badge shown on each announcement. DB already had `class_id` column and RLS.
+
+2. **Student verplaatsen** (`MoveStudentModal`) — In `/beheer`, student rows now show a ⇄ button on hover. Opens a modal showing current class enrollments (with remove toggle) and a dropdown to add to new classes. Flexible per-class control. No group-based bulk move.
+
+3. **Aanwezigheid** — New `/aanwezigheid` page with sidebar nav entry for all roles.
+   - Teachers: see their classes, "Markeren" button (disabled if already done today), mark present/absent/late/excused per student, saves session + records.
+   - Admins: same marking + "Overzicht" button → session history per class → per-session drill-down.
+   - Students: "Mijn aanwezigheid" card → own records per class with class filter.
+   - No retroactive dates (today only for new sessions).
+
+4. **Rapporten uploaden** — New `/klassen/[klasId]/rapporten` page. "Rapporten" button added to class detail header (visible to all roles).
+   - Teachers/admins: upload PDF per student per semester (1 per slot); replace or delete existing; download via signed URL.
+   - Students: see own reports per semester, download.
+   - Storage: private `student-reports` bucket, path `{tenantId}/{studentId}/{classId}_s{semester}.{ext}` (fixed path = upsert replaces old file automatically).
+
+5. **Floating feedback button** — `FeedbackButton` on all dashboard pages (bottom-right). Type: Bug / Suggestie / Vraag. Saves to `feedback` table. Optional Discord webhook via `DISCORD_FEEDBACK_WEBHOOK_URL` env var. Super_admin can read all feedback (future: show in superadmin panel).
+
+**Bug fix — `lib/api-auth.ts`:**
+`is_active` was not included in the `.select()` string, so `!profile.is_active` evaluated to `!undefined === true`, causing every privileged API route (`/api/invite`, `/api/user/*`) to return 403 for all callers since commit `b6de38b` (2026-05-25). Fixed by adding `is_active` to the select and to `CallerProfile` type.
+
+**DB changes applied to live DB:**
+- `feedback` table with RLS (users can insert, super_admin manages)
+- `student_reports` table with RLS (student reads own, teacher manages class reports, admin manages tenant)
+- `attendance_sessions` + `attendance_records` RLS policies added (tables existed, no policies before)
+- Migration files: `supabase/8_features_migration.sql`, `supabase/8b_features_policies_fix.sql`
+
+**Storage:**
+- `student-reports` bucket created (private) with two storage policies
+
+**Still pending (deferred):**
+- Examens per semester — pending mosque confirmation
+- Discord webhook setup for feedback button (optional, `DISCORD_FEEDBACK_WEBHOOK_URL`)
+- Show feedback inbox in superadmin panel
+- All items from `SECURITY_TODO.md` (custom SMTP, rate limiting, etc.)
 
 ---
 
