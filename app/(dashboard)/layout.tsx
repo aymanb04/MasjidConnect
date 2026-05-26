@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { supabase } from '@/lib/supabase/singleton'
 import Sidebar from '@/components/layout/Sidebar'
+import { FeedbackButton } from '@/components/features/feedback/FeedbackButton'
 import type { Tenant } from '@/lib/types'
 import { Menu } from 'lucide-react'
 
@@ -75,6 +76,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     {children}
                 </div>
             </main>
+
+            {/* Floating feedback button — visible on all dashboard pages */}
+            <FeedbackButton />
         </div>
     )
 }
