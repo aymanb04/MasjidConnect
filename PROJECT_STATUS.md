@@ -1,5 +1,5 @@
 # MasjidConnect — Project Status
-**Last updated: 2026-05-26**
+**Last updated: 2026-05-27**
 **Author of this document: Claude (Sonnet 4.6) — generated at end of session**
 
 ---
@@ -69,6 +69,7 @@ Each mosque is a **tenant**. Users belong to a tenant and have one of four roles
 | `student_reports` | PDF report per student per class per semester (1 per slot, private storage) |
 | `feedback` | Bug reports / suggestions from users; readable by super_admin only |
 | `rooster_sessions` | Weekly schedule sessions per class |
+| `exam_scores` | Paper exam scores per student per class per semester (1/2). No assignment/submission flow — teacher enters score + max_score directly. |
 
 ### DB migrations status
 Schema is in sync with the live DB as of 2026-05-25 (see `supabase/schema.sql`
@@ -253,6 +254,35 @@ Prioritised based on what's partially prepared in DB:
 | 10 | Meertaligheid | No | NL/FR/AR (RTL for Arabic) |
 | 11 | Quran-voortgang tracker | No | Track memorisation (hifz) per student |
 | 12 | API / Integraties | No | Google Classroom, webhooks, open API |
+
+---
+
+## 14. What Was Discussed This Session (2026-05-27)
+
+### Exam scores feature
+
+Mosque confirmed they want exam scores visible online. Exams are paper-based — only the score goes online, no assignment/submission flow.
+
+**DB:** New `exam_scores` table (`class_id`, `student_id`, `semester` 1/2, `score`, `max_score`, UNIQUE per student+class+semester). RLS: students read own, teachers manage their classes, admins manage tenant. Migration run manually via Supabase SQL editor; schema.sql updated.
+
+**Scores page (`/klassen/[klasId]/scores`):** New "Examenresultaten" card below the homework grid.
+- Lists all students × S1/S2 columns
+- Click **+** on empty cell → inline inputs (score / max, default max=20)
+- Enter or ✓ to save (upsert); Esc to cancel
+- Hover existing score → pencil to edit, × to delete
+- Green/amber/red colour coding (≥70% / ≥50% / below)
+
+**Class detail page (`/klassen/[klasId]`):** Students see their own exam scores in the right column (card only appears if at least one score exists for that student in that class).
+
+### Git history cleanup
+
+Removed `Co-Authored-By: Claude Sonnet 4.6` trailer from all 112 commits using `git filter-branch`. Author and committer dates both preserved (`GIT_COMMITTER_DATE=$GIT_AUTHOR_DATE`). Force-pushed to origin. History on GitHub looks identical to before, just without the trailer.
+
+**Commits this session:**
+
+| Hash | What |
+|---|---|
+| `54d2341` | feat: exam scores — puntenlijst card + student view on klas detail |
 
 ---
 
@@ -518,7 +548,9 @@ Minor note: `CsvImportButton.tsx` line 85 aliases `klas` and `class` as valid CS
 ## 16. Git History (recent, newest first)
 
 ```
-29f67ff docs: update PROJECT_STATUS.md for 2026-05-26 session
+54d2341 feat: exam scores — puntenlijst card + student view on klas detail
+ef4bd44 docs: bring PROJECT_STATUS up to date after 2026-05-26 session
+1bca4b6 docs: update PROJECT_STATUS.md for 2026-05-26 session
 dec58e2 feat: feedback inbox UI in superadmin panel
 c10188e feat: load feedback data in superadmin
 b582f2c feat: floating feedback button on all dashboard pages
