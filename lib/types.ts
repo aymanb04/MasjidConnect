@@ -235,6 +235,18 @@ export interface StudentReport {
   uploader?: Pick<Profile, 'id' | 'first_name' | 'last_name'>
 }
 
+export interface ExamScore {
+  id: string
+  class_id: string
+  student_id: string
+  semester: 1 | 2
+  score: number
+  max_score: number
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
 export interface Feedback {
   id: string
   tenant_id?: string

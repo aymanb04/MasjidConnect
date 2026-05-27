@@ -23,6 +23,7 @@ export default function KlasDetailPage() {
   const [addingTeacher, setAddingTeacher] = useState(false)
   const [selectedTeacherId, setSelectedTeacherId] = useState('')
   const [savingTeacher, setSavingTeacher] = useState(false)
+  const [myExamScores, setMyExamScores] = useState<any[]>([])
 
   useEffect(() => {
     if (!profile || !klasId) return
@@ -55,11 +56,17 @@ export default function KlasDetailPage() {
       setAllTeachers(at ?? [])
     }
 
-    if (profile!.role === 'student' && a?.length) {
-      const { data: subs } = await supabase.from('submissions').select('*').eq('student_id', profile!.id).in('assignment_id', a.map((x: any) => x.id))
+    if (profile!.role === 'student') {
+      const [{ data: subs }, { data: exams }] = await Promise.all([
+        a?.length
+          ? supabase.from('submissions').select('*').eq('student_id', profile!.id).in('assignment_id', a.map((x: any) => x.id))
+          : Promise.resolve({ data: [] as any[] }),
+        supabase.from('exam_scores').select('*').eq('class_id', klasId as string).eq('student_id', profile!.id),
+      ])
       const map: Record<string, any> = {}
       subs?.forEach((s: any) => { map[s.assignment_id] = s })
       setMySubmissions(map)
+      setMyExamScores(exams ?? [])
     }
 
     setLoading(false)
@@ -209,6 +216,36 @@ export default function KlasDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Exam scores — student sees their own */}
+          {profile?.role === 'student' && myExamScores.length > 0 && (
+            <div className="card p-6 h-fit">
+              <div className="flex items-center gap-2 mb-4">
+                <GraduationCap size={18} className="text-amber-500"/>
+                <h2 className="font-semibold text-gray-900">Examenresultaten</h2>
+              </div>
+              <div className="space-y-2">
+                {([1, 2] as const).map(sem => {
+                  const exam = myExamScores.find((e: any) => e.semester === sem)
+                  if (!exam) return null
+                  const pct = exam.score / exam.max_score
+                  const color = pct >= 0.7
+                    ? 'bg-green-100 text-green-700'
+                    : pct >= 0.5
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-red-100 text-red-700'
+                  return (
+                    <div key={sem} className="flex items-center justify-between px-3 py-2.5 rounded-xl border border-border">
+                      <span className="text-sm text-gray-700">Examen Semester {sem}</span>
+                      <span className={`inline-block px-2.5 py-0.5 rounded-lg text-sm font-semibold ${color}`}>
+                        {exam.score}/{exam.max_score}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Students (teachers/admins only) */}
           {isTeacher && (

@@ -1,22 +1,31 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, GraduationCap, Plus, X, Check, Pencil, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function ScoresPage() {
   const { klasId } = useParams()
   const { profile, loading: profileLoading } = useProfile()
   const router = useRouter()
-  const [klas, setKlas]             = useState<any>(null)
-  const [students, setStudents]     = useState<any[]>([])
+
+  const [klas, setKlas]               = useState<any>(null)
+  const [students, setStudents]       = useState<any[]>([])
   const [assignments, setAssignments] = useState<any[]>([])
-  const [scoreMap, setScoreMap]     = useState<Record<string, Record<string, { status: string; score: number | null }>>>({})
-  const [loading, setLoading]       = useState(true)
+  const [scoreMap, setScoreMap]       = useState<Record<string, Record<string, { status: string; score: number | null }>>>({})
+  const [examScores, setExamScores]   = useState<any[]>([])
+  const [loading, setLoading]         = useState(true)
+
+  // Inline edit state for exam card
+  const [editingCell, setEditingCell] = useState<{ studentId: string; semester: 1 | 2 } | null>(null)
+  const [editScore, setEditScore]     = useState('')
+  const [editMaxScore, setEditMaxScore] = useState('20')
+  const [savingCell, setSavingCell]   = useState(false)
+  const scoreInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!profile || !klasId) return
@@ -27,10 +36,15 @@ export default function ScoresPage() {
     loadData()
   }, [profile, klasId])
 
+  // Focus score input when edit cell opens
+  useEffect(() => {
+    if (editingCell) scoreInputRef.current?.focus()
+  }, [editingCell])
+
   async function loadData() {
     const supabase = getSupabase()
 
-    const [{ data: k }, { data: studentRows }, { data: a }] = await Promise.all([
+    const [{ data: k }, { data: studentRows }, { data: a }, { data: exams }] = await Promise.all([
       supabase.from('classes').select('id, name, color').eq('id', klasId).single(),
       supabase.from('class_students')
         .select('profiles!class_students_student_id_fkey(id, first_name, last_name)')
@@ -40,6 +54,9 @@ export default function ScoresPage() {
         .eq('class_id', klasId)
         .eq('is_published', true)
         .order('due_date', { ascending: true }),
+      supabase.from('exam_scores')
+        .select('*')
+        .eq('class_id', klasId),
     ])
 
     const studentList = studentRows?.map((r: any) => r.profiles).filter(Boolean) ?? []
@@ -49,6 +66,7 @@ export default function ScoresPage() {
     setKlas(k)
     setStudents(studentList)
     setAssignments(assignmentList)
+    setExamScores(exams ?? [])
 
     if (studentList.length && assignmentList.length) {
       const { data: subs } = await supabase
@@ -81,7 +99,8 @@ export default function ScoresPage() {
   if (profileLoading || loading) return <PageLoader />
   if (!klas) return null
 
-  // Per-student weighted average: sum(earned) / sum(max) as percentage
+  // ── helpers ──────────────────────────────────────────────────────────
+
   function studentAvg(studentId: string): number | null {
     let earned = 0, total = 0
     for (const a of assignments) {
@@ -94,7 +113,6 @@ export default function ScoresPage() {
     return (earned / total) * 100
   }
 
-  // Per-assignment average (graded scores only)
   function assignmentAvg(assignmentId: string) {
     const scores = students
       .map((s: any) => scoreMap[s.id]?.[assignmentId]?.score)
@@ -116,6 +134,51 @@ export default function ScoresPage() {
     return 'bg-red-100 text-red-700'
   }
 
+  function getExam(studentId: string, semester: 1 | 2) {
+    return examScores.find(e => e.student_id === studentId && e.semester === semester) ?? null
+  }
+
+  function openEdit(studentId: string, semester: 1 | 2, existing?: any) {
+    setEditingCell({ studentId, semester })
+    setEditScore(existing ? String(existing.score) : '')
+    setEditMaxScore(existing ? String(existing.max_score) : '20')
+  }
+
+  async function saveExamScore(studentId: string, semester: 1 | 2) {
+    const score    = parseFloat(editScore)
+    const maxScore = parseFloat(editMaxScore)
+    if (isNaN(score) || isNaN(maxScore) || maxScore <= 0 || score < 0) return
+    setSavingCell(true)
+    const { data, error } = await getSupabase()
+      .from('exam_scores')
+      .upsert(
+        { class_id: klasId as string, student_id: studentId, semester, score, max_score: maxScore },
+        { onConflict: 'class_id,student_id,semester' }
+      )
+      .select()
+      .single()
+    if (!error && data) {
+      setExamScores(prev => [
+        ...prev.filter(e => !(e.student_id === studentId && e.semester === semester)),
+        data,
+      ])
+    }
+    setSavingCell(false)
+    setEditingCell(null)
+  }
+
+  async function deleteExamScore(studentId: string, semester: 1 | 2) {
+    await getSupabase()
+      .from('exam_scores')
+      .delete()
+      .eq('class_id', klasId as string)
+      .eq('student_id', studentId)
+      .eq('semester', semester)
+    setExamScores(prev => prev.filter(e => !(e.student_id === studentId && e.semester === semester)))
+  }
+
+  // ── render ────────────────────────────────────────────────────────────
+
   return (
     <div className="animate-slide-up">
       <div className="mb-6">
@@ -135,6 +198,7 @@ export default function ScoresPage() {
         </div>
       </div>
 
+      {/* ── Homework grades grid ─────────────────────────────────────── */}
       {assignments.length === 0 || students.length === 0 ? (
         <div className="card p-8 text-center text-gray-400 text-sm">
           {assignments.length === 0 ? 'Nog geen opdrachten voor deze klas.' : 'Nog geen leerlingen ingeschreven.'}
@@ -195,7 +259,6 @@ export default function ScoresPage() {
                             </td>
                           )
                         }
-                        // Submitted but not yet graded
                         return (
                           <td key={a.id} className="px-3 py-3 text-center">
                             <span className="inline-block px-2 py-0.5 rounded-lg text-xs bg-blue-50 text-blue-500">
@@ -239,6 +302,124 @@ export default function ScoresPage() {
                   <td className="px-4 py-3 border-l border-border"/>
                 </tr>
               </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Examenresultaten card ────────────────────────────────────── */}
+      {students.length > 0 && (
+        <div className="card overflow-hidden mt-6">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-amber-50/60">
+            <GraduationCap size={16} className="text-amber-600"/>
+            <h2 className="font-semibold text-sm text-gray-800">Examenresultaten</h2>
+            <span className="text-xs text-gray-400 ml-1">Klik op <Plus size={11} className="inline"/> om een score in te voeren</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-gray-50/40">
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[160px]">Leerling</th>
+                  <th className="px-6 py-3 font-medium text-gray-600 text-center min-w-[160px]">Examen S1</th>
+                  <th className="px-6 py-3 font-medium text-gray-600 text-center min-w-[160px]">Examen S2</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {students.map((s: any) => (
+                  <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-medium flex-shrink-0">
+                          {s.first_name[0]}{s.last_name[0]}
+                        </div>
+                        <span className="font-medium text-gray-800">{s.first_name} {s.last_name}</span>
+                      </div>
+                    </td>
+
+                    {([1, 2] as const).map(sem => {
+                      const exam      = getExam(s.id, sem)
+                      const isEditing = editingCell?.studentId === s.id && editingCell?.semester === sem
+
+                      return (
+                        <td key={sem} className="px-4 py-2 text-center">
+                          {isEditing ? (
+                            /* ── inline edit ── */
+                            <div className="flex items-center gap-1 justify-center">
+                              <input
+                                ref={scoreInputRef}
+                                type="number"
+                                value={editScore}
+                                onChange={e => setEditScore(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') saveExamScore(s.id, sem); if (e.key === 'Escape') setEditingCell(null) }}
+                                className="input w-16 text-center text-xs py-1"
+                                placeholder="Score"
+                                min="0"
+                              />
+                              <span className="text-gray-400 text-xs">/</span>
+                              <input
+                                type="number"
+                                value={editMaxScore}
+                                onChange={e => setEditMaxScore(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') saveExamScore(s.id, sem); if (e.key === 'Escape') setEditingCell(null) }}
+                                className="input w-16 text-center text-xs py-1"
+                                placeholder="Max"
+                                min="1"
+                              />
+                              <button
+                                onClick={() => saveExamScore(s.id, sem)}
+                                disabled={savingCell}
+                                className="text-green-600 hover:text-green-700 p-0.5 transition-colors"
+                                title="Opslaan (Enter)"
+                              >
+                                {savingCell
+                                  ? <Loader2 size={13} className="animate-spin"/>
+                                  : <Check size={13}/>}
+                              </button>
+                              <button
+                                onClick={() => setEditingCell(null)}
+                                className="text-gray-400 hover:text-gray-600 p-0.5 transition-colors"
+                                title="Annuleren (Esc)"
+                              >
+                                <X size={13}/>
+                              </button>
+                            </div>
+                          ) : exam ? (
+                            /* ── existing score ── */
+                            <div className="flex items-center gap-1 justify-center group">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-semibold ${scoreColor(exam.score, exam.max_score)}`}>
+                                {exam.score}/{exam.max_score}
+                              </span>
+                              <button
+                                onClick={() => openEdit(s.id, sem, exam)}
+                                className="text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                                title="Bewerken"
+                              >
+                                <Pencil size={11}/>
+                              </button>
+                              <button
+                                onClick={() => deleteExamScore(s.id, sem)}
+                                className="text-gray-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                                title="Verwijderen"
+                              >
+                                <X size={11}/>
+                              </button>
+                            </div>
+                          ) : (
+                            /* ── empty cell ── */
+                            <button
+                              onClick={() => openEdit(s.id, sem)}
+                              className="text-gray-300 hover:text-amber-500 transition-colors p-1 rounded hover:bg-amber-50"
+                              title="Score invoeren"
+                            >
+                              <Plus size={14}/>
+                            </button>
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
         </div>

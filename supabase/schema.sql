@@ -1,5 +1,5 @@
 -- MasjidConnect — Supabase Schema
--- Last synced: 2026-05-25
+-- Last synced: 2026-05-27
 -- Source of truth: pg_policies + pg_constraint + pg_indexes
 -- WARNING: This file is a reference/documentation copy. Do NOT run it as-is
 --          against a live database (no idempotency guards, no migration order).
@@ -385,6 +385,22 @@ CREATE TABLE public.attendance_records (
   CONSTRAINT attendance_records_session_id_student_id_key UNIQUE (session_id, student_id),
   CONSTRAINT attendance_records_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.attendance_sessions(id) ON DELETE CASCADE,
   CONSTRAINT attendance_records_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)
+);
+
+CREATE TABLE public.exam_scores (
+  id         uuid    NOT NULL DEFAULT gen_random_uuid(),
+  class_id   uuid    NOT NULL,
+  student_id uuid    NOT NULL,
+  semester   smallint NOT NULL CHECK (semester IN (1, 2)),
+  score      numeric NOT NULL CHECK (score >= 0),
+  max_score  numeric NOT NULL DEFAULT 20 CHECK (max_score > 0),
+  notes      text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT exam_scores_pkey PRIMARY KEY (id),
+  CONSTRAINT exam_scores_class_id_student_id_semester_key UNIQUE (class_id, student_id, semester),
+  CONSTRAINT exam_scores_class_id_fkey   FOREIGN KEY (class_id)   REFERENCES public.classes(id)   ON DELETE CASCADE,
+  CONSTRAINT exam_scores_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)  ON DELETE CASCADE
 );
 
 CREATE TABLE public.invitations (
@@ -1149,3 +1165,49 @@ CREATE POLICY "admin_view_own_payments" ON public.payments
 
 CREATE POLICY "super_admin_all_payments" ON public.payments
   FOR ALL USING (is_super_admin());
+
+-- ============================================================
+-- POLICIES — exam_scores
+-- ============================================================
+
+ALTER TABLE exam_scores ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY student_read_own_exam_scores ON exam_scores
+  FOR SELECT TO authenticated
+  USING (student_id = (SELECT auth.uid()));
+
+CREATE POLICY teacher_manage_exam_scores ON exam_scores
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM class_teachers ct
+      WHERE ct.class_id   = exam_scores.class_id
+        AND ct.teacher_id = (SELECT auth.uid())
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM class_teachers ct
+      WHERE ct.class_id   = exam_scores.class_id
+        AND ct.teacher_id = (SELECT auth.uid())
+    )
+  );
+
+CREATE POLICY admin_manage_exam_scores ON exam_scores
+  FOR ALL TO authenticated
+  USING (
+    (SELECT get_my_role()) IN ('admin', 'super_admin')
+    AND EXISTS (
+      SELECT 1 FROM classes c
+      WHERE c.id = exam_scores.class_id
+        AND c.tenant_id = (SELECT get_my_tenant_id())
+    )
+  )
+  WITH CHECK (
+    (SELECT get_my_role()) IN ('admin', 'super_admin')
+    AND EXISTS (
+      SELECT 1 FROM classes c
+      WHERE c.id = exam_scores.class_id
+        AND c.tenant_id = (SELECT get_my_tenant_id())
+    )
+  );
