@@ -1,5 +1,5 @@
 # MasjidConnect — Project Status
-**Last updated: 2026-05-27**
+**Last updated: 2026-05-28**
 **Author of this document: Ayman Boulayoune**
 
 ---
@@ -254,6 +254,27 @@ Prioritised based on what's partially prepared in DB:
 | 10 | Meertaligheid | No | NL/FR/AR (RTL for Arabic) |
 | 11 | Quran-voortgang tracker | No | Track memorisation (hifz) per student |
 | 12 | API / Integraties | No | Google Classroom, webhooks, open API |
+
+---
+
+## 14. What Was Discussed This Session (2026-05-28)
+
+### Repository cleanup
+
+- Removed `.idea/` (5 JetBrains IDE files) from git tracking; added to `.gitignore`
+- Deleted `lib/supabase/client.ts` — dead file, never imported anywhere (codebase uses `lib/supabase/singleton.ts` exclusively)
+- Rewrote `README.md` in English; fixed outdated info: wrong domain, Framer Motion listed but unused, missing `student-reports` bucket, missing pages in structure, done features still listed as planned
+- Updated domain from `masjid-connect.be` → `masjidconnect.be` everywhere: README, `superadmin/page.tsx`, `CreateTenantButton.tsx`, PROJECT_STATUS.md
+
+**Commits this session:**
+
+| Hash | What |
+|---|---|
+| `780535e` | chore: remove .idea IDE files and dead supabase client stub |
+| `949a07b` | docs: rewrite README in English, fix outdated stack and setup info |
+| `de3720e` | docs: fix domain to masjidconnect.be (no dash) |
+| `797ffc7` | fix: update hardcoded domain to masjidconnect.be (no dash) |
+| `a235856` | docs: update domain to masjidconnect.be in PROJECT_STATUS |
 
 ---
 
