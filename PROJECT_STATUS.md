@@ -1,6 +1,6 @@
 # MasjidConnect — Project Status
 **Last updated: 2026-05-27**
-**Author of this document: Claude (Sonnet 4.6) — generated at end of session**
+**Author of this document: Ayman Boulayoune**
 
 ---
 
@@ -23,7 +23,7 @@ Each mosque is a **tenant**. Users belong to a tenant and have one of four roles
 | Icons | Lucide React |
 | File Storage | Supabase Storage |
 | Hosting | Vercel |
-| Domain | `masjid-connect.be` (registered via Combell, DNS at Combell, A → Vercel IP) |
+| Domain | `masjidconnect.be` (registered via Combell, DNS at Combell, A → Vercel IP) |
 | Language | TypeScript |
 
 ---
@@ -391,10 +391,10 @@ Listed newest first. All branched from master, no force pushes.
 - ⏳ Custom SMTP (Resend) — blocker before live, deferred
 
 ### Domain setup
-- Domain `masjid-connect.be` purchased at Combell
+- Domain `masjidconnect.be` purchased at Combell
 - DNS: A records → `216.198.79.1` (Vercel anycast), AAAA records deleted
 - Vercel domain validated, SSL cert issued
-- `NEXT_PUBLIC_SITE_URL=https://masjid-connect.be` set in Vercel env vars
+- `NEXT_PUBLIC_SITE_URL=https://masjidconnect.be` set in Vercel env vars
 - Supabase Auth Site URL + Redirect URLs updated to new domain
 
 ### Performance Advisor impact
