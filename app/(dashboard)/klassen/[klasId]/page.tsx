@@ -181,24 +181,34 @@ export default function KlasDetailPage() {
               <p className="text-sm text-gray-400 text-center py-2">Geen leerkracht toegewezen.</p>
             ) : (
               <div className="space-y-1">
-                {teachers.map((t: any) => (
-                  <div key={t.id} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 transition-colors group">
-                    <div className="w-7 h-7 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">
-                      {t.first_name?.[0]}{t.last_name?.[0]}
+                {teachers.map((t: any) => {
+                  const subject = encodeURIComponent(`Vraag over ${klas.name}`)
+                  const body = encodeURIComponent(`Beste ${t.first_name},\n\n`)
+                  const mailtoHref = t.email ? `mailto:${t.email}?subject=${subject}&body=${body}` : undefined
+                  const isStudent = profile?.role === 'student'
+                  return (
+                    <div key={t.id} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 transition-colors group">
+                      <div className="w-7 h-7 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">
+                        {t.first_name?.[0]}{t.last_name?.[0]}
+                      </div>
+                      <span className="text-sm text-gray-700 flex-1 min-w-0 truncate">{t.first_name} {t.last_name}</span>
+                      {mailtoHref && (
+                        <a
+                          href={mailtoHref}
+                          className={`transition-colors p-0.5 ${isStudent ? 'text-primary-500 hover:text-primary-700' : 'text-gray-300 hover:text-primary-600 opacity-0 group-hover:opacity-100'}`}
+                          title={`Mail ${t.first_name}`}
+                        >
+                          <Mail size={14}/>
+                        </a>
+                      )}
+                      {isAdmin && (
+                        <button onClick={() => removeTeacher(t.id)} className="text-gray-200 hover:text-red-400 transition-colors p-0.5 opacity-0 group-hover:opacity-100" title="Verwijderen">
+                          <X size={13}/>
+                        </button>
+                      )}
                     </div>
-                    <span className="text-sm text-gray-700 flex-1 min-w-0 truncate">{t.first_name} {t.last_name}</span>
-                    {t.email && (
-                      <a href={`mailto:${t.email}`} className="text-gray-300 hover:text-primary-600 transition-colors p-0.5 opacity-0 group-hover:opacity-100" title={`Mail ${t.first_name}`}>
-                        <Mail size={14}/>
-                      </a>
-                    )}
-                    {isAdmin && (
-                      <button onClick={() => removeTeacher(t.id)} className="text-gray-200 hover:text-red-400 transition-colors p-0.5 opacity-0 group-hover:opacity-100" title="Verwijderen">
-                        <X size={13}/>
-                      </button>
-                    )}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
             {isAdmin && addingTeacher && (
