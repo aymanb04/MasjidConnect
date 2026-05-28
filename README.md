@@ -1,6 +1,6 @@
 # MasjidConnect
 
-Digital platform for mosque education schools — built with Next.js 14 + Supabase.
+Digital platform for educational centres — built with Next.js 14 + Supabase.
 
 **Production:** [https://masjidconnect.be](https://masjidconnect.be)
 
