@@ -2,14 +2,20 @@ node_modules/
 .next/
 .env.local
 .env
+.idea/
 out/
 build/
 *.log
 .DS_Store
 
-# Dev-only scripts (contain hardcoded demo passwords)
+# Dev-only scripts and demo files (contain hardcoded demo passwords)
 supabase/seed.ts
 supabase/reset.sql
+DEMO_ACCOUNTS.txt
+-aankodigingen per klas (filter).txt
+csv_test.txt
+SECURITY
+TOEKOMSTIGE_FUNCTIES.txt
 
 # Internal operational notes (not for git history)
 SECURITY_TODO.md
