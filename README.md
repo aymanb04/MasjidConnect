@@ -2,7 +2,7 @@
 
 Digitaal platform voor moskee-onderwijs — gebouwd met Next.js 14 + Supabase.
 
-**Productie:** [https://masjid-connect.be](https://masjid-connect.be)
+**Productie:** [https://masjidconnect.be](https://masjidconnect.be)
 
 ## Stack
 
