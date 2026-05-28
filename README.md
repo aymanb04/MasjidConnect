@@ -2,7 +2,7 @@
 
 Digital platform for mosque education schools — built with Next.js 14 + Supabase.
 
-**Production:** [https://masjid-connect.be](https://masjid-connect.be)
+**Production:** [https://masjidconnect.be](https://masjidconnect.be)
 
 ## Stack
 
@@ -10,7 +10,7 @@ Digital platform for mosque education schools — built with Next.js 14 + Supaba
 - **Database + Auth + Storage**: Supabase
 - **Styling**: Tailwind CSS
 - **Hosting**: Vercel
-- **Domain**: `masjid-connect.be` (Combell registrar, DNS via Combell, A-records → Vercel)
+- **Domain**: `masjidconnect.be` (Combell registrar, DNS via Combell, A-records → Vercel)
 
 ---
 
@@ -101,7 +101,7 @@ supabase/
 
 ## Deploying to Vercel
 
-Production runs on Vercel at `masjid-connect.be`.
+Production runs on Vercel at `masjidconnect.be`.
 
 ### Environment variables (Vercel production)
 | Key | Value |
@@ -109,7 +109,7 @@ Production runs on Vercel at `masjid-connect.be`.
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role key (server-only) |
-| `NEXT_PUBLIC_SITE_URL` | `https://masjid-connect.be` |
+| `NEXT_PUBLIC_SITE_URL` | `https://masjidconnect.be` |
 | `DISCORD_FEEDBACK_WEBHOOK_URL` | Optional Discord webhook for feedback notifications |
 
 ### DNS (Combell)
@@ -119,8 +119,8 @@ Combell servers and break IPv6 clients. Mail records (MX, SPF, DKIM, CNAMEs
 for `autoconfig`/`autodiscover`/`mail`) remain on Mailprotect.
 
 ### Supabase Auth
-- Site URL: `https://masjid-connect.be`
-- Redirect URLs: `https://masjid-connect.be/**` and `http://localhost:3000/**` for local dev
+- Site URL: `https://masjidconnect.be`
+- Redirect URLs: `https://masjidconnect.be/**` and `http://localhost:3000/**` for local dev
 
 ---
 
