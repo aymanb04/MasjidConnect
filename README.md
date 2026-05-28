@@ -1,45 +1,53 @@
 # MasjidConnect
 
-Digitaal platform voor moskee-onderwijs — gebouwd met Next.js 14 + Supabase.
+Digital platform for mosque education schools — built with Next.js 14 + Supabase.
 
-**Productie:** [https://masjidconnect.be](https://masjidconnect.be)
+**Production:** [https://masjid-connect.be](https://masjid-connect.be)
 
 ## Stack
 
 - **Frontend + Backend**: Next.js 14 (App Router)
 - **Database + Auth + Storage**: Supabase
 - **Styling**: Tailwind CSS
-- **Animaties**: Framer Motion
 - **Hosting**: Vercel
-- **Domein**: `masjid-connect.be` (Combell registrar, DNS via Combell, A-records naar Vercel)
+- **Domain**: `masjid-connect.be` (Combell registrar, DNS via Combell, A-records → Vercel)
 
 ---
 
-## Opstarten (lokaal)
+## Local setup
 
-### 1. Repository klonen
+### 1. Clone the repository
 ```bash
-git clone <jouw-repo>
+git clone <your-repo>
 cd masjidconnect
 npm install
 ```
 
-### 2. Supabase project aanmaken
-1. Ga naar [supabase.com](https://supabase.com) en maak een gratis project aan
-2. Ga naar **SQL Editor** en voer het volledige `supabase/schema.sql` bestand uit
-3. Ga naar **Storage** en maak 4 buckets aan:
+### 2. Create a Supabase project
+1. Go to [supabase.com](https://supabase.com) and create a free project
+2. Open the **SQL Editor** and run the full `supabase/schema.sql` file
+3. Go to **Storage** and create 5 buckets:
    - `submission-files` — Private
    - `module-documents` — Private
+   - `student-reports` — Private
    - `avatars` — Public
    - `tenant-logos` — Public
 
-### 3. Environment variabelen instellen
+### 3. Set environment variables
 ```bash
 cp .env.example .env.local
 ```
-Vul in `.env.local` jouw Supabase URL en keys in (te vinden in Supabase → Settings → API).
+Fill in your Supabase URL and keys (found in Supabase → Settings → API).
 
-### 4. Dev server starten
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service-role key (server-only, never exposed to client) |
+| `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` for local dev |
+| `DISCORD_FEEDBACK_WEBHOOK_URL` | Optional — posts user feedback to a Discord channel |
+
+### 4. Start the dev server
 ```bash
 npm run dev
 ```
@@ -47,83 +55,92 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ---
 
-## Eerste Super Admin aanmaken
+## Creating the first Super Admin
 
-1. Ga naar Supabase → **Authentication → Users** → **Add user**
-2. Maak een gebruiker aan met jouw e-mail
-3. Ga naar **Table Editor → profiles** en pas de `role` aan naar `super_admin`
-4. Verwijder de `tenant_id` (zet op NULL)
-5. Log in via `/login` — je ziet nu het Super Admin dashboard
+1. Go to Supabase → **Authentication → Users** → **Add user**
+2. Create a user with your email
+3. Go to **Table Editor → profiles** and set the `role` column to `super_admin`
+4. Set `tenant_id` to NULL
+5. Log in at `/login` — you'll see the Super Admin dashboard
 
 ---
 
-## Structuur
+## Project structure
 
 ```
 app/
-  login/              — Loginpagina
+  login/                    — Login page
   (dashboard)/
-    dashboard/        — Rolspecifiek dashboard
-    klassen/          — Klasoverzicht + detail
-    huiswerk/         — Opdrachten + indieningen
-    lesmodules/       — Modules + documenten
-    beheer/           — Admin: gebruikers en klassen
-    superadmin/       — Super admin: alle moskeeën
+    dashboard/              — Role-specific home dashboard
+    klassen/                — Class list + detail + grades + reports
+    huiswerk/               — Assignments + submissions
+    lesmodules/             — Course modules + documents
+    aanwezigheid/           — Attendance marking and history
+    rooster/                — Weekly schedule
+    agenda/                 — Calendar view
+    beheer/                 — Admin: user management, year transition
+    superadmin/             — Super admin: all mosques overview
 components/
-  layout/             — Sidebar
+  layout/                   — Sidebar
   features/
-    assignments/      — Huiswerk componenten
-    modules/          — Lesmodule componenten
-    admin/            — Beheer componenten
+    assignments/            — Homework components
+    modules/                — Course module components
+    admin/                  — Management components
+    announcements/          — Announcements card
+    feedback/               — Feedback button
 lib/
-  supabase/           — Client + server helpers
-  types.ts            — TypeScript types
-  utils.ts            — Hulpfuncties
+  supabase/                 — Supabase client helpers
+  hooks/                    — useProfile and other hooks
+  types.ts                  — TypeScript interfaces
+  utils.ts                  — Utility functions
 supabase/
-  schema.sql          — Volledig database schema
+  schema.sql                — Full database schema with RLS policies
 ```
 
 ---
 
-## Deployen op Vercel
+## Deploying to Vercel
 
-Productie draait op Vercel via `masjid-connect.be`.
+Production runs on Vercel at `masjid-connect.be`.
 
-### Environment variabelen (Production op Vercel)
+### Environment variables (Vercel production)
 | Key | Value |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role key (server-only) |
 | `NEXT_PUBLIC_SITE_URL` | `https://masjid-connect.be` |
+| `DISCORD_FEEDBACK_WEBHOOK_URL` | Optional Discord webhook for feedback notifications |
 
 ### DNS (Combell)
-A-records voor zowel apex als `www` naar Vercel's anycast IP (zie Vercel
-Domains panel voor het actuele adres). **Geen AAAA-records** — die wijzen
-naar Combell-servers en breken IPv6-clients. Mail-records (MX, SPF, DKIM,
-CNAMEs voor `autoconfig`/`autodiscover`/`mail`) blijven op Mailprotect.
+A-records for both apex and `www` pointing to Vercel's anycast IP (see Vercel
+Domains panel for the current address). **No AAAA records** — they point to
+Combell servers and break IPv6 clients. Mail records (MX, SPF, DKIM, CNAMEs
+for `autoconfig`/`autodiscover`/`mail`) remain on Mailprotect.
 
 ### Supabase Auth
 - Site URL: `https://masjid-connect.be`
-- Redirect URLs: bevat `https://masjid-connect.be/**` plus `http://localhost:3000/**` voor lokale dev
+- Redirect URLs: `https://masjid-connect.be/**` and `http://localhost:3000/**` for local dev
 
 ---
 
-## Rollen
+## Roles
 
-| Rol | Beschrijving |
-|-----|-------------|
-| `super_admin` | Jij — ziet alle moskeeën, maakt tenants aan |
-| `admin` | Coördinator van een moskee — beheert klassen en gebruikers |
-| `teacher` | Leerkracht — geeft huiswerk op, deelt documenten |
-| `student` | Leerling — dient taken in, bekijkt lesmateriaal |
+| Role | Description |
+|---|---|
+| `super_admin` | MasjidConnect operator — sees all mosques, creates tenants |
+| `admin` | Mosque coordinator — manages classes and users within their mosque |
+| `teacher` | Teacher — assigns homework, shares course materials, marks attendance |
+| `student` | Student — submits assignments, views course materials and grades |
 
 ---
 
-## V2 features (nog te bouwen)
-- Afwezigheidslijsten
-- Admin rapportage dashboard
-- E-mailnotificaties (Resend)
-- Betalingsintegratie (Stripe)
-- Progressive Web App (PWA)
-- Berichtensysteem
+## Planned features
+- Schedule export (ICS / Google Calendar)
+- Parent portal (linked to child account)
+- In-app messaging (replace WhatsApp usage)
+- Email notifications (Resend)
+- Payment integration (Stripe — school fees)
+- Multilingual support (NL / FR / AR)
+- Quran memorisation tracker (hifz progress)
+- Native mobile app (after PWA proves value)
