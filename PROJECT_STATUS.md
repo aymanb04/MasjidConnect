@@ -270,7 +270,7 @@ Prioritised based on what's partially prepared in DB:
 #### Quick-win security fixes (all in one commit `7230e93`)
 - **E1 — HSTS:** Added `Strict-Transport-Security: max-age=31536000; includeSubDomains` to `next.config.js`
 - **C3 — Name length:** `first_name` and `last_name` now validated ≤100 chars in `/api/invite`
-- **C2 — Score cap:** `saveExamScore` in scores page now rejects `score > maxScore` client-side. DB constraint still pending: `ALTER TABLE exam_scores ADD CONSTRAINT score_within_max CHECK (score <= max_score);`
+- **C2 — Score cap:** `saveExamScore` in scores page now rejects `score > maxScore` client-side. DB constraint applied: `ALTER TABLE exam_scores ADD CONSTRAINT score_within_max CHECK (score <= max_score);` ✅
 - **F2 — Error sanitization:** All `/api/*` routes now `console.error` internally and return generic `"Er is een fout opgetreden."` to client. Exception: anonymize storage error still says "Bestanden konden niet worden verwijderd" without raw detail.
 
 #### Rate limiting via Upstash Redis (`169e4e8`)
