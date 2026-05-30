@@ -257,6 +257,53 @@ Prioritised based on what's partially prepared in DB:
 
 ---
 
+## 14. What Was Discussed This Session (2026-05-30)
+
+### Security hardening + rate limiting
+
+#### CSV import locked for demo phase
+- Added `IMPORT_DISABLED = true` flag in `CsvImportButton.tsx`
+- Flow still works through upload → mapping → preview (mosque can test CSV parsing)
+- Import button greyed out with orange banner: "Import tijdelijk uitgeschakeld tijdens de demofase"
+- To re-enable: set `IMPORT_DISABLED = false`
+
+#### Quick-win security fixes (all in one commit `7230e93`)
+- **E1 — HSTS:** Added `Strict-Transport-Security: max-age=31536000; includeSubDomains` to `next.config.js`
+- **C3 — Name length:** `first_name` and `last_name` now validated ≤100 chars in `/api/invite`
+- **C2 — Score cap:** `saveExamScore` in scores page now rejects `score > maxScore` client-side. DB constraint still pending: `ALTER TABLE exam_scores ADD CONSTRAINT score_within_max CHECK (score <= max_score);`
+- **F2 — Error sanitization:** All `/api/*` routes now `console.error` internally and return generic `"Er is een fout opgetreden."` to client. Exception: anonymize storage error still says "Bestanden konden niet worden verwijderd" without raw detail.
+
+#### Rate limiting via Upstash Redis (`169e4e8`)
+- Installed `@upstash/ratelimit` + `@upstash/redis`
+- New `lib/rate-limit.ts` — sliding window, 1h, per-caller per-route, no-ops gracefully if env vars absent
+- Applied to all 5 destructive routes:
+
+| Route | Limit |
+|---|---|
+| `/api/user/anonymize` | 3 / hour |
+| `/api/user/delete` | 3 / hour |
+| `/api/user/archive` | 30 / hour |
+| `/api/user/reactivate` | 30 / hour |
+| `/api/invite` | 30 / hour |
+
+- Returns 429 with `Retry-After` header when exceeded
+- Upstash Redis DB created (EU region), env vars added to `.env.local` and Vercel Production
+- Active in production after push + redeploy
+
+#### Discussed but deferred
+- Discord webhook alert on anonymize calls — added to `SECURITY_TODO.md §3b` and `TOEKOMSTIGE_FUNCTIES.txt §13`
+- `exam_scores` DB constraint (`score <= max_score`) — needs one SQL line in Supabase editor
+
+**Commits this session:**
+
+| Hash | What |
+|---|---|
+| `4940afd` | docs: README description update (from remote) |
+| `7230e93` | security: quick-win hardening — HSTS, input validation, error sanitization, CSV import lock |
+| `169e4e8` | security: add Upstash rate limiting to all destructive API routes |
+
+---
+
 ## 14. What Was Discussed This Session (2026-05-28)
 
 ### Repository cleanup
