@@ -205,7 +205,7 @@ File type is validated via browser-reported MIME type only (`f.type`), which is 
 | Item | Priority | Notes |
 |---|---|---|
 | Discord webhook alert on anonymize | High | ~30 min. See `SECURITY_TODO.md §3b` |
-| Custom SMTP via Resend | **Blocker for launch** | 2 email/hour cap on Supabase default |
+| Custom SMTP via Resend | **Blocker for launch** | In progress — DNS propagating, Supabase configured, awaiting domain verification |
 | Server-side file type validation | Medium | Magic byte check in API route or Edge Function |
 | Atomic invite via Postgres RPC | Medium | Auth user created before DB writes — orphan risk on failure |
 | PITR backups | Medium | Daily snapshots only; ~€100/month add-on |

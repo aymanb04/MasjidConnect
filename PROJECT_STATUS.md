@@ -1,5 +1,5 @@
 # MasjidConnect — Project Status
-**Last updated: 2026-05-28**
+**Last updated: 2026-05-30**
 **Author of this document: Ayman Boulayoune**
 
 ---
@@ -254,6 +254,39 @@ Prioritised based on what's partially prepared in DB:
 | 10 | Meertaligheid | No | NL/FR/AR (RTL for Arabic) |
 | 11 | Quran-voortgang tracker | No | Track memorisation (hifz) per student |
 | 12 | API / Integraties | No | Google Classroom, webhooks, open API |
+
+---
+
+## 14. What Was Discussed This Session (2026-05-30) — continued
+
+### Custom SMTP via Resend (in progress — DNS pending)
+
+Goal: replace Supabase's built-in 2 emails/hour cap with Resend (3,000/month free tier).
+
+**Resend account:** created. Domain `masjidconnect.be` added.
+
+**DNS records added in Combell (all present, propagation pending):**
+
+| Record | Type | Value |
+|---|---|---|
+| `masjidconnect.be` | TXT | `v=spf1 include:amazonses.com ~all` |
+| `resend._domainkey.masjidconnect.be` | TXT | DKIM public key |
+| `send.masjidconnect.be` | TXT | `v=spf1 include:amazonses.com ~all` |
+| `send.masjidconnect.be` | MX | `feedback-smtp.eu-west-1.amazonses.com` (priority 10, TTL 60) |
+| `_dmarc.masjidconnect.be` | TXT | `v=DMARC1; p=none;` |
+
+**Supabase SMTP settings configured:**
+- Host: `smtp.resend.com`, Port: `465`, Username: `resend`
+- Sender: `noreply@masjidconnect.be` / `MasjidConnect`
+- Custom SMTP toggle: ON
+- Password: Resend API key saved
+
+**Status:** All 3 Resend records show "Pending" — DNS propagation in progress (can take up to 24h for DKIM). No action needed, just wait.
+
+**After domain verifies:**
+1. Try a test invite to confirm emails land in inbox
+2. Supabase → Authentication → Rate Limits → set email limit to 200/hour
+3. Re-enable CSV import: set `IMPORT_DISABLED = false` in `CsvImportButton.tsx`
 
 ---
 
