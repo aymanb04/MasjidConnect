@@ -17,10 +17,14 @@ export async function DELETE(request: Request) {
 
         // Verwijdert auth user → cascade verwijdert profiel + klaskoppelingen automatisch
         const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+        if (error) {
+            console.error('[/api/user/delete] auth delete:', error.message)
+            return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
+        }
 
         return NextResponse.json({ success: true })
     } catch (e: any) {
-        return NextResponse.json({ error: e.message }, { status: 500 })
+        console.error('[/api/user/delete]', e.message)
+        return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
     }
 }
