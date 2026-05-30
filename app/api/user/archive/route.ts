@@ -33,13 +33,19 @@ export async function POST(request: Request) {
             .from('profiles')
             .update({ is_active: false })
             .eq('id', userId)
-        if (profileErr) return NextResponse.json({ error: profileErr.message }, { status: 400 })
+        if (profileErr) {
+            console.error('[/api/user/archive] profile update:', profileErr.message)
+            return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
+        }
 
         // Ban from auth so they can't log in — 10 year duration (effectively permanent)
         const { error: authErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
             ban_duration: '876000h',
         })
-        if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 })
+        if (authErr) {
+            console.error('[/api/user/archive] auth ban:', authErr.message)
+            return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
+        }
 
         // Force-revoke all active sessions immediately so the user is kicked out
         // right away rather than waiting for their JWT to expire (up to 1 hour)
@@ -53,6 +59,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ success: true })
     } catch (e: any) {
-        return NextResponse.json({ error: e.message }, { status: 500 })
+        console.error('[/api/user/archive]', e.message)
+        return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
     }
 }

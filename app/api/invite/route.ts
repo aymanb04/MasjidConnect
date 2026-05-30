@@ -31,6 +31,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Ongeldig e-mailadres' }, { status: 400 })
         }
 
+        if (!first_name?.trim() || first_name.length > 100) {
+            return NextResponse.json({ error: 'Ongeldige voornaam (max 100 tekens)' }, { status: 400 })
+        }
+        if (!last_name?.trim() || last_name.length > 100) {
+            return NextResponse.json({ error: 'Ongeldige achternaam (max 100 tekens)' }, { status: 400 })
+        }
+
         // Admins can only create users in their own tenant
         if (caller.role === 'admin' && tenant_id !== caller.tenant_id) {
             return NextResponse.json({ error: 'Geen toegang tot deze moskee' }, { status: 403 })
@@ -108,6 +115,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ success: true, user: data.user })
     } catch (e: any) {
-        return NextResponse.json({ error: e.message }, { status: 500 })
+        console.error('[/api/invite]', e.message)
+        return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
     }
 }

@@ -16,6 +16,7 @@ interface Props {
 }
 
 const MAX_IMPORT_ROWS = 500
+const IMPORT_DISABLED = true
 
 const SYSTEM_FIELDS = [
     { key: 'voornaam',   label: 'Voornaam',   required: true  },
@@ -376,9 +377,16 @@ export default function CsvImportButton({ tenantId, onImported }: Props) {
                                         </tbody>
                                     </table>
                                 </div>
-                                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
-                                    Elke gebruiker ontvangt een uitnodigingsmail. Oranje groepsnamen worden niet herkend — maak eerst de groep aan in Beheer.
-                                </div>
+                                {IMPORT_DISABLED && (
+                                    <div className="mt-3 p-3 bg-orange-50 border border-orange-300 rounded-xl text-xs text-orange-700 font-medium">
+                                        Import is tijdelijk uitgeschakeld tijdens de demofase. Er worden geen accounts aangemaakt of uitnodigingsmails verstuurd.
+                                    </div>
+                                )}
+                                {!IMPORT_DISABLED && (
+                                    <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+                                        Elke gebruiker ontvangt een uitnodigingsmail. Oranje groepsnamen worden niet herkend — maak eerst de groep aan in Beheer.
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -432,12 +440,18 @@ export default function CsvImportButton({ tenantId, onImported }: Props) {
                             {step === 'preview' && (
                                 <>
                                     <button onClick={() => setStep('mapping')} className="btn-secondary flex-1 justify-center">Terug</button>
-                                    <button onClick={handleImport} disabled={loading} className="btn-primary flex-1 justify-center">
-                                        {loading
-                                            ? <><Loader2 size={15} className="animate-spin"/> Importeren… ({mappedRows.length} accounts)</>
-                                            : `${mappedRows.length} gebruikers importeren`
-                                        }
-                                    </button>
+                                    {IMPORT_DISABLED ? (
+                                        <button disabled className="btn-primary flex-1 justify-center opacity-50 cursor-not-allowed" title="Tijdelijk uitgeschakeld tijdens demofase">
+                                            Import uitgeschakeld
+                                        </button>
+                                    ) : (
+                                        <button onClick={handleImport} disabled={loading} className="btn-primary flex-1 justify-center">
+                                            {loading
+                                                ? <><Loader2 size={15} className="animate-spin"/> Importeren… ({mappedRows.length} accounts)</>
+                                                : `${mappedRows.length} gebruikers importeren`
+                                            }
+                                        </button>
+                                    )}
                                 </>
                             )}
                             {step === 'done' && (

@@ -35,7 +35,10 @@ export async function POST(request: Request) {
             email:        `anon-${userId}@deleted.invalid`,
             ban_duration: '876000h',
         })
-        if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 })
+        if (authErr) {
+            console.error('[/api/user/anonymize] auth ban:', authErr.message)
+            return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
+        }
 
         // Force-revoke all active sessions immediately
         await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${userId}/logout`, {
@@ -64,7 +67,10 @@ export async function POST(request: Request) {
                 is_anonymized: true,
             })
             .eq('id', userId)
-        if (profileErr) return NextResponse.json({ error: profileErr.message }, { status: 400 })
+        if (profileErr) {
+            console.error('[/api/user/anonymize] profile scrub:', profileErr.message)
+            return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
+        }
 
         // ── Step 3: Scrub submission text content ──────────────────────────────
         await supabaseAdmin
@@ -101,8 +107,9 @@ export async function POST(request: Request) {
                 .from('submission-files')
                 .remove(paths)
             if (storageErr) {
+                console.error('[/api/user/anonymize] storage removal:', storageErr.message)
                 return NextResponse.json(
-                    { error: `Bestanden konden niet worden verwijderd: ${storageErr.message}` },
+                    { error: 'Bestanden konden niet worden verwijderd. Neem contact op met de beheerder.' },
                     { status: 500 }
                 )
             }
@@ -115,6 +122,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ success: true })
     } catch (e: any) {
-        return NextResponse.json({ error: e.message }, { status: 500 })
+        console.error('[/api/user/anonymize]', e.message)
+        return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
     }
 }

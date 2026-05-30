@@ -147,7 +147,7 @@ export default function ScoresPage() {
   async function saveExamScore(studentId: string, semester: 1 | 2) {
     const score    = parseFloat(editScore)
     const maxScore = parseFloat(editMaxScore)
-    if (isNaN(score) || isNaN(maxScore) || maxScore <= 0 || score < 0) return
+    if (isNaN(score) || isNaN(maxScore) || maxScore <= 0 || score < 0 || score > maxScore) return
     setSavingCell(true)
     const { data, error } = await getSupabase()
       .from('exam_scores')
