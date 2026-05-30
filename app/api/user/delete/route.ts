@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/api-auth'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,6 +11,15 @@ const supabaseAdmin = createClient(
 export async function DELETE(request: Request) {
     const auth = await requireRole(request, ['super_admin'])
     if ('error' in auth) return auth.error
+    const { caller } = auth
+
+    const rl = await checkRateLimit('/api/user/delete', caller.id)
+    if (rl.limited) {
+        return NextResponse.json(
+            { error: 'Te veel verzoeken. Probeer later opnieuw.' },
+            { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 3600) } }
+        )
+    }
 
     try {
         const { userId } = await request.json()
