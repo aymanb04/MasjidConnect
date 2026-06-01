@@ -16,7 +16,7 @@ interface Props {
 }
 
 const MAX_IMPORT_ROWS = 500
-const IMPORT_DISABLED = true
+const IMPORT_DISABLED = false
 
 const SYSTEM_FIELDS = [
     { key: 'voornaam',   label: 'Voornaam',   required: true  },
