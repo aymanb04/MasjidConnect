@@ -85,6 +85,17 @@ Migration scripts in `supabase/` that may still need running on a fresh DB:
 - `10_terms_acceptance.sql` — adds `terms_accepted_at` + `terms_version` to
   `profiles` for the Voorwaarden acceptance gate. ✅ Applied to live DB 2026-06-03.
   No RLS change needed (existing `update_own_profile` policy covers it).
+- `11_exam_score_within_max.sql` — `score <= max_score` CHECK on `exam_scores`
+  (the "C2" fix). Already applied to live DB 2026-05-30; this file just records it.
+
+**Drift audit 2026-06-03:** `9_exam_scores.sql` had never been committed (now is).
+`schema.sql` was missing the `feedback` and `student_reports` tables (+ their RLS),
+the real `attendance_*` policies (was a stale "no policies yet" stub), and the
+`score_within_max` constraint — all were applied to the live DB via migrations 8/8b
+or the SQL editor but never folded into the snapshot. **All now reconciled in
+`schema.sql`.** Lesson: keep committing numbered migration files; don't treat
+`schema.sql` as the only record. (Adopting the Supabase CLI is still tracked in
+`SECURITY_TODO §7a`.)
 
 ---
 
