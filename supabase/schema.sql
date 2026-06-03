@@ -163,6 +163,9 @@ CREATE TABLE public.profiles (
   is_active      boolean          DEFAULT true,
   -- GDPR: true after anonymize. Prevents reactivation of erased users.
   is_anonymized  boolean          NOT NULL DEFAULT false,
+  -- Voorwaarden acceptance (see migration 10 + /akkoord gate)
+  terms_accepted_at timestamp with time zone,
+  terms_version  integer          NOT NULL DEFAULT 0,
   last_seen_at   timestamp with time zone,
   created_at     timestamp with time zone DEFAULT now(),
   updated_at     timestamp with time zone DEFAULT now(),

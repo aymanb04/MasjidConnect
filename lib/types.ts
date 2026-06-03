@@ -56,6 +56,9 @@ export interface Profile {
   is_active: boolean
   // GDPR erasure flag — set by /api/user/anonymize. Irreversible.
   is_anonymized: boolean
+  // Voorwaarden acceptance — see lib/terms.ts + /akkoord gate
+  terms_accepted_at?: string
+  terms_version?: number
   last_seen_at?: string
   created_at: string
   updated_at: string
