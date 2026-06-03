@@ -1,4 +1,5 @@
 import { Shield, Users, Clock, FileCheck, Mail, Building2, Scale, Server } from 'lucide-react'
+import { EntityFooter } from './EntityFooter'
 
 const sections = [
   {
@@ -80,6 +81,7 @@ const sections = [
 
 export function PrivacyContent() {
   return (
+    <>
     <div className="space-y-5">
       {sections.map(({ icon: Icon, title, items }) => (
         <div key={title} className="card p-6">
@@ -100,5 +102,7 @@ export function PrivacyContent() {
         </div>
       ))}
     </div>
+    <EntityFooter />
+    </>
   )
 }

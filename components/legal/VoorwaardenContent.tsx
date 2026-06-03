@@ -1,10 +1,9 @@
 // In-app rendering of the Gebruikersovereenkomst (legal/gebruikersovereenkomst.md).
 // Keep this in sync with that file when the Voorwaarden change, and bump
 // CURRENT_TERMS_VERSION in lib/terms.ts.
-//
-// TODO (vóór live-gang): vul de juridische entiteit van MasjidConnect in
-// (rechtsvorm, adres, KBO/BTW) en de bevoegde rechtbank. Tot dan toont de UI
-// een generieke omschrijving zonder verzonnen gegevens.
+// The legal entity is identified in the EntityFooter below; the full formal
+// version (with address + court) lives in legal/gebruikersovereenkomst.md.
+import { EntityFooter } from './EntityFooter'
 
 type Block =
   | { p: string }
@@ -107,6 +106,7 @@ const sections: Section[] = [
 
 export function VoorwaardenContent() {
   return (
+    <>
     <div className="space-y-5">
       {sections.map(({ title, blocks }) => (
         <div key={title} className="card p-6">
@@ -138,5 +138,7 @@ export function VoorwaardenContent() {
         </div>
       ))}
     </div>
+    <EntityFooter />
+    </>
   )
 }
