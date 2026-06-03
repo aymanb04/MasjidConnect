@@ -17,5 +17,14 @@ csv_test.txt
 SECURITY
 TOEKOMSTIGE_FUNCTIES.txt
 
-# Internal operational notes (not for git history)
+# Internal operational / sensitive notes (not for git history)
 SECURITY_TODO.md
+SECURITY_FINDINGS.md
+GDPR_NOTES.txt
+DEMO_ACCOUNT.txt
+
+# Local references, test data and build artifacts
+test_import.csv
+tsconfig.tsbuildinfo
+Smartschool-Privacyverklaring.pdf
+Schermafbeelding*.png
