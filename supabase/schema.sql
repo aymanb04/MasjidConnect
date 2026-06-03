@@ -163,6 +163,9 @@ CREATE TABLE public.profiles (
   is_active      boolean          DEFAULT true,
   -- GDPR: true after anonymize. Prevents reactivation of erased users.
   is_anonymized  boolean          NOT NULL DEFAULT false,
+  -- Voorwaarden acceptance (see migration 10 + /akkoord gate)
+  terms_accepted_at timestamp with time zone,
+  terms_version  integer          NOT NULL DEFAULT 0,
   last_seen_at   timestamp with time zone,
   created_at     timestamp with time zone DEFAULT now(),
   updated_at     timestamp with time zone DEFAULT now(),
@@ -400,7 +403,49 @@ CREATE TABLE public.exam_scores (
   CONSTRAINT exam_scores_pkey PRIMARY KEY (id),
   CONSTRAINT exam_scores_class_id_student_id_semester_key UNIQUE (class_id, student_id, semester),
   CONSTRAINT exam_scores_class_id_fkey   FOREIGN KEY (class_id)   REFERENCES public.classes(id)   ON DELETE CASCADE,
-  CONSTRAINT exam_scores_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)  ON DELETE CASCADE
+  CONSTRAINT exam_scores_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)  ON DELETE CASCADE,
+  -- Cross-column guardrail; applied to live DB 2026-05-30 (see migration 11)
+  CONSTRAINT score_within_max CHECK (score <= max_score)
+);
+
+-- Bug reports / suggestions / questions from users (migration 8). Super_admin reads.
+CREATE TABLE public.feedback (
+  id         uuid        NOT NULL DEFAULT uuid_generate_v4(),
+  tenant_id  uuid,
+  user_id    uuid        NOT NULL,
+  user_name  text,
+  user_role  text,
+  type       text        NOT NULL DEFAULT 'bug'
+               CHECK (type IN ('bug', 'suggestie', 'vraag')),
+  message    text        NOT NULL,
+  page_url   text,
+  is_read    boolean     NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT feedback_pkey PRIMARY KEY (id),
+  CONSTRAINT feedback_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE
+);
+
+-- PDF report per student per class per semester per year (migration 8). Private storage.
+CREATE TABLE public.student_reports (
+  id             uuid    NOT NULL DEFAULT uuid_generate_v4(),
+  tenant_id      uuid    NOT NULL,
+  student_id     uuid    NOT NULL,
+  class_id       uuid    NOT NULL,
+  school_year_id uuid    NOT NULL,
+  uploaded_by    uuid    NOT NULL,
+  semester       int     NOT NULL CHECK (semester IN (1, 2)),
+  file_name      text    NOT NULL,
+  file_url       text    NOT NULL,  -- storage path (not public URL)
+  file_size      bigint,
+  file_type      text,
+  created_at     timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT student_reports_pkey PRIMARY KEY (id),
+  CONSTRAINT student_reports_unique_slot UNIQUE (student_id, class_id, school_year_id, semester),
+  CONSTRAINT student_reports_tenant_fkey   FOREIGN KEY (tenant_id)      REFERENCES public.tenants(id)      ON DELETE CASCADE,
+  CONSTRAINT student_reports_student_fkey  FOREIGN KEY (student_id)     REFERENCES public.profiles(id)     ON DELETE CASCADE,
+  CONSTRAINT student_reports_class_fkey    FOREIGN KEY (class_id)       REFERENCES public.classes(id)      ON DELETE CASCADE,
+  CONSTRAINT student_reports_year_fkey     FOREIGN KEY (school_year_id) REFERENCES public.school_years(id) ON DELETE CASCADE,
+  CONSTRAINT student_reports_uploader_fkey FOREIGN KEY (uploaded_by)    REFERENCES public.profiles(id)
 );
 
 CREATE TABLE public.invitations (
@@ -483,6 +528,8 @@ CREATE INDEX IF NOT EXISTS idx_submission_files_submission ON public.submission_
 -- content
 CREATE INDEX IF NOT EXISTS idx_lesson_modules_class    ON public.lesson_modules(class_id);
 CREATE INDEX IF NOT EXISTS idx_announcements_tenant_id ON public.announcements(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_student_reports_student ON public.student_reports(student_id);
+CREATE INDEX IF NOT EXISTS idx_student_reports_class   ON public.student_reports(class_id);
 
 -- invitations / audit
 CREATE INDEX IF NOT EXISTS idx_invitations_email       ON public.invitations(email);
@@ -511,6 +558,8 @@ ALTER TABLE public.lesson_modules     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.module_documents   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance_records  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.feedback           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.student_reports    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invitations        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments           ENABLE ROW LEVEL SECURITY;
@@ -1129,11 +1178,49 @@ CREATE POLICY "admin_manage_docs" ON public.module_documents
   );
 
 -- ============================================================
--- POLICIES — attendance_sessions / attendance_records
--- No policies defined yet — feature UI not built.
--- With RLS enabled and no policies, these tables are inaccessible
--- to all non-service-role callers (safe default).
--- Add policies here when the attendance feature is implemented.
+-- POLICIES — attendance_sessions / attendance_records (migration 8/8b)
+-- ============================================================
+
+CREATE POLICY "teacher_admin_manage_attendance_sessions" ON public.attendance_sessions
+  FOR ALL TO authenticated
+  USING (
+    teacher_id = (SELECT auth.uid())
+    OR (
+      (SELECT get_my_role()) IN ('admin', 'super_admin')
+      AND class_id IN (SELECT id FROM classes WHERE tenant_id = (SELECT get_my_tenant_id()))
+    )
+  )
+  WITH CHECK (
+    teacher_id = (SELECT auth.uid())
+    OR (SELECT get_my_role()) IN ('admin', 'super_admin')
+  );
+
+CREATE POLICY "student_view_own_class_sessions" ON public.attendance_sessions
+  FOR SELECT TO authenticated
+  USING (
+    class_id IN (SELECT class_id FROM class_students WHERE student_id = (SELECT auth.uid()))
+  );
+
+CREATE POLICY "teacher_admin_manage_attendance_records" ON public.attendance_records
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM attendance_sessions s
+      WHERE s.id = attendance_records.session_id
+        AND (s.teacher_id = (SELECT auth.uid()) OR (SELECT get_my_role()) IN ('admin', 'super_admin'))
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM attendance_sessions s
+      WHERE s.id = attendance_records.session_id
+        AND (s.teacher_id = (SELECT auth.uid()) OR (SELECT get_my_role()) IN ('admin', 'super_admin'))
+    )
+  );
+
+CREATE POLICY "student_view_own_attendance_records" ON public.attendance_records
+  FOR SELECT TO authenticated
+  USING (student_id = (SELECT auth.uid()));
 -- ============================================================
 
 -- ============================================================
@@ -1211,3 +1298,60 @@ CREATE POLICY admin_manage_exam_scores ON exam_scores
         AND c.tenant_id = (SELECT get_my_tenant_id())
     )
   );
+
+-- ============================================================
+-- POLICIES — feedback (migration 8/8b)
+-- ============================================================
+
+CREATE POLICY "users_insert_feedback" ON public.feedback
+  FOR INSERT TO authenticated
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "super_admin_manage_feedback" ON public.feedback
+  FOR ALL TO authenticated
+  USING ((SELECT is_super_admin()));
+
+-- ============================================================
+-- POLICIES — student_reports (migration 8/8b)
+-- ============================================================
+
+CREATE POLICY "student_view_own_reports" ON public.student_reports
+  FOR SELECT TO authenticated
+  USING (student_id = (SELECT auth.uid()));
+
+CREATE POLICY "teacher_manage_class_reports" ON public.student_reports
+  FOR ALL TO authenticated
+  USING (
+    (SELECT get_my_role()) = 'teacher'
+    AND tenant_id = (SELECT get_my_tenant_id())
+    AND EXISTS (
+      SELECT 1 FROM class_teachers
+      WHERE class_teachers.class_id = student_reports.class_id
+        AND class_teachers.teacher_id = (SELECT auth.uid())
+    )
+  )
+  WITH CHECK (
+    (SELECT get_my_role()) = 'teacher'
+    AND tenant_id = (SELECT get_my_tenant_id())
+    AND uploaded_by = (SELECT auth.uid())
+    AND EXISTS (
+      SELECT 1 FROM class_teachers
+      WHERE class_teachers.class_id = student_reports.class_id
+        AND class_teachers.teacher_id = (SELECT auth.uid())
+    )
+  );
+
+CREATE POLICY "admin_manage_reports" ON public.student_reports
+  FOR ALL TO authenticated
+  USING (
+    (SELECT get_my_role()) IN ('admin', 'super_admin')
+    AND tenant_id = (SELECT get_my_tenant_id())
+  )
+  WITH CHECK (
+    (SELECT get_my_role()) IN ('admin', 'super_admin')
+    AND tenant_id = (SELECT get_my_tenant_id())
+  );
+
+CREATE POLICY "super_admin_all_reports" ON public.student_reports
+  FOR ALL TO authenticated
+  USING ((SELECT is_super_admin()));

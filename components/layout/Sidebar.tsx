@@ -107,10 +107,16 @@ export default function Sidebar({ profile, tenant, onClose }: Props) {
             <LogOut size={15} />
           </button>
         </div>
-        <Link href="/privacy" onClick={onClose}
-          className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors mt-1">
-          <Lock size={11}/> Privacy
-        </Link>
+        <div className="flex items-center gap-3 mt-1">
+          <Link href="/privacy" onClick={onClose}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            <Lock size={11}/> Privacy
+          </Link>
+          <Link href="/voorwaarden" onClick={onClose}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            <FileText size={11}/> Voorwaarden
+          </Link>
+        </div>
       </div>
     </aside>
   )
