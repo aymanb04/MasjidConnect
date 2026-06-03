@@ -1,5 +1,5 @@
 # MasjidConnect — Project Status
-**Last updated: 2026-05-30**
+**Last updated: 2026-06-03**
 **Author of this document: Ayman Boulayoune**
 
 ---
@@ -81,6 +81,10 @@ Migration scripts in `supabase/` that may still need running on a fresh DB:
   for RLS perf. Idempotent. Applied to live DB on 2026-05-25.
 - `7c_rls_scope_to_authenticated.sql` — `ALTER POLICY ... TO authenticated`
   for all 65 policies. Applied to live DB on 2026-05-25.
+- `9_exam_scores.sql` — exam_scores table + RLS (see 2026-05-27 session).
+- `10_terms_acceptance.sql` — adds `terms_accepted_at` + `terms_version` to
+  `profiles` for the Voorwaarden acceptance gate. ✅ Applied to live DB 2026-06-03.
+  No RLS change needed (existing `update_own_profile` policy covers it).
 
 ---
 
@@ -112,7 +116,9 @@ Migration scripts in `supabase/` that may still need running on a fresh DB:
 | `/superadmin` | Super admin only | Multi-tenant overview. Expandable tenant rows, per-tenant user lists, archive/reactivate, archived toggle. |
 | `/aanwezigheid` | All roles | Attendance. Teachers mark today's attendance per student; admins see history per class with drill-down; students see own records. |
 | `/klassen/[klasId]/rapporten` | All roles | Report cards per student. Teachers/admins upload PDF per semester; students download own. |
-| `/privacy` | All roles | Privacy policy page. |
+| `/privacy` | All roles | Privacy policy page. Renders shared `components/legal/PrivacyContent`. |
+| `/voorwaarden` | All roles | Gebruikersvoorwaarden (Terms of Use) page. Renders shared `components/legal/VoorwaardenContent`. |
+| `/akkoord` | Logged-in, not-yet-accepted | Standalone acceptance gate (outside the dashboard layout). Shows privacy + terms inline; one checkbox writes `terms_accepted_at` + `terms_version`. Dashboard layout routes un-accepted users here. |
 
 ---
 
@@ -196,17 +202,29 @@ Full breakdown in `GDPR_NOTES.txt` (project root, not tracked by git).
 - Lesson modules are class-owned, not teacher-owned (persist after teacher leaves)
 - RLS enforces tenant isolation
 - Service role key never exposed to client
+- **In-app Voorwaarden acceptance gate** (`/akkoord`) — users must accept the
+  privacy statement + terms before using the app; versioned re-acceptance via
+  `terms_version` (added 2026-06-03).
 
-### Still needs attention (legal review required)
-- [ ] Parental consent flow for minor students (mosque schools teach age 6-18)
-- [ ] Data Processing Agreement (DPA/verwerkersovereenkomst) with each mosque
-- [ ] Sub-processor disclosure: Supabase must be named as sub-processor; MasjidConnect must sign Supabase's DPA
-- [ ] Privacy policy and privacy notice for end users
-- [ ] Data Subject Access Request (DSAR) — no data export feature exists
+### Legal documents drafted 2026-06-03 (in `legal/` — CONCEPT, not lawyer-reviewed)
+- [x] **Privacyverklaring** (end-user) — `legal/privacyverklaring.md` + in-app `/privacy`
+- [x] **Gebruikersovereenkomst** (Terms of Use) — `legal/gebruikersovereenkomst.md` + in-app `/voorwaarden`
+- [x] **Verwerkersovereenkomst (DPA)** template — `legal/verwerkersovereenkomst.md`
+- [x] **Sub-processor disclosure** (Supabase/Vercel/Resend/Upstash) — `legal/sub-verwerkers.md`
+- [x] **Register of processing activities (Art. 30)** — `legal/verwerkingsregister.md`
+- [x] **Parental info/consent form** — `legal/ouder-toestemming.md`
+
+### Still needs attention
+- [ ] **Fill `[INVULLEN: ...]` placeholders** — MasjidConnect legal entity (rechtsvorm, adres, KBO/BTW), privacy e-mail, **confirm Supabase EU hosting region**
+- [ ] **Legal review** of all drafts (DPA especially) before any mosque signs / before September 2026 launch
+- [ ] Sign + archive each sub-processor's DPA (Supabase, Vercel, Resend, Upstash)
+- [ ] Data Subject Access Request (DSAR) — no self-service data export feature exists (manual for now)
 - [ ] Retention policy enforcement: suggested 2 years after archiving → auto-anonymize (not implemented)
 - [ ] Consider scrubbing `text_content` of submissions on GDPR erasure (currently kept)
-- [ ] Breach notification procedure (72-hour rule to Belgian DPA — GBA)
-- [ ] Register of processing activities (Art. 30 GDPR)
+- [ ] Breach notification procedure (72-hour rule to GBA) — drafted in DPA art. 9, not yet a formal internal runbook
+- [ ] Decide final legal basis for minors (contract/legitimate interest vs. consent) — pending legal advice
+
+See `legal/README.md` for the full fill-in + review checklist.
 
 ---
 
@@ -254,6 +272,93 @@ Prioritised based on what's partially prepared in DB:
 | 10 | Meertaligheid | No | NL/FR/AR (RTL for Arabic) |
 | 11 | Quran-voortgang tracker | No | Track memorisation (hifz) per student |
 | 12 | API / Integraties | No | Google Classroom, webhooks, open API |
+
+---
+
+## 14. What Was Discussed This Session (2026-06-03)
+
+### Legal / GDPR documents + in-app acceptance gate
+
+Focus: agreements + privacy. Used the Belgian school platform **Smartschool** as
+the structural benchmark (its Oct 2025 privacyverklaring PDF + the pasted
+gebruikersovereenkomst are kept in the project root as reference) and the GBA's
+official Art. 30 field list.
+
+**Created `legal/` folder (all CONCEPT — not lawyer-reviewed, placeholders marked `[INVULLEN: ...]`):**
+
+| File | What |
+|---|---|
+| `legal/privacyverklaring.md` | End-user privacy statement |
+| `legal/gebruikersovereenkomst.md` | Terms of Use |
+| `legal/verwerkersovereenkomst.md` | DPA (Art. 28) + 3 annexes |
+| `legal/sub-verwerkers.md` | Sub-processor list (Supabase/Vercel/Resend/Upstash) |
+| `legal/verwerkingsregister.md` | Art. 30 register (processor + controller parts) |
+| `legal/ouder-toestemming.md` | Parental info/consent form |
+| `legal/README.md` | Index + fill-in/legal-review checklist |
+
+Core design: **mosque = verwerkingsverantwoordelijke, MasjidConnect = verwerker**
+(mirrors Smartschool). Deliberately omitted Smartschool's **DISCIMUS** reporting —
+it only applies to official Flemish schools, not mosque schools.
+
+**In-app acceptance gate (new feature):**
+- Migration `supabase/10_terms_acceptance.sql` — `terms_accepted_at` + `terms_version`
+  on `profiles` (✅ applied to live DB 2026-06-03). No RLS change needed.
+- `lib/terms.ts` — `CURRENT_TERMS_VERSION = 1` + `needsTermsAcceptance()`.
+- Shared content: `components/legal/PrivacyContent.tsx`, `VoorwaardenContent.tsx`.
+- Pages: `/privacy` (refactored), `/voorwaarden` (new), `/akkoord` (new gate, standalone).
+- Gate in `app/(dashboard)/layout.tsx` routes un-accepted users to `/akkoord`.
+- Sidebar: added a "Voorwaarden" link next to "Privacy".
+- Checkbox wording is "gelezen / ga akkoord" (acknowledge + agree) — NOT framed as
+  consent, since the legal basis is contract/legitimate interest.
+- Typecheck passes (`npx tsc --noEmit` → 0).
+
+Migration 10 applied to live DB and Auth email limit set to 200/hour (both
+2026-06-03). **Not committed yet.** Pending: fill entity/region placeholders +
+legal review before real users.
+
+---
+
+## 14. What Was Discussed This Session (2026-06-01)
+
+### Resend DNS fix
+
+**Root cause:** DNS records were added to Combell's panel, but `masjidconnect.be` nameservers are `ns1.vercel-dns.com` (Vercel took over DNS when the domain was added to the Vercel project). Combell records are invisible to the world.
+
+**Fix:** Deleted records from Combell, added all 5 records in Vercel DNS panel (Settings → Domains → masjidconnect.be → DNS Records):
+
+| Name | Type | Value |
+|---|---|---|
+| *(blank)* | TXT | `v=spf1 include:amazonses.com ~all` |
+| `resend._domainkey` | TXT | DKIM public key from Resend |
+| `send` | TXT | `v=spf1 include:amazonses.com ~all` |
+| `send` | MX | `feedback-smtp.eu-west-1.amazonses.com` (priority 10) |
+| `_dmarc` | TXT | `v=DMARC1; p=none;` |
+
+Resend domain status: **Verified** ✅
+
+### CSV import re-enabled
+
+Set `IMPORT_DISABLED = false` in `CsvImportButton.tsx` (commit `1e0772a`).
+
+### Email deliverability
+
+First test invite went to spam. Accepted for demo phase — new domain has no sending reputation yet. Workaround: ask recipient to mark as "geen spam". Reputation builds over time automatically.
+
+### Still pending from this session
+
+- [ ] Supabase → Authentication → Rate Limits → set email limit to **200/hour** (manual, in dashboard)
+
+### Staging environment + load testing (planned next session)
+
+Goal: simulate hundreds of concurrent users before real school year (September 2026 deadline).
+
+**Plan:**
+1. Create a second free Supabase project (`masjidconnect-staging`)
+2. Deploy separate Vercel branch with staging env vars
+3. Load test with **k6** (open source, JS-based) against staging — simulate 200 concurrent users hitting login, klassen, huiswerk endpoints
+4. Activate **Supabase Supavisor connection pooler** (Settings → Database → use pooler connection string) before going to production with real users — free tier caps at ~60 direct connections, pooler handles hundreds of clients
+
+**Key bottleneck:** Supabase DB connections, not Vercel (serverless, auto-scales). At real scale (multi-mosque), upgrade to Supabase Pro will be needed.
 
 ---
 
@@ -690,6 +795,10 @@ e506817 chore: add TypeScript interfaces for new tables
 | `app/(dashboard)/beheer/jaarovergang/page.tsx` | Year transition |
 | `app/(dashboard)/klassen/[klasId]/scores/page.tsx` | Gradebook |
 | `app/(dashboard)/rooster/page.tsx` | Weekly schedule |
+| `legal/` | All GDPR/legal documents (privacyverklaring, DPA, register, terms, parental, sub-processors) + README checklist |
+| `lib/terms.ts` | Voorwaarden version constant + `needsTermsAcceptance()`; bump version to force re-acceptance |
+| `components/legal/` | Shared `PrivacyContent` + `VoorwaardenContent`, used by the pages and the `/akkoord` gate |
+| `app/akkoord/page.tsx` | Acceptance gate shown before dashboard access |
 | `GDPR_NOTES.txt` | Full GDPR analysis (not in git) |
 | `TOEKOMSTIGE_FUNCTIES.txt` | Future features list (not in git) |
 | `test_import.csv` | Test CSV for bulk import (not in git) |

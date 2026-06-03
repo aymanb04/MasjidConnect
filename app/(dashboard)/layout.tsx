@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useProfile } from '@/lib/hooks/useProfile'
+import { needsTermsAcceptance } from '@/lib/terms'
 import { supabase } from '@/lib/supabase/singleton'
 import Sidebar from '@/components/layout/Sidebar'
 import { FeedbackButton } from '@/components/features/feedback/FeedbackButton'
@@ -16,8 +17,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [tenant, setTenant] = useState<Tenant | null>(null)
 
     useEffect(() => {
-        if (!loading && !profile) {
+        if (loading) return
+        if (!profile) {
             router.push('/login')
+        } else if (needsTermsAcceptance(profile)) {
+            router.push('/akkoord')
         }
     }, [loading, profile])
 
@@ -39,7 +43,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )
     }
 
-    if (!profile) return null
+    // Don't flash the dashboard while redirecting to /login or /akkoord.
+    if (!profile || needsTermsAcceptance(profile)) return null
 
     return (
         <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#F8F7F4' }}>
