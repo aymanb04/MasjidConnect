@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { supabase } from '@/lib/supabase/singleton'
-import { CURRENT_TERMS_VERSION, needsTermsAcceptance } from '@/lib/terms'
+import { needsTermsAcceptance } from '@/lib/terms'
 import { PrivacyContent } from '@/components/legal/PrivacyContent'
 import { VoorwaardenContent } from '@/components/legal/VoorwaardenContent'
 import { Loader2 } from 'lucide-react'
@@ -26,15 +26,23 @@ export default function AkkoordPage() {
         if (!profile || !checked) return
         setSaving(true)
         setError('')
-        const { error } = await supabase
-            .from('profiles')
-            .update({
-                terms_accepted_at: new Date().toISOString(),
-                terms_version: CURRENT_TERMS_VERSION,
-            })
-            .eq('id', profile.id)
 
-        if (error) {
+        // Write goes through an API route with the service role: the
+        // update_own_profile RLS policy recurses on a client-side self-update,
+        // so the client cannot write its own profile directly.
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) {
+            setError('Je sessie is verlopen. Log opnieuw in.')
+            setSaving(false)
+            return
+        }
+
+        const res = await fetch('/api/terms/accept', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${session.access_token}` },
+        })
+
+        if (!res.ok) {
             setError('Er liep iets mis bij het opslaan. Probeer het opnieuw.')
             setSaving(false)
             return
