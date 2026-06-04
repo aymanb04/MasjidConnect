@@ -22,6 +22,7 @@ SECURITY_TODO.md
 SECURITY_FINDINGS.md
 GDPR_NOTES.txt
 DEMO_ACCOUNT.txt
+INTERVIEW_AUDIT.md
 
 # Local references, test data and build artifacts
 test_import.csv
