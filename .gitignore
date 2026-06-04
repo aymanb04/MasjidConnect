@@ -23,6 +23,12 @@ SECURITY_FINDINGS.md
 GDPR_NOTES.txt
 DEMO_ACCOUNT.txt
 INTERVIEW_AUDIT.md
+PROJECT_STATUS.md
+SECURITY_AUDIT_REPORT.md
+
+# Legal docs contain the owner's home address + KBO — keep out of the public repo
+# (the in-app /privacy and /voorwaarden pages render from components/legal, not these)
+legal/
 
 # Local references, test data and build artifacts
 test_import.csv
