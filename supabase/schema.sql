@@ -1,8 +1,16 @@
 -- MasjidConnect — Supabase Schema
--- Last synced: 2026-05-27
+-- Last synced: 2026-06-12
 -- Source of truth: pg_policies + pg_constraint + pg_indexes
 -- WARNING: This file is a reference/documentation copy. Do NOT run it as-is
 --          against a live database (no idempotency guards, no migration order).
+--
+-- 2026-06-12 resync (migration 12 — tenant-scope fixes):
+--   - Admin branches of view_class_students, view_class_teachers,
+--     teacher_view_submissions, teacher_update_submissions now tenant-scoped
+--   - teacher_view_submission_files admin/super_admin branch removed
+--     (covered by admin_view_submission_files + super_admin policy)
+--   - Redundant teacher_view_class_students policy dropped
+--   - New STORAGE POLICIES section (previously dashboard-only, undocumented)
 --
 -- 2026-05-25 resync added:
 --   - ON DELETE CASCADE / SET NULL on all FKs (matches live state)
@@ -12,11 +20,6 @@
 --   - profiles.is_anonymized column (replaces 'Verwijderd' first_name sentinel)
 --   - submission_feedback.score CHECK constraint
 --   - New INDEXES section enumerating all FK + lookup indexes
---
--- Known live-DB cleanup pending in this file (intentionally not represented):
---   - Live DB still has duplicate UNIQUE policies on class_students (broad
---     view_class_students vs narrow teacher_view_class_students). Pure
---     redundancy, not a bug — defer until next RLS audit pass.
 
 -- ============================================================
 -- HELPER FUNCTIONS
@@ -675,12 +678,20 @@ CREATE POLICY "super_admin_all_classes" ON public.classes
 -- POLICIES — class_teachers
 -- ============================================================
 
+-- Admin branch tenant-scoped (migration 12)
 CREATE POLICY "view_class_teachers" ON public.class_teachers
   FOR SELECT USING (
     is_super_admin()
-    OR (get_my_role())::text = 'admin'
     OR teacher_id = auth.uid()
     OR am_i_student_of_class(class_id)
+    OR (
+      (get_my_role())::text = 'admin'
+      AND EXISTS (
+        SELECT 1 FROM classes c
+        WHERE c.id = class_teachers.class_id
+          AND c.tenant_id = get_my_tenant_id()
+      )
+    )
   );
 
 -- WITH CHECK scopes writes to own tenant (prevents cross-tenant teacher assignment)
@@ -716,24 +727,22 @@ CREATE POLICY "super_admin_class_teachers" ON public.class_teachers
 -- POLICIES — class_students
 -- ============================================================
 
+-- Admin branch tenant-scoped (migration 12). The redundant
+-- teacher_view_class_students policy was dropped in the same migration
+-- (teachers are covered here via am_i_teacher_of_class).
 CREATE POLICY "view_class_students" ON public.class_students
   FOR SELECT USING (
     is_super_admin()
-    OR (get_my_role())::text = 'admin'
     OR student_id = auth.uid()
     OR am_i_teacher_of_class(class_id)
-  );
-
-CREATE POLICY "teacher_view_class_students" ON public.class_students
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM class_teachers ct
-      JOIN classes c ON c.id = ct.class_id
-      WHERE ct.teacher_id = auth.uid()
-        AND ct.class_id = class_students.class_id
-        AND c.tenant_id = get_my_tenant_id()
+    OR (
+      (get_my_role())::text = 'admin'
+      AND EXISTS (
+        SELECT 1 FROM classes c
+        WHERE c.id = class_students.class_id
+          AND c.tenant_id = get_my_tenant_id()
+      )
     )
-    OR (get_my_role())::text = 'admin'
   );
 
 -- WITH CHECK scopes writes to own tenant (prevents cross-tenant student enrollment)
@@ -952,6 +961,8 @@ CREATE POLICY "student_update_own_submissions" ON public.submissions
 CREATE POLICY "student_delete_own_submissions" ON public.submissions
   FOR DELETE USING (student_id = auth.uid());
 
+-- Admin branch tenant-scoped (migration 12) — submissions contain student
+-- homework content; a bare admin branch granted cross-tenant read/write.
 CREATE POLICY "teacher_view_submissions" ON public.submissions
   FOR SELECT USING (
     EXISTS (
@@ -960,7 +971,15 @@ CREATE POLICY "teacher_view_submissions" ON public.submissions
       WHERE a.id = submissions.assignment_id
         AND ct.teacher_id = auth.uid()
     )
-    OR (get_my_role())::text = 'admin'
+    OR (
+      (get_my_role())::text = 'admin'
+      AND EXISTS (
+        SELECT 1 FROM assignments a
+        JOIN classes c ON c.id = a.class_id
+        WHERE a.id = submissions.assignment_id
+          AND c.tenant_id = get_my_tenant_id()
+      )
+    )
   );
 
 CREATE POLICY "teacher_update_submissions" ON public.submissions
@@ -971,7 +990,32 @@ CREATE POLICY "teacher_update_submissions" ON public.submissions
       WHERE a.id = submissions.assignment_id
         AND ct.teacher_id = auth.uid()
     )
-    OR (get_my_role())::text = 'admin'
+    OR (
+      (get_my_role())::text = 'admin'
+      AND EXISTS (
+        SELECT 1 FROM assignments a
+        JOIN classes c ON c.id = a.class_id
+        WHERE a.id = submissions.assignment_id
+          AND c.tenant_id = get_my_tenant_id()
+      )
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM assignments a
+      JOIN class_teachers ct ON ct.class_id = a.class_id
+      WHERE a.id = submissions.assignment_id
+        AND ct.teacher_id = auth.uid()
+    )
+    OR (
+      (get_my_role())::text = 'admin'
+      AND EXISTS (
+        SELECT 1 FROM assignments a
+        JOIN classes c ON c.id = a.class_id
+        WHERE a.id = submissions.assignment_id
+          AND c.tenant_id = get_my_tenant_id()
+      )
+    )
   );
 
 CREATE POLICY "super_admin_all_submissions" ON public.submissions
@@ -1050,6 +1094,8 @@ CREATE POLICY "student_manage_own_files" ON public.submission_files
     )
   );
 
+-- Admin/super_admin branch removed (migration 12) — admins are covered by the
+-- tenant-scoped admin_view_submission_files below, super_admin by its ALL policy.
 CREATE POLICY "teacher_view_submission_files" ON public.submission_files
   FOR SELECT USING (
     EXISTS (
@@ -1059,7 +1105,6 @@ CREATE POLICY "teacher_view_submission_files" ON public.submission_files
       WHERE s.id = submission_files.submission_id
         AND ct.teacher_id = auth.uid()
     )
-    OR (get_my_role())::text = ANY (ARRAY['admin', 'super_admin'])
   );
 
 CREATE POLICY "admin_view_submission_files" ON public.submission_files
@@ -1355,3 +1400,213 @@ CREATE POLICY "admin_manage_reports" ON public.student_reports
 CREATE POLICY "super_admin_all_reports" ON public.student_reports
   FOR ALL TO authenticated
   USING ((SELECT is_super_admin()));
+
+-- ============================================================
+-- STORAGE POLICIES — storage.objects
+-- Synced from live pg_policies 2026-06-12 (migration 12). These were
+-- previously dashboard-only and existed in no repo file.
+--
+-- Path conventions (the policies depend on them):
+--   submission-files:  {user_id}/{assignment_id}/{ts}_{name}   → foldername[1] = user id
+--   student-reports:   {tenant_id}/{student_id}/{class_id}_s{semester}.{ext}
+--                                                              → [1] = tenant, [2] = student
+--   module-documents:  modules/{module_id}/{ts}_{name}         → [1] = 'modules', [2] = module id
+--
+-- ⚠️ Inside any EXISTS subquery that joins other tables, the object path MUST
+--    be referenced as storage.objects.name — unqualified `name` binds to the
+--    joined table's column and the policy silently never matches.
+-- ============================================================
+
+-- ---- submission-files ----------------------------------------------------
+
+CREATE POLICY "submission_files_insert" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'submission-files'
+    AND (storage.foldername(name))[1] = (auth.uid())::text
+  );
+
+-- Own folder, teacher of the file's class, or admin of the file's tenant (migration 12)
+CREATE POLICY "submission_files_select" ON storage.objects
+  FOR SELECT USING (
+    bucket_id = 'submission-files'
+    AND (
+      (storage.foldername(name))[1] = (auth.uid())::text
+      OR EXISTS (
+        SELECT 1 FROM submission_files sf
+        JOIN submissions s     ON s.id = sf.submission_id
+        JOIN assignments a     ON a.id = s.assignment_id
+        JOIN class_teachers ct ON ct.class_id = a.class_id
+        WHERE sf.file_url = storage.objects.name
+          AND ct.teacher_id = auth.uid()
+      )
+      OR (
+        (get_my_role())::text = 'admin'
+        AND EXISTS (
+          SELECT 1 FROM submission_files sf
+          JOIN submissions s ON s.id = sf.submission_id
+          JOIN assignments a ON a.id = s.assignment_id
+          JOIN classes c     ON c.id = a.class_id
+          WHERE sf.file_url = storage.objects.name
+            AND c.tenant_id = get_my_tenant_id()
+        )
+      )
+      OR is_super_admin()
+    )
+  );
+
+-- Own folder or admin of the file's tenant (migration 12)
+CREATE POLICY "submission_files_delete" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'submission-files'
+    AND (
+      (storage.foldername(name))[1] = (auth.uid())::text
+      OR (
+        (get_my_role())::text = 'admin'
+        AND EXISTS (
+          SELECT 1 FROM submission_files sf
+          JOIN submissions s ON s.id = sf.submission_id
+          JOIN assignments a ON a.id = s.assignment_id
+          JOIN classes c     ON c.id = a.class_id
+          WHERE sf.file_url = storage.objects.name
+            AND c.tenant_id = get_my_tenant_id()
+        )
+      )
+      OR is_super_admin()
+    )
+  );
+
+-- ---- student-reports -------------------------------------------------------
+-- Staff CRUD tenant-scoped via folder[1]; super_admin global (migration 12).
+
+CREATE POLICY "reports_staff_select" ON storage.objects
+  FOR SELECT USING (
+    bucket_id = 'student-reports'
+    AND (
+      is_super_admin()
+      OR (
+        (storage.foldername(name))[1] = (get_my_tenant_id())::text
+        AND (get_my_role())::text = ANY (ARRAY['teacher', 'admin'])
+      )
+    )
+  );
+
+CREATE POLICY "reports_staff_insert" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'student-reports'
+    AND (
+      is_super_admin()
+      OR (
+        (storage.foldername(name))[1] = (get_my_tenant_id())::text
+        AND (get_my_role())::text = ANY (ARRAY['teacher', 'admin'])
+      )
+    )
+  );
+
+CREATE POLICY "reports_staff_update" ON storage.objects
+  FOR UPDATE
+  USING (
+    bucket_id = 'student-reports'
+    AND (
+      is_super_admin()
+      OR (
+        (storage.foldername(name))[1] = (get_my_tenant_id())::text
+        AND (get_my_role())::text = ANY (ARRAY['teacher', 'admin'])
+      )
+    )
+  )
+  WITH CHECK (
+    bucket_id = 'student-reports'
+    AND (
+      is_super_admin()
+      OR (
+        (storage.foldername(name))[1] = (get_my_tenant_id())::text
+        AND (get_my_role())::text = ANY (ARRAY['teacher', 'admin'])
+      )
+    )
+  );
+
+CREATE POLICY "reports_staff_delete" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'student-reports'
+    AND (
+      is_super_admin()
+      OR (
+        (storage.foldername(name))[1] = (get_my_tenant_id())::text
+        AND (get_my_role())::text = ANY (ARRAY['teacher', 'admin'])
+      )
+    )
+  );
+
+-- Student reads own report: folder[1] = own tenant, folder[2] = own uid (migration 12,
+-- fixes the bug where [1] was compared to auth.uid() and never matched)
+CREATE POLICY "reports_student_select_own" ON storage.objects
+  FOR SELECT USING (
+    bucket_id = 'student-reports'
+    AND (storage.foldername(name))[1] = (get_my_tenant_id())::text
+    AND (storage.foldername(name))[2] = (auth.uid())::text
+  );
+
+-- ---- module-documents ------------------------------------------------------
+-- Scoped via folder[2] = module id → lesson_modules → classes (migration 12).
+-- Students need the module visible; teachers their own classes; admins own tenant.
+
+CREATE POLICY "module_docs_select" ON storage.objects
+  FOR SELECT USING (
+    bucket_id = 'module-documents'
+    AND (
+      is_super_admin()
+      OR (
+        (storage.foldername(name))[1] = 'modules'
+        AND EXISTS (
+          SELECT 1 FROM lesson_modules lm
+          JOIN classes c ON c.id = lm.class_id
+          WHERE lm.id = ((storage.foldername(storage.objects.name))[2])::uuid
+            AND (
+              (lm.is_visible AND am_i_student_of_class(lm.class_id))
+              OR am_i_teacher_of_class(lm.class_id)
+              OR ((get_my_role())::text = 'admin' AND c.tenant_id = get_my_tenant_id())
+            )
+        )
+      )
+    )
+  );
+
+CREATE POLICY "module_docs_insert" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'module-documents'
+    AND (
+      is_super_admin()
+      OR (
+        (storage.foldername(name))[1] = 'modules'
+        AND EXISTS (
+          SELECT 1 FROM lesson_modules lm
+          JOIN classes c ON c.id = lm.class_id
+          WHERE lm.id = ((storage.foldername(storage.objects.name))[2])::uuid
+            AND (
+              am_i_teacher_of_class(lm.class_id)
+              OR ((get_my_role())::text = 'admin' AND c.tenant_id = get_my_tenant_id())
+            )
+        )
+      )
+    )
+  );
+
+CREATE POLICY "module_docs_delete" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'module-documents'
+    AND (
+      is_super_admin()
+      OR (
+        (storage.foldername(name))[1] = 'modules'
+        AND EXISTS (
+          SELECT 1 FROM lesson_modules lm
+          JOIN classes c ON c.id = lm.class_id
+          WHERE lm.id = ((storage.foldername(storage.objects.name))[2])::uuid
+            AND (
+              am_i_teacher_of_class(lm.class_id)
+              OR ((get_my_role())::text = 'admin' AND c.tenant_id = get_my_tenant_id())
+            )
+        )
+      )
+    )
+  );
