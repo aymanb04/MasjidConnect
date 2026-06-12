@@ -8,6 +8,7 @@ const LIMITS: Record<string, number> = {
   '/api/user/archive':    30,
   '/api/user/reactivate': 30,
   '/api/invite':          30,
+  '/api/feedback':        10,
 }
 
 let redis: Redis | null = null

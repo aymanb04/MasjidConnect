@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { requireRole } from '@/lib/api-auth'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,6 +11,14 @@ const supabaseAdmin = createClient(
 export async function POST(req: NextRequest) {
   const auth = await requireRole(req, ['student', 'teacher', 'admin', 'super_admin'])
   if ('error' in auth) return auth.error
+
+  const rl = await checkRateLimit('/api/feedback', auth.caller.id)
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: 'Te veel verzoeken. Probeer later opnieuw.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 3600) } }
+    )
+  }
 
   const { type, message, page_url } = await req.json()
 
