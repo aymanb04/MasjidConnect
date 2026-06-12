@@ -6,7 +6,7 @@ import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
-import { CheckCircle2, XCircle, Clock, FileCheck, ArrowLeft, Loader2, Users, ChevronRight } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, FileCheck, ArrowLeft, Loader2, Users, ChevronRight, AlertTriangle, X } from 'lucide-react'
 import type { AttendanceStatus } from '@/lib/types'
 
 // ─── Status config ────────────────────────────────────────────────────────────
@@ -310,10 +310,13 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
   const [loading,   setLoading]   = useState(true)
   const [saving,    setSaving]    = useState(false)
   const [done,      setDone]      = useState(false)
+  const [prevAbsent,    setPrevAbsent]    = useState<{ date: string; names: string[] } | null>(null)
+  const [prevDismissed, setPrevDismissed] = useState(false)
 
   useEffect(() => {
     setLoading(true)
     setExisting(null)
+    setPrevDismissed(false)
     loadData()
   }, [date])
 
@@ -351,6 +354,30 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
       .sort((a: any, b: any) => a.last_name.localeCompare(b.last_name))
 
     setStudents(studs)
+
+    // Who was absent in the most recent session before this date?
+    const { data: prevSess } = await supabase
+      .from('attendance_sessions')
+      .select('id, session_date')
+      .eq('class_id', cls.id)
+      .lt('session_date', date)
+      .order('session_date', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (prevSess) {
+      const { data: prevRecs } = await supabase
+        .from('attendance_records')
+        .select('status, profiles!attendance_records_student_id_fkey(first_name, last_name)')
+        .eq('session_id', prevSess.id)
+        .eq('status', 'absent')
+      const names = (prevRecs ?? [])
+        .map((r: any) => r.profiles ? `${r.profiles.first_name} ${r.profiles.last_name}` : null)
+        .filter(Boolean) as string[]
+      setPrevAbsent(names.length ? { date: prevSess.session_date, names } : null)
+    } else {
+      setPrevAbsent(null)
+    }
 
     // Default all to 'present' for new sessions
     if (!sess) {
@@ -476,6 +503,26 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
         </div>
       ) : (
         <>
+          {/* Last-session absentees (feedback: popup of who was absent last week) */}
+          {prevAbsent && !prevDismissed && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 mb-4 flex items-start gap-2.5">
+              <AlertTriangle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 text-sm text-amber-800">
+                <p className="font-medium mb-0.5">
+                  Afwezig op de vorige sessie ({format(new Date(prevAbsent.date), 'EEE d MMM', { locale: nl })}):
+                </p>
+                <p>{prevAbsent.names.join(', ')}</p>
+              </div>
+              <button
+                onClick={() => setPrevDismissed(true)}
+                className="text-amber-400 hover:text-amber-600 transition-colors flex-shrink-0"
+                aria-label="Sluiten"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          )}
+
           {/* Summary bar */}
           <div className="grid grid-cols-4 gap-2 mb-4">
             {[
