@@ -272,14 +272,13 @@ function ClassListView({
                 {canMark && (
                   <button
                     onClick={() => onSelectForMarking(cls)}
-                    disabled={doneToday}
                     className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
                       doneToday
-                        ? 'border-green-200 bg-green-50 text-green-600 cursor-default'
+                        ? 'border-green-200 bg-green-50 text-green-600 hover:bg-green-100'
                         : 'border-primary-200 bg-primary-50 text-primary-600 hover:bg-primary-100'
                     }`}
                   >
-                    {doneToday ? '✓ Gedaan' : 'Markeren'}
+                    {doneToday ? '✓ Aanpassen' : 'Markeren'}
                   </button>
                 )}
                 {!isStudent && (
@@ -303,8 +302,8 @@ function ClassListView({
 
 function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile: any; onBack: () => void }) {
   const today = format(new Date(), 'yyyy-MM-dd')
-  const todayLabel = format(new Date(), 'EEEE d MMMM yyyy', { locale: nl })
 
+  const [date,      setDate]      = useState(today) // selectable: retroactive entry allowed, future blocked
   const [students,  setStudents]  = useState<StudentItem[]>([])
   const [statuses,  setStatuses]  = useState<Record<string, AttendanceStatus>>({})
   const [existing,  setExisting]  = useState<string | null>(null) // session id if already exists
@@ -312,15 +311,19 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
   const [saving,    setSaving]    = useState(false)
   const [done,      setDone]      = useState(false)
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    setLoading(true)
+    setExisting(null)
+    loadData()
+  }, [date])
 
   async function loadData() {
-    // Check for existing session today
+    // Check for existing session on the selected date
     const { data: sess } = await supabase
       .from('attendance_sessions')
       .select('id')
       .eq('class_id', cls.id)
-      .eq('session_date', today)
+      .eq('session_date', date)
       .maybeSingle()
 
     let initStatuses: Record<string, AttendanceStatus> = {}
@@ -373,10 +376,10 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
       let sessionId = existing
 
       if (!sessionId) {
-        // Create new session
+        // Create new session (selected date may be in the past — backfill)
         const { data: sess, error } = await supabase
           .from('attendance_sessions')
-          .insert({ class_id: cls.id, teacher_id: profile.id, session_date: today })
+          .insert({ class_id: cls.id, teacher_id: profile.id, session_date: date })
           .select('id')
           .single()
         if (error) throw new Error(error.message)
@@ -417,7 +420,7 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
         <ArrowLeft size={15} /> Terug
       </button>
 
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-4">
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold flex-shrink-0"
           style={{ backgroundColor: cls.color }}
@@ -426,12 +429,35 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
         </div>
         <div>
           <h2 className="font-semibold text-gray-900">{cls.name}</h2>
-          <p className="text-sm text-gray-400 capitalize">{todayLabel}</p>
+          <p className="text-sm text-gray-400 capitalize">
+            {format(new Date(date), 'EEEE d MMMM yyyy', { locale: nl })}
+          </p>
         </div>
         {existing && (
           <span className="ml-auto text-xs bg-amber-50 text-amber-600 border border-amber-200 px-2 py-1 rounded-lg">
             Aanpassen
           </span>
+        )}
+      </div>
+
+      {/* Date picker — backfill a missed day (future dates blocked) */}
+      <div className="flex items-center gap-2 mb-5">
+        <label htmlFor="attendance-date" className="text-sm text-gray-500">Datum:</label>
+        <input
+          id="attendance-date"
+          type="date"
+          value={date}
+          max={today}
+          onChange={e => { if (e.target.value && e.target.value <= today) setDate(e.target.value) }}
+          className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-200"
+        />
+        {date !== today && (
+          <button
+            onClick={() => setDate(today)}
+            className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+          >
+            Vandaag
+          </button>
         )}
       </div>
 
