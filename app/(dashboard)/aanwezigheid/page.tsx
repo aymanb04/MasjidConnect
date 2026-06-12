@@ -603,6 +603,7 @@ function HistoryView({
 }) {
   const [sessions, setSessions] = useState<SessionItem[]>([])
   const [loading,  setLoading]  = useState(true)
+  const [tab,      setTab]      = useState<'sessions' | 'students'>('sessions')
 
   useEffect(() => { loadSessions() }, [])
 
@@ -661,11 +662,30 @@ function HistoryView({
         </div>
         <div>
           <h2 className="font-semibold text-gray-900">{cls.name} — Aanwezigheidshistoriek</h2>
-          <p className="text-sm text-gray-400">Laatste 30 sessies</p>
+          <p className="text-sm text-gray-400">
+            {tab === 'sessions' ? 'Laatste 30 sessies' : 'Heel schooljaar, per leerling'}
+          </p>
         </div>
       </div>
 
-      {loading ? (
+      {/* Tabs: per session / per student (year overview) */}
+      <div className="flex gap-1.5 mb-4">
+        {([['sessions', 'Sessies'], ['students', 'Per leerling']] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              tab === key ? 'bg-primary-50 text-primary-700' : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'students' ? (
+        <StudentStatsView cls={cls} />
+      ) : loading ? (
         <div className="flex items-center justify-center gap-2 py-12 text-gray-400">
           <Loader2 size={16} className="animate-spin" /> Laden…
         </div>
@@ -701,6 +721,133 @@ function HistoryView({
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── StudentStatsView (year overview per student) ─────────────────────────────
+
+interface StudentStat {
+  id: string
+  name: string
+  present: number
+  absent: number
+  late: number
+  excused: number
+  total: number
+  streak: boolean // absent in the 2 most recent sessions
+}
+
+function StudentStatsView({ cls }: { cls: ClassItem }) {
+  const [rows,         setRows]         = useState<StudentStat[]>([])
+  const [sessionCount, setSessionCount] = useState(0)
+  const [loading,      setLoading]      = useState(true)
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    // All sessions of this class (the class itself is bound to one school year)
+    const { data: sessions } = await supabase
+      .from('attendance_sessions')
+      .select('id, session_date')
+      .eq('class_id', cls.id)
+      .order('session_date', { ascending: false })
+
+    const sessionIds = (sessions ?? []).map((s: any) => s.id)
+    setSessionCount(sessionIds.length)
+
+    // Roster
+    const { data: links } = await supabase
+      .from('class_students')
+      .select('profiles(id, first_name, last_name)')
+      .eq('class_id', cls.id)
+    const students = (links ?? [])
+      .map((l: any) => l.profiles)
+      .filter(Boolean)
+      .sort((a: any, b: any) => a.last_name.localeCompare(b.last_name))
+
+    // Records — chunked so a full year × full class stays under PostgREST's row cap
+    const records: { session_id: string; student_id: string; status: AttendanceStatus }[] = []
+    for (let i = 0; i < sessionIds.length; i += 20) {
+      const { data } = await supabase
+        .from('attendance_records')
+        .select('session_id, student_id, status')
+        .in('session_id', sessionIds.slice(i, i + 20))
+      records.push(...((data ?? []) as any))
+    }
+
+    const lastTwo = sessionIds.slice(0, 2)
+    setRows(students.map((st: any) => {
+      const mine = records.filter(r => r.student_id === st.id)
+      const count = (s: AttendanceStatus) => mine.filter(r => r.status === s).length
+      const streak = lastTwo.length === 2 &&
+        lastTwo.every(sid => mine.some(r => r.session_id === sid && r.status === 'absent'))
+      return {
+        id: st.id,
+        name: `${st.first_name} ${st.last_name}`,
+        present: count('present'), absent: count('absent'),
+        late: count('late'), excused: count('excused'),
+        total: mine.length, streak,
+      }
+    }))
+    setLoading(false)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-12 text-gray-400">
+        <Loader2 size={16} className="animate-spin" /> Laden…
+      </div>
+    )
+  }
+
+  if (sessionCount === 0 || rows.length === 0) {
+    return (
+      <div className="card p-8 text-center text-gray-400 text-sm">
+        Nog geen aanwezigheid geregistreerd voor deze klas.
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-gray-400 mb-2">{sessionCount} sessies geregistreerd</p>
+      <div className="card divide-y divide-border overflow-hidden">
+        {rows.map(r => {
+          const pct = r.total ? Math.round((r.present / r.total) * 100) : 0
+          const pctColor = pct >= 80 ? 'text-green-600' : pct >= 60 ? 'text-amber-500' : 'text-red-500'
+          return (
+            <div key={r.id} className="flex items-center gap-3 px-4 py-3">
+              <div className="w-7 h-7 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                {r.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800 flex items-center gap-2 flex-wrap">
+                  {r.name}
+                  {r.streak && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">
+                      <AlertTriangle size={10} /> laatste 2 sessies afwezig
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {r.total === 0
+                    ? 'Geen records'
+                    : [
+                        `${r.present}× aanwezig`,
+                        r.absent  > 0 && `${r.absent}× afwezig`,
+                        r.late    > 0 && `${r.late}× te laat`,
+                        r.excused > 0 && `${r.excused}× verontschuldigd`,
+                      ].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+              {r.total > 0 && (
+                <span className={`text-sm font-semibold flex-shrink-0 ${pctColor}`}>{pct}%</span>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -818,12 +965,12 @@ function MyRecordsView({
     // gotcha: attendance_sessions RLS does a subquery to class_students (also
     // RLS-protected), which causes nested PostgREST joins to silently return [].
 
-    // 1. My attendance records
+    // 1. My attendance records (whole year — a student has at most a few
+    // hundred records, well under the PostgREST row cap)
     const { data: recs } = await supabase
       .from('attendance_records')
       .select('status, session_id')
       .eq('student_id', profile.id)
-      .limit(60)
 
     if (!recs || recs.length === 0) { setLoading(false); return }
 
