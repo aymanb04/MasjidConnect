@@ -52,6 +52,24 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Geen toegang tot deze moskee' }, { status: 403 })
         }
 
+        // group_id/class_id are used below with the service-role client (bypasses
+        // RLS), so verify they belong to the target tenant — otherwise an admin
+        // could enroll users into another mosque's classes.
+        if (group_id) {
+            const { data: group } = await supabaseAdmin
+                .from('groups').select('tenant_id').eq('id', group_id).single()
+            if (!group || group.tenant_id !== tenant_id) {
+                return NextResponse.json({ error: 'Geen toegang tot deze groep' }, { status: 403 })
+            }
+        }
+        if (class_id) {
+            const { data: klas } = await supabaseAdmin
+                .from('classes').select('tenant_id').eq('id', class_id).single()
+            if (!klas || klas.tenant_id !== tenant_id) {
+                return NextResponse.json({ error: 'Geen toegang tot deze klas' }, { status: 403 })
+            }
+        }
+
         const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
             data: { first_name, last_name, role, tenant_id },
             redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? request.headers.get('origin')}/reset-password`,
