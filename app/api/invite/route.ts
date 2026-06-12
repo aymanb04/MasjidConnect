@@ -75,7 +75,10 @@ export async function POST(request: Request) {
             redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? request.headers.get('origin')}/reset-password`,
         })
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+        if (error) {
+            console.error('[/api/invite] inviteUserByEmail:', error.message)
+            return NextResponse.json({ error: 'Uitnodiging kon niet worden verzonden.' }, { status: 400 })
+        }
 
         if (invited_by) {
             await supabaseAdmin.from('invitations').insert({
