@@ -4,27 +4,43 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { formatRelative } from '@/lib/utils'
 import type { Profile, Announcement } from '@/lib/types'
-import { Megaphone, Plus, X, Loader2, School, Trash2, Tag } from 'lucide-react'
+import { Megaphone, Plus, X, Loader2, School, Trash2, Tag, Users } from 'lucide-react'
 
 interface ClassOption {
   id: string
   name: string
   color: string
 }
+interface GroupOption {
+  id: string
+  name: string
+}
+
+type Audience = 'school' | 'class' | 'group' | 'teachers'
+
+const AUDIENCE_LABELS: Record<Audience, string> = {
+  school: 'Iedereen (school)',
+  class: 'Specifieke klas',
+  group: 'Hele groep',
+  teachers: 'Enkel leerkrachten',
+}
 
 export function AnnouncementsCard({ profile }: { profile: Profile }) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading,       setLoading]       = useState(true)
   const [showForm,      setShowForm]      = useState(false)
-  const [form,          setForm]          = useState({ title: '', content: '', class_id: '' })
+  const [form,          setForm]          = useState<{ title: string; content: string; audience: Audience; class_id: string; group_id: string }>(
+    { title: '', content: '', audience: 'school', class_id: '', group_id: '' })
   const [formError,     setFormError]     = useState('')
   const [saving,        setSaving]        = useState(false)
   const [filterClassId, setFilterClassId] = useState<string | null>(null)
   const [myClasses,     setMyClasses]     = useState<ClassOption[]>([])
+  const [myGroups,      setMyGroups]      = useState<GroupOption[]>([])
 
   const canPost = ['admin', 'super_admin', 'teacher'].includes(profile.role)
   // Teachers must always post to a specific class (enforced by DB RLS as well)
   const mustPickClass = profile.role === 'teacher'
+  const isAdmin = ['admin', 'super_admin'].includes(profile.role)
 
   useEffect(() => {
     loadAnnouncements()
@@ -37,7 +53,7 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
     if (!profile.tenant_id) { setLoading(false); return }
     const { data } = await supabase
       .from('announcements')
-      .select('*, creator:profiles!created_by(id, first_name, last_name), class:classes(id, name, color)')
+      .select('*, creator:profiles!created_by(id, first_name, last_name), class:classes(id, name, color), group:groups(id, name)')
       .eq('tenant_id', profile.tenant_id)
       .order('created_at', { ascending: false })
       .limit(30)
@@ -71,14 +87,13 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
           .filter(Boolean) as ClassOption[]
       )
     } else {
-      // admin / super_admin — all classes in their tenant
-      const { data } = await supabase
-        .from('classes')
-        .select('id, name, color')
-        .eq('tenant_id', profile.tenant_id)
-        .eq('is_archived', false)
-        .order('name')
-      setMyClasses((data ?? []) as ClassOption[])
+      // admin / super_admin — all classes + groups in their tenant
+      const [{ data: cls }, { data: grps }] = await Promise.all([
+        supabase.from('classes').select('id, name, color').eq('tenant_id', profile.tenant_id).eq('is_archived', false).order('name'),
+        supabase.from('groups').select('id, name').eq('tenant_id', profile.tenant_id).order('name'),
+      ])
+      setMyClasses((cls ?? []) as ClassOption[])
+      setMyGroups((grps ?? []) as GroupOption[])
     }
   }
 
@@ -86,8 +101,14 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
 
   async function handleSubmit() {
     if (!form.title.trim()) return
-    if (mustPickClass && !form.class_id) {
+    // Teachers always post to a class
+    const audience: Audience = mustPickClass ? 'class' : form.audience
+    if (audience === 'class' && !form.class_id) {
       setFormError('Kies een klas voor deze aankondiging.')
+      return
+    }
+    if (audience === 'group' && !form.group_id) {
+      setFormError('Kies een groep voor deze aankondiging.')
       return
     }
     setSaving(true)
@@ -97,11 +118,13 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
       created_by: profile.id,
       title:      form.title.trim(),
       content:    form.content.trim() || null,
-      class_id:   form.class_id || null,
+      audience,
+      class_id:   audience === 'class' ? form.class_id : null,
+      group_id:   audience === 'group' ? form.group_id : null,
     })
     if (!error) {
       setShowForm(false)
-      setForm({ title: '', content: '', class_id: '' })
+      setForm({ title: '', content: '', audience: 'school', class_id: '', group_id: '' })
       loadAnnouncements()
     } else {
       setFormError(error.message)
@@ -141,7 +164,7 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
         </h2>
         {canPost && !showForm && (
           <button
-            onClick={() => { setForm({ title: '', content: '', class_id: '' }); setFormError(''); setShowForm(true) }}
+            onClick={() => { setForm({ title: '', content: '', audience: 'school', class_id: '', group_id: '' }); setFormError(''); setShowForm(true) }}
             className="btn-secondary text-xs py-1.5 px-3"
           >
             <Plus size={13} /> Plaatsen
@@ -204,24 +227,61 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
             className="input resize-none h-20"
           />
 
-          {/* Class selector */}
-          <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
-              <Tag size={11} />
-              {mustPickClass ? 'Klas *' : 'Klas (leeg = voor iedereen)'}
-            </label>
-            <select
-              value={form.class_id}
-              onChange={e => setForm(p => ({ ...p, class_id: e.target.value }))}
-              className="input text-sm"
-            >
-              {!mustPickClass && <option value="">Voor iedereen (school-breed)</option>}
-              {mustPickClass && <option value="">Kies een klas…</option>}
-              {myClasses.map(cls => (
-                <option key={cls.id} value={cls.id}>{cls.name}</option>
-              ))}
-            </select>
-          </div>
+          {/* Audience selector */}
+          {mustPickClass ? (
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
+                <Tag size={11} /> Klas *
+              </label>
+              <select
+                value={form.class_id}
+                onChange={e => setForm(p => ({ ...p, class_id: e.target.value }))}
+                className="input text-sm"
+              >
+                <option value="">Kies een klas…</option>
+                {myClasses.map(cls => (
+                  <option key={cls.id} value={cls.id}>{cls.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
+                  <Tag size={11} /> Voor wie?
+                </label>
+                <select
+                  value={form.audience}
+                  onChange={e => setForm(p => ({ ...p, audience: e.target.value as Audience, class_id: '', group_id: '' }))}
+                  className="input text-sm"
+                >
+                  {(['school', 'class', 'group', 'teachers'] as const).map(a => (
+                    <option key={a} value={a}>{AUDIENCE_LABELS[a]}</option>
+                  ))}
+                </select>
+              </div>
+              {form.audience === 'class' && (
+                <select
+                  value={form.class_id}
+                  onChange={e => setForm(p => ({ ...p, class_id: e.target.value }))}
+                  className="input text-sm"
+                >
+                  <option value="">Kies een klas…</option>
+                  {myClasses.map(cls => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
+                </select>
+              )}
+              {form.audience === 'group' && (
+                <select
+                  value={form.group_id}
+                  onChange={e => setForm(p => ({ ...p, group_id: e.target.value }))}
+                  className="input text-sm"
+                >
+                  <option value="">Kies een groep…</option>
+                  {myGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+              )}
+            </div>
+          )}
 
           {formError && <p className="text-xs text-red-500">{formError}</p>}
 
@@ -231,7 +291,12 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
             </button>
             <button
               onClick={handleSubmit}
-              disabled={saving || !form.title.trim() || (mustPickClass && !form.class_id)}
+              disabled={
+                saving || !form.title.trim()
+                || (mustPickClass && !form.class_id)
+                || (!mustPickClass && form.audience === 'class' && !form.class_id)
+                || (!mustPickClass && form.audience === 'group' && !form.group_id)
+              }
               className="btn-primary text-xs py-1.5 px-3"
             >
               {saving ? <Loader2 size={13} className="animate-spin" /> : 'Plaatsen'}
@@ -253,6 +318,7 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
           {filtered.map((ann: any) => {
             const canDelete = ann.created_by === profile.id || ['admin', 'super_admin'].includes(profile.role)
             const cls: ClassOption | null = ann.class ?? null
+            const grp = ann.group ?? null
 
             return (
               <div
@@ -263,7 +329,9 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
                   className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
                   style={{ backgroundColor: cls?.color ?? '#1B6B4A' }}
                 >
-                  <School size={14} className="text-white" />
+                  {ann.audience === 'teachers'
+                    ? <Users size={14} className="text-white" />
+                    : <School size={14} className="text-white" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
@@ -276,6 +344,16 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
                         >
                           <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cls.color }} />
                           {cls.name}
+                        </span>
+                      )}
+                      {ann.audience === 'group' && grp && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-full mt-0.5 bg-blue-50 text-blue-600">
+                          <Users size={10} /> {grp.name}
+                        </span>
+                      )}
+                      {ann.audience === 'teachers' && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-full mt-0.5 bg-purple-50 text-purple-600">
+                          <Users size={10} /> Leerkrachten
                         </span>
                       )}
                     </div>
