@@ -162,6 +162,7 @@ export function InviteUserButton({ tenantId, onInvited }: Props) {
                   <option value="student">Leerling</option>
                   <option value="teacher">Leerkracht</option>
                   <option value="admin">Beheerder</option>
+                  <option value="leerlingenbegeleiding">Leerlingenbegeleiding</option>
                 </select>
               </div>
 

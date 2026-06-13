@@ -142,6 +142,7 @@ export default function CsvImportButton({ tenantId, onImported }: Props) {
         const r = rol.toLowerCase()
         if (['teacher','leerkracht','prof','leraar'].includes(r)) return 'teacher'
         if (['admin','beheerder'].includes(r)) return 'admin'
+        if (['leerlingenbegeleiding','begeleider','begeleiding','counselor'].includes(r)) return 'leerlingenbegeleiding'
         return 'student'
     }
 

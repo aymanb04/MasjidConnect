@@ -9,7 +9,7 @@ const supabaseAdmin = createClient(
 )
 
 export async function POST(req: NextRequest) {
-  const auth = await requireRole(req, ['student', 'teacher', 'admin', 'super_admin'])
+  const auth = await requireRole(req, ['student', 'teacher', 'admin', 'super_admin', 'leerlingenbegeleiding'])
   if ('error' in auth) return auth.error
 
   const rl = await checkRateLimit('/api/feedback', auth.caller.id)

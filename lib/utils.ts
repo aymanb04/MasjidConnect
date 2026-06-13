@@ -47,6 +47,7 @@ export function getRoleBadge(role: string): { label: string; color: string } {
     admin:       { label: 'Beheerder',   color: 'bg-primary-100 text-primary-700' },
     teacher:     { label: 'Leerkracht',  color: 'bg-blue-100 text-blue-700' },
     student:     { label: 'Leerling',    color: 'bg-amber-100 text-amber-700' },
+    leerlingenbegeleiding: { label: 'Begeleiding', color: 'bg-purple-100 text-purple-700' },
   }
   return map[role] ?? { label: role, color: 'bg-gray-100 text-gray-600' }
 }

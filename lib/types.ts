@@ -2,7 +2,7 @@
 // MasjidConnect — TypeScript Types
 // ============================================================
 
-export type Role = 'super_admin' | 'admin' | 'teacher' | 'student'
+export type Role = 'super_admin' | 'admin' | 'teacher' | 'student' | 'leerlingenbegeleiding'
 export type SubmissionStatus = 'draft' | 'submitted' | 'graded' | 'returned'
 export type SubscriptionStatus = 'trial' | 'active' | 'inactive' | 'cancelled'
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused'
@@ -184,10 +184,14 @@ export interface Invitation {
   created_at: string
 }
 
+export type AnnouncementAudience = 'school' | 'class' | 'group' | 'teachers'
+
 export interface Announcement {
   id: string
   tenant_id: string
   class_id?: string
+  group_id?: string
+  audience: AnnouncementAudience
   created_by: string
   title: string
   content?: string
@@ -195,6 +199,7 @@ export interface Announcement {
   // joined
   creator?: Pick<Profile, 'id' | 'first_name' | 'last_name'>
   class?: Pick<Class, 'id' | 'name' | 'color'>
+  group?: Pick<Group, 'id' | 'name'>
 }
 
 export interface AttendanceSession {
@@ -248,6 +253,80 @@ export interface ExamScore {
   notes?: string
   created_at: string
   updated_at: string
+}
+
+export interface Family {
+  id: string
+  tenant_id: string
+  label: string
+  created_at: string
+}
+
+export interface StudentDetails {
+  student_id: string
+  tenant_id: string
+  date_of_birth?: string
+  gender?: 'm' | 'f'
+  address?: string
+  parent_email?: string
+  parent_phone?: string
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
+  family_id?: string
+  created_at: string
+  updated_at: string
+  // joined
+  family?: Family
+}
+
+export interface StudentNote {
+  id: string
+  tenant_id: string
+  student_id: string
+  author_id: string
+  body: string
+  created_at: string
+  // joined
+  author?: Pick<Profile, 'id' | 'first_name' | 'last_name' | 'role'>
+}
+
+export interface StudentDocument {
+  id: string
+  tenant_id: string
+  student_id: string
+  doc_type: 'contract' | 'disability' | 'other'
+  file_name: string
+  file_url: string
+  note?: string
+  uploaded_by: string
+  created_at: string
+}
+
+export interface OudercontactSlot {
+  id: string
+  tenant_id: string
+  teacher_id: string
+  class_id?: string
+  starts_at: string
+  ends_at: string
+  capacity: number
+  note?: string
+  created_at: string
+  // joined
+  teacher?: Pick<Profile, 'id' | 'first_name' | 'last_name'>
+  class?: Pick<Class, 'id' | 'name' | 'color'>
+  bookings?: OudercontactBooking[]
+}
+
+export interface OudercontactBooking {
+  id: string
+  slot_id: string
+  student_id: string
+  booked_by: string
+  note?: string
+  created_at: string
+  // joined
+  student?: Pick<Profile, 'id' | 'first_name' | 'last_name'>
 }
 
 export interface Feedback {

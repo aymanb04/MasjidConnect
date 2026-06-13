@@ -8,7 +8,7 @@ const supabaseAdmin = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const VALID_ROLES = ['student', 'teacher', 'admin']
+const VALID_ROLES = ['student', 'teacher', 'admin', 'leerlingenbegeleiding']
 const EMAIL_RE   = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export async function POST(request: Request) {

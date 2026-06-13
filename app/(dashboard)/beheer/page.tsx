@@ -101,9 +101,10 @@ export default function BeheerPage() {
 
   if (profileLoading || loading) return <PageLoader />
 
-  const teachers = users.filter(u => u.role === 'teacher')
-  const students  = users.filter(u => u.role === 'student')
-  const admins    = users.filter(u => u.role === 'admin')
+  const teachers   = users.filter(u => u.role === 'teacher')
+  const students   = users.filter(u => u.role === 'student')
+  const admins     = users.filter(u => u.role === 'admin')
+  const counselors = users.filter(u => u.role === 'leerlingenbegeleiding')
 
   const filteredUsers = users.filter(u => {
     if (roleFilter !== 'all' && u.role !== roleFilter) return false
@@ -258,6 +259,7 @@ export default function BeheerPage() {
                 { key: 'student', label: 'Leerlingen',  count: students.length },
                 { key: 'teacher', label: 'Leerkrachten',count: teachers.length },
                 { key: 'admin',   label: 'Admins',      count: admins.length   },
+                { key: 'leerlingenbegeleiding', label: 'Begeleiding', count: counselors.length },
               ] as const).map(tab => (
                 <button key={tab.key} onClick={() => setRoleFilter(tab.key)}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
