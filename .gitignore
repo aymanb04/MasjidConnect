@@ -27,8 +27,12 @@ DEMO_ACCOUNT.txt
 INTERVIEW_AUDIT.md
 INTERVIEW_SAM_PREP.md
 PROJECT_STATUS.md
+PROJECT_KNOWLEDGE.md
 SECURITY_AUDIT_REPORT.md
 legal/
+
+# Local-only dev tooling — the run-app walkthrough skill (+ its Playwright install)
+.claude/skills/run-app/
 
 # Local references, test data and build artifacts
 test_import.csv
