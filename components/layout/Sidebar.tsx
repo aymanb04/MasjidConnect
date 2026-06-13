@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { cn, getInitials } from '@/lib/utils'
 import type { Profile, Tenant } from '@/lib/types'
-import { LayoutDashboard, BookOpen, FileText, GraduationCap, Settings, LogOut, Shield, ChevronRight, ExternalLink, CalendarDays, Clock, Lock, ClipboardCheck } from 'lucide-react'
+import { LayoutDashboard, BookOpen, FileText, GraduationCap, Settings, LogOut, Shield, ChevronRight, ExternalLink, CalendarDays, Clock, Lock, ClipboardCheck, FolderOpen, Euro, CalendarClock } from 'lucide-react'
 
 interface Props {
   profile: Profile
@@ -14,19 +14,23 @@ interface Props {
 }
 
 const navItems = [
-  { label: 'Dashboard',   href: '/dashboard',   icon: LayoutDashboard, roles: ['super_admin','admin','teacher','student'] },
+  { label: 'Dashboard',   href: '/dashboard',   icon: LayoutDashboard, roles: ['super_admin','admin','teacher','student','leerlingenbegeleiding'] },
   { label: 'Klassen',     href: '/klassen',     icon: GraduationCap,   roles: ['admin','teacher','student'] },
   { label: 'Huiswerk',    href: '/huiswerk',    icon: FileText,        roles: ['teacher','student'] },
   { label: 'Lesmodules',  href: '/lesmodules',  icon: BookOpen,        roles: ['teacher','student'] },
   { label: 'Aanwezigheid', href: '/aanwezigheid', icon: ClipboardCheck,  roles: ['admin','teacher','student'] },
   { label: 'Rooster',     href: '/rooster',      icon: Clock,           roles: ['admin','teacher','student'] },
   { label: 'Agenda',      href: '/agenda',       icon: CalendarDays,    roles: ['admin','teacher','student'] },
+  { label: 'Oudercontact', href: '/oudercontact', icon: CalendarClock,  roles: ['admin','teacher','student'] },
+  { label: 'Dossiers',    href: '/dossiers',     icon: FolderOpen,      roles: ['admin','teacher','leerlingenbegeleiding'] },
+  { label: 'Betalingen',  href: '/betalingen',   icon: Euro,            roles: ['admin'] },
   { label: 'Beheer',      href: '/beheer',      icon: Settings,        roles: ['admin'] },
   { label: 'Super Admin', href: '/superadmin',  icon: Shield,          roles: ['super_admin'] },
 ]
 
 const roleLabels: Record<string, string> = {
-  super_admin: 'Super Admin', admin: 'Beheerder', teacher: 'Leerkracht', student: 'Leerling'
+  super_admin: 'Super Admin', admin: 'Beheerder', teacher: 'Leerkracht', student: 'Leerling',
+  leerlingenbegeleiding: 'Leerlingenbegeleiding',
 }
 
 export default function Sidebar({ profile, tenant, onClose }: Props) {
