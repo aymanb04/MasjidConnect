@@ -24,6 +24,7 @@ export default function KlasDetailPage() {
   const [selectedTeacherId, setSelectedTeacherId] = useState('')
   const [savingTeacher, setSavingTeacher] = useState(false)
   const [myExamScores, setMyExamScores] = useState<any[]>([])
+  const [myTestScores, setMyTestScores] = useState<any[]>([])
 
   useEffect(() => {
     if (!profile || !klasId) return
@@ -47,7 +48,7 @@ export default function KlasDetailPage() {
     setTeachers(tc?.map((x: any) => x.profiles).filter(Boolean) ?? [])
 
     if (isTeacher) {
-      const { data: s } = await supabase.from('class_students').select('profiles(id, first_name, last_name)').eq('class_id', klasId)
+      const { data: s } = await supabase.from('class_students').select('profiles(id, first_name, last_name, email)').eq('class_id', klasId)
       setStudents(s?.map((x: any) => x.profiles).filter(Boolean) ?? [])
     }
 
@@ -57,16 +58,31 @@ export default function KlasDetailPage() {
     }
 
     if (profile!.role === 'student') {
-      const [{ data: subs }, { data: exams }] = await Promise.all([
+      const [{ data: subs }, { data: exams }, { data: classTests }] = await Promise.all([
         a?.length
           ? supabase.from('submissions').select('*').eq('student_id', profile!.id).in('assignment_id', a.map((x: any) => x.id))
           : Promise.resolve({ data: [] as any[] }),
         supabase.from('exam_scores').select('*').eq('class_id', klasId as string).eq('student_id', profile!.id),
+        supabase.from('class_tests').select('id, title, max_score, test_date').eq('class_id', klasId as string).order('test_date', { ascending: true }),
       ])
       const map: Record<string, any> = {}
       subs?.forEach((s: any) => { map[s.assignment_id] = s })
       setMySubmissions(map)
       setMyExamScores(exams ?? [])
+
+      // Merge the student's test scores onto the class tests
+      if (classTests?.length) {
+        const { data: ts } = await supabase
+          .from('test_scores').select('test_id, score')
+          .eq('student_id', profile!.id)
+          .in('test_id', classTests.map((t: any) => t.id))
+        const scoreByTest = Object.fromEntries((ts ?? []).map((r: any) => [r.test_id, Number(r.score)]))
+        setMyTestScores(
+          classTests
+            .filter((t: any) => scoreByTest[t.id] !== undefined)
+            .map((t: any) => ({ ...t, score: scoreByTest[t.id] }))
+        )
+      }
     }
 
     setLoading(false)
@@ -257,6 +273,34 @@ export default function KlasDetailPage() {
             </div>
           )}
 
+          {/* Test scores — student sees their own (migration 16) */}
+          {profile?.role === 'student' && myTestScores.length > 0 && (
+            <div className="card p-6 h-fit">
+              <div className="flex items-center gap-2 mb-4">
+                <BarChart2 size={18} className="text-amber-500"/>
+                <h2 className="font-semibold text-gray-900">Toetsen</h2>
+              </div>
+              <div className="space-y-2">
+                {myTestScores.map((t: any) => {
+                  const pct = t.score / t.max_score
+                  const color = pct >= 0.7
+                    ? 'bg-green-100 text-green-700'
+                    : pct >= 0.5
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-red-100 text-red-700'
+                  return (
+                    <div key={t.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl border border-border">
+                      <span className="text-sm text-gray-700 min-w-0 truncate">{t.title}</span>
+                      <span className={`inline-block px-2.5 py-0.5 rounded-lg text-sm font-semibold flex-shrink-0 ml-2 ${color}`}>
+                        {t.score}/{t.max_score}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Students (teachers/admins only) */}
           {isTeacher && (
             <div className="card p-6 h-fit">
@@ -267,14 +311,24 @@ export default function KlasDetailPage() {
               </div>
               {students.length === 0 ? <p className="text-sm text-gray-400 text-center py-4">Geen leerlingen toegewezen.</p> : (
                 <div className="space-y-1">
-                  {students.map((s: any) => (
-                    <div key={s.id} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="w-7 h-7 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">
-                        {s.first_name[0]}{s.last_name[0]}
+                  {students.map((s: any) => {
+                    const mailtoHref = s.email
+                      ? `mailto:${s.email}?subject=${encodeURIComponent(`${klas.name} — ${s.first_name} ${s.last_name}`)}`
+                      : undefined
+                    return (
+                      <div key={s.id} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 transition-colors group">
+                        <div className="w-7 h-7 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">
+                          {s.first_name[0]}{s.last_name[0]}
+                        </div>
+                        <span className="text-sm text-gray-700 flex-1 min-w-0 truncate">{s.first_name} {s.last_name}</span>
+                        {mailtoHref && (
+                          <a href={mailtoHref} className="text-gray-300 hover:text-primary-600 transition-colors p-0.5 opacity-0 group-hover:opacity-100" title={`Mail ${s.first_name}`}>
+                            <Mail size={14}/>
+                          </a>
+                        )}
                       </div>
-                      <span className="text-sm text-gray-700">{s.first_name} {s.last_name}</span>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

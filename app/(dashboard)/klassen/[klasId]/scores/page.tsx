@@ -20,6 +20,15 @@ export default function ScoresPage() {
   const [examScores, setExamScores]   = useState<any[]>([])
   const [loading, setLoading]         = useState(true)
 
+  // Manual test columns (in-class tests / offline homework — migration 16)
+  const [tests, setTests]             = useState<any[]>([])
+  const [testScoreMap, setTestScoreMap] = useState<Record<string, Record<string, { id: string; score: number }>>>({})
+  const [showNewTest, setShowNewTest] = useState(false)
+  const [newTest, setNewTest]         = useState({ title: '', max_score: '20', test_date: new Date().toISOString().slice(0, 10) })
+  const [creatingTest, setCreatingTest] = useState(false)
+  const [editingTestCell, setEditingTestCell] = useState<{ studentId: string; testId: string } | null>(null)
+  const [editTestScore, setEditTestScore]     = useState('')
+
   // Inline edit state for exam card
   const [editingCell, setEditingCell] = useState<{ studentId: string; semester: 1 | 2 } | null>(null)
   const [editScore, setEditScore]     = useState('')
@@ -68,6 +77,23 @@ export default function ScoresPage() {
     setAssignments(assignmentList)
     setExamScores(exams ?? [])
 
+    const { data: testRows } = await supabase
+      .from('class_tests').select('*')
+      .eq('class_id', klasId)
+      .order('test_date', { ascending: true })
+    setTests(testRows ?? [])
+    if (testRows?.length) {
+      const { data: ts } = await supabase
+        .from('test_scores').select('id, test_id, student_id, score')
+        .in('test_id', testRows.map((t: any) => t.id))
+      const m: Record<string, Record<string, { id: string; score: number }>> = {}
+      ts?.forEach((r: any) => {
+        if (!m[r.student_id]) m[r.student_id] = {}
+        m[r.student_id][r.test_id] = { id: r.id, score: Number(r.score) }
+      })
+      setTestScoreMap(m)
+    }
+
     if (studentList.length && assignmentList.length) {
       const { data: subs } = await supabase
         .from('submissions')
@@ -109,8 +135,75 @@ export default function ScoresPage() {
       earned += score
       total  += a.max_score
     }
+    // Manual test columns count toward the same weighted average
+    for (const t of tests) {
+      const ts = testScoreMap[studentId]?.[t.id]
+      if (!ts || !t.max_score) continue
+      earned += ts.score
+      total  += Number(t.max_score)
+    }
     if (!total) return null
     return (earned / total) * 100
+  }
+
+  function testAvg(testId: string) {
+    const scores = students
+      .map((s: any) => testScoreMap[s.id]?.[testId]?.score)
+      .filter((s): s is number => s !== null && s !== undefined)
+    if (!scores.length) return null
+    return scores.reduce((a, b) => a + b, 0) / scores.length
+  }
+
+  async function createTest() {
+    const max = parseFloat(newTest.max_score)
+    if (!newTest.title.trim() || isNaN(max) || max <= 0) return
+    setCreatingTest(true)
+    const { data, error } = await getSupabase().from('class_tests').insert({
+      class_id: klasId as string,
+      title: newTest.title.trim(),
+      max_score: max,
+      test_date: newTest.test_date,
+      created_by: profile!.id,
+    }).select().single()
+    if (!error && data) {
+      setTests(prev => [...prev, data].sort((a, b) => a.test_date.localeCompare(b.test_date)))
+      setNewTest({ title: '', max_score: '20', test_date: new Date().toISOString().slice(0, 10) })
+      setShowNewTest(false)
+    }
+    setCreatingTest(false)
+  }
+
+  async function deleteTest(testId: string) {
+    if (!confirm('Toets en alle scores verwijderen?')) return
+    await getSupabase().from('class_tests').delete().eq('id', testId)
+    setTests(prev => prev.filter(t => t.id !== testId))
+  }
+
+  async function saveTestScore(studentId: string, test: any) {
+    const score = parseFloat(editTestScore)
+    if (isNaN(score) || score < 0 || score > Number(test.max_score)) return
+    const { data, error } = await getSupabase().from('test_scores').upsert(
+      { test_id: test.id, student_id: studentId, score },
+      { onConflict: 'test_id,student_id' }
+    ).select().single()
+    if (!error && data) {
+      setTestScoreMap(prev => ({
+        ...prev,
+        [studentId]: { ...(prev[studentId] ?? {}), [test.id]: { id: data.id, score: Number(data.score) } },
+      }))
+    }
+    setEditingTestCell(null)
+  }
+
+  async function deleteTestScore(studentId: string, testId: string) {
+    const existing = testScoreMap[studentId]?.[testId]
+    if (!existing) return
+    await getSupabase().from('test_scores').delete().eq('id', existing.id)
+    setTestScoreMap(prev => {
+      const mine = { ...(prev[studentId] ?? {}) }
+      delete mine[testId]
+      return { ...prev, [studentId]: mine }
+    })
   }
 
   function assignmentAvg(assignmentId: string) {
@@ -198,10 +291,48 @@ export default function ScoresPage() {
         </div>
       </div>
 
+      {/* ── Add manual test column (in-class test / offline homework) ── */}
+      {students.length > 0 && (
+        <div className="mb-4">
+          {showNewTest ? (
+            <div className="card p-4 flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[180px]">
+                <label className="label">Titel</label>
+                <input type="text" value={newTest.title}
+                  onChange={e => setNewTest(p => ({ ...p, title: e.target.value }))}
+                  placeholder="Bv. Toets hoofdstuk 3 / Huiswerk week 12" className="input" />
+              </div>
+              <div className="w-24">
+                <label className="label">Max</label>
+                <input type="number" min="1" value={newTest.max_score}
+                  onChange={e => setNewTest(p => ({ ...p, max_score: e.target.value }))} className="input" />
+              </div>
+              <div className="w-40">
+                <label className="label">Datum</label>
+                <input type="date" value={newTest.test_date}
+                  onChange={e => setNewTest(p => ({ ...p, test_date: e.target.value }))} className="input" />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={createTest} disabled={creatingTest || !newTest.title.trim()}
+                  className="btn-primary text-sm flex items-center gap-1.5">
+                  {creatingTest ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Toevoegen
+                </button>
+                <button onClick={() => setShowNewTest(false)} className="btn-secondary text-sm">Annuleren</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setShowNewTest(true)}
+              className="btn-secondary text-sm flex items-center gap-1.5">
+              <Plus size={14} /> Toets / offline score toevoegen
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ── Homework grades grid ─────────────────────────────────────── */}
-      {assignments.length === 0 || students.length === 0 ? (
+      {(assignments.length === 0 && tests.length === 0) || students.length === 0 ? (
         <div className="card p-8 text-center text-gray-400 text-sm">
-          {assignments.length === 0 ? 'Nog geen opdrachten voor deze klas.' : 'Nog geen leerlingen ingeschreven.'}
+          {students.length === 0 ? 'Nog geen leerlingen ingeschreven.' : 'Nog geen opdrachten of toetsen voor deze klas.'}
         </div>
       ) : (
         <div className="card overflow-hidden">
@@ -221,6 +352,17 @@ export default function ScoresPage() {
                       {a.max_score && (
                         <span className="text-xs font-normal text-gray-400">/{a.max_score}</span>
                       )}
+                    </th>
+                  ))}
+                  {tests.map((t: any) => (
+                    <th key={t.id} className="px-3 py-3 font-medium text-gray-600 text-center min-w-[120px] bg-amber-50/50">
+                      <span className="line-clamp-2 block text-xs leading-snug" title={t.test_date}>{t.title}</span>
+                      <span className="text-xs font-normal text-gray-400">/{t.max_score}</span>
+                      <button onClick={() => deleteTest(t.id)}
+                        className="block mx-auto mt-0.5 text-gray-300 hover:text-red-400 transition-colors"
+                        title="Toets verwijderen">
+                        <X size={11} />
+                      </button>
                     </th>
                   ))}
                   <th className="px-4 py-3 font-medium text-gray-600 text-center min-w-[80px] border-l border-border">
@@ -267,6 +409,61 @@ export default function ScoresPage() {
                           </td>
                         )
                       })}
+                      {tests.map((t: any) => {
+                        const ts = testScoreMap[s.id]?.[t.id]
+                        const isEditing = editingTestCell?.studentId === s.id && editingTestCell?.testId === t.id
+                        return (
+                          <td key={t.id} className="px-3 py-2 text-center bg-amber-50/30">
+                            {isEditing ? (
+                              <div className="flex items-center gap-1 justify-center">
+                                <input
+                                  type="number" autoFocus min="0" max={t.max_score}
+                                  value={editTestScore}
+                                  onChange={e => setEditTestScore(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') saveTestScore(s.id, t)
+                                    if (e.key === 'Escape') setEditingTestCell(null)
+                                  }}
+                                  className="input w-16 text-center text-xs py-1"
+                                  placeholder={`/${t.max_score}`}
+                                />
+                                <button onClick={() => saveTestScore(s.id, t)}
+                                  className="text-green-600 hover:text-green-700 p-0.5" title="Opslaan (Enter)">
+                                  <Check size={13} />
+                                </button>
+                                <button onClick={() => setEditingTestCell(null)}
+                                  className="text-gray-400 hover:text-gray-600 p-0.5" title="Annuleren (Esc)">
+                                  <X size={13} />
+                                </button>
+                              </div>
+                            ) : ts ? (
+                              <div className="flex items-center gap-1 justify-center group">
+                                <span className={`inline-block px-2 py-0.5 rounded-lg text-xs font-medium ${scoreColor(ts.score, Number(t.max_score))}`}>
+                                  {fmt(ts.score, Number(t.max_score))}
+                                </span>
+                                <button
+                                  onClick={() => { setEditingTestCell({ studentId: s.id, testId: t.id }); setEditTestScore(String(ts.score)) }}
+                                  className="text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                                  title="Bewerken">
+                                  <Pencil size={11} />
+                                </button>
+                                <button onClick={() => deleteTestScore(s.id, t.id)}
+                                  className="text-gray-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                                  title="Verwijderen">
+                                  <X size={11} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => { setEditingTestCell({ studentId: s.id, testId: t.id }); setEditTestScore('') }}
+                                className="text-gray-300 hover:text-amber-500 transition-colors p-1 rounded hover:bg-amber-50"
+                                title="Score invoeren">
+                                <Plus size={14} />
+                              </button>
+                            )}
+                          </td>
+                        )
+                      })}
                       <td className="px-4 py-3 text-center border-l border-border">
                         {avg !== null ? (
                           <span className="text-xs font-semibold text-gray-700">
@@ -292,6 +489,20 @@ export default function ScoresPage() {
                         {avg !== null ? (
                           <span className={`inline-block px-2 py-0.5 rounded-lg text-xs font-semibold ${scoreColor(avg, a.max_score)}`}>
                             {fmt(avg, a.max_score)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
+                    )
+                  })}
+                  {tests.map((t: any) => {
+                    const avg = testAvg(t.id)
+                    return (
+                      <td key={t.id} className="px-3 py-3 text-center bg-amber-50/30">
+                        {avg !== null ? (
+                          <span className={`inline-block px-2 py-0.5 rounded-lg text-xs font-semibold ${scoreColor(avg, Number(t.max_score))}`}>
+                            {fmt(avg, Number(t.max_score))}
                           </span>
                         ) : (
                           <span className="text-gray-300 text-xs">—</span>
