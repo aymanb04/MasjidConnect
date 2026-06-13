@@ -1,5 +1,15 @@
 -- MasjidConnect — Supabase Schema
--- Last synced: 2026-06-12
+-- Last synced: 2026-06-13
+--
+-- 2026-06-13 (migrations 13–18, mosque feedback feature batch):
+--   - New role 'leerlingenbegeleiding' (role CHECK + counselor read branches)
+--   - announcements: + group_id, + audience; 3 read policies → 1 audience-aware
+--   - New tables: families, student_details, student_notes, student_documents,
+--     fee_config, fee_payments, staff_pay, payroll_entries, class_tests,
+--     test_scores, oudercontact_slots, oudercontact_bookings
+--   - New private storage bucket 'student-documents'
+--   (Full RLS for the new tables is authoritative in supabase/14..18_*.sql)
+--
 -- Source of truth: pg_policies + pg_constraint + pg_indexes
 -- WARNING: This file is a reference/documentation copy. Do NOT run it as-is
 --          against a live database (no idempotency guards, no migration order).
@@ -157,7 +167,7 @@ CREATE TABLE public.profiles (
   id             uuid             NOT NULL,
   tenant_id      uuid,
   role           character varying NOT NULL
-    CHECK (role IN ('super_admin', 'admin', 'teacher', 'student')),
+    CHECK (role IN ('super_admin', 'admin', 'teacher', 'student', 'leerlingenbegeleiding')),
   first_name     character varying NOT NULL,
   last_name      character varying NOT NULL,
   email          character varying,
@@ -263,7 +273,11 @@ CREATE TABLE public.class_sessions (
 CREATE TABLE public.announcements (
   id           uuid             NOT NULL DEFAULT uuid_generate_v4(),
   tenant_id    uuid             NOT NULL,
-  class_id     uuid,                        -- NULL = school-wide
+  class_id     uuid,                        -- set when audience = 'class'
+  group_id     uuid,                        -- set when audience = 'group' (migration 17)
+  -- audience targeting (migration 17): school | class | group | teachers
+  audience     text             NOT NULL DEFAULT 'school'
+    CHECK (audience IN ('school', 'class', 'group', 'teachers')),
   created_by   uuid             NOT NULL,
   title        character varying NOT NULL,
   content      text,
@@ -273,6 +287,7 @@ CREATE TABLE public.announcements (
   CONSTRAINT announcements_pkey PRIMARY KEY (id),
   CONSTRAINT announcements_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE,
   CONSTRAINT announcements_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE CASCADE,
+  CONSTRAINT announcements_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.groups(id) ON DELETE CASCADE,
   CONSTRAINT announcements_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
 );
 
@@ -456,7 +471,7 @@ CREATE TABLE public.invitations (
   tenant_id   uuid             NOT NULL,
   email       character varying NOT NULL,
   role        character varying NOT NULL
-    CHECK (role IN ('admin', 'teacher', 'student')),
+    CHECK (role IN ('admin', 'teacher', 'student', 'leerlingenbegeleiding')),
   class_id    uuid,
   token       character varying NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex') UNIQUE,
   invited_by  uuid             NOT NULL,
@@ -610,7 +625,7 @@ CREATE POLICY "admin_manage_profiles" ON public.profiles
   WITH CHECK (
     (get_my_role())::text = 'admin'
     AND tenant_id = get_my_tenant_id()
-    AND (role)::text = ANY (ARRAY['student', 'teacher', 'admin'])
+    AND (role)::text = ANY (ARRAY['student', 'teacher', 'admin', 'leerlingenbegeleiding'])
   );
 
 CREATE POLICY "super_admin_all_profiles" ON public.profiles
@@ -639,7 +654,7 @@ CREATE POLICY "super_admin_all_years" ON public.school_years
 CREATE POLICY "member_view_groups" ON public.groups
   FOR SELECT USING (
     tenant_id = get_my_tenant_id()
-    AND ((get_my_role())::text = 'admin' OR am_i_member_of_group(id))
+    AND ((get_my_role())::text = ANY (ARRAY['admin', 'leerlingenbegeleiding']) OR am_i_member_of_group(id))
   );
 
 CREATE POLICY "admin_manage_groups" ON public.groups
@@ -659,7 +674,7 @@ CREATE POLICY "member_view_own_classes" ON public.classes
   FOR SELECT USING (
     tenant_id = get_my_tenant_id()
     AND (
-      (get_my_role())::text = 'admin'
+      (get_my_role())::text = ANY (ARRAY['admin', 'leerlingenbegeleiding'])
       OR am_i_teacher_of_class(id)
       OR am_i_student_of_class(id)
     )
@@ -678,14 +693,14 @@ CREATE POLICY "super_admin_all_classes" ON public.classes
 -- POLICIES — class_teachers
 -- ============================================================
 
--- Admin branch tenant-scoped (migration 12)
+-- Admin branch tenant-scoped (migration 12); counselor added (migration 13)
 CREATE POLICY "view_class_teachers" ON public.class_teachers
   FOR SELECT USING (
     is_super_admin()
     OR teacher_id = auth.uid()
     OR am_i_student_of_class(class_id)
     OR (
-      (get_my_role())::text = 'admin'
+      (get_my_role())::text = ANY (ARRAY['admin', 'leerlingenbegeleiding'])
       AND EXISTS (
         SELECT 1 FROM classes c
         WHERE c.id = class_teachers.class_id
@@ -736,7 +751,7 @@ CREATE POLICY "view_class_students" ON public.class_students
     OR student_id = auth.uid()
     OR am_i_teacher_of_class(class_id)
     OR (
-      (get_my_role())::text = 'admin'
+      (get_my_role())::text = ANY (ARRAY['admin', 'leerlingenbegeleiding'])
       AND EXISTS (
         SELECT 1 FROM classes c
         WHERE c.id = class_students.class_id
@@ -802,45 +817,32 @@ CREATE POLICY "super_admin_all_sessions" ON public.class_sessions
 -- POLICIES — announcements
 -- ============================================================
 
--- General read: own tenant + member of the class (or school-wide)
+-- Single audience-aware read policy (migration 17). Replaced the three
+-- prior OR-combining policies, which treated class_id IS NULL as "everyone"
+-- and would have leaked staff-only announcements to students.
 CREATE POLICY "announcements_read" ON public.announcements
-  FOR SELECT USING (
-    tenant_id = (SELECT p.tenant_id FROM profiles p WHERE p.id = auth.uid())
-    AND (
-      class_id IS NULL
-      OR class_id IN (
-        SELECT class_students.class_id FROM class_students
-        WHERE class_students.student_id = auth.uid()
-        UNION
-        SELECT class_teachers.class_id FROM class_teachers
-        WHERE class_teachers.teacher_id = auth.uid()
-      )
-    )
-  );
-
-CREATE POLICY "student_read_announcements" ON public.announcements
-  FOR SELECT USING (
+  FOR SELECT TO authenticated
+  USING (
     tenant_id = get_my_tenant_id()
     AND (
-      class_id IS NULL
-      OR EXISTS (
-        SELECT 1 FROM class_students
-        WHERE class_students.class_id = announcements.class_id
-          AND class_students.student_id = auth.uid()
-      )
-    )
-  );
-
-CREATE POLICY "teacher_read_announcements" ON public.announcements
-  FOR SELECT USING (
-    tenant_id = get_my_tenant_id()
-    AND (
-      class_id IS NULL
-      OR EXISTS (
-        SELECT 1 FROM class_teachers
-        WHERE class_teachers.class_id = announcements.class_id
-          AND class_teachers.teacher_id = auth.uid()
-      )
+      (get_my_role())::text = ANY (ARRAY['admin', 'super_admin'])
+      OR audience = 'school'
+      OR (audience = 'teachers'
+          AND (get_my_role())::text = ANY (ARRAY['teacher', 'leerlingenbegeleiding']))
+      OR (audience = 'class' AND class_id IN (
+            SELECT cs.class_id FROM class_students cs WHERE cs.student_id = auth.uid()
+            UNION
+            SELECT ct.class_id FROM class_teachers ct WHERE ct.teacher_id = auth.uid()
+          ))
+      OR (audience = 'group' AND group_id IN (
+            SELECT c.group_id FROM classes c
+            JOIN class_students cs ON cs.class_id = c.id
+            WHERE cs.student_id = auth.uid() AND c.group_id IS NOT NULL
+            UNION
+            SELECT c.group_id FROM classes c
+            JOIN class_teachers ct ON ct.class_id = c.id
+            WHERE ct.teacher_id = auth.uid() AND c.group_id IS NOT NULL
+          ))
     )
   );
 
@@ -1344,6 +1346,18 @@ CREATE POLICY admin_manage_exam_scores ON exam_scores
     )
   );
 
+-- Counselor read-only on exam scores (migration 13)
+CREATE POLICY counselor_read_exam_scores ON exam_scores
+  FOR SELECT TO authenticated
+  USING (
+    (get_my_role())::text = 'leerlingenbegeleiding'
+    AND EXISTS (
+      SELECT 1 FROM classes c
+      WHERE c.id = exam_scores.class_id
+        AND c.tenant_id = (SELECT get_my_tenant_id())
+    )
+  );
+
 -- ============================================================
 -- POLICIES — feedback (migration 8/8b)
 -- ============================================================
@@ -1610,3 +1624,205 @@ CREATE POLICY "module_docs_delete" ON storage.objects
       )
     )
   );
+
+-- ============================================================
+-- FEATURE BATCH 2026-06 (migrations 14–18)
+-- Tables below are the reference catalog. The exact RLS policies are
+-- authoritative in the numbered migration files (supabase/14_dossiers.sql …
+-- 18_oudercontact.sql), applied to the live DB and summarized inline.
+-- ============================================================
+
+-- ---- Migration 14: student dossiers ------------------------
+
+CREATE TABLE public.families (
+  id         uuid NOT NULL DEFAULT uuid_generate_v4(),
+  tenant_id  uuid NOT NULL,
+  label      text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT families_pkey PRIMARY KEY (id),
+  CONSTRAINT families_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE
+);
+
+CREATE TABLE public.student_details (
+  student_id              uuid NOT NULL,
+  tenant_id               uuid NOT NULL,
+  date_of_birth           date,
+  gender                  text CHECK (gender IN ('m', 'f')),
+  address                 text,
+  parent_email            text,
+  parent_phone            text,
+  emergency_contact_name  text,
+  emergency_contact_phone text,
+  family_id               uuid,
+  created_at              timestamp with time zone DEFAULT now(),
+  updated_at              timestamp with time zone DEFAULT now(),
+  CONSTRAINT student_details_pkey PRIMARY KEY (student_id),
+  CONSTRAINT student_details_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
+  CONSTRAINT student_details_tenant_id_fkey  FOREIGN KEY (tenant_id)  REFERENCES public.tenants(id) ON DELETE CASCADE,
+  CONSTRAINT student_details_family_id_fkey  FOREIGN KEY (family_id)  REFERENCES public.families(id) ON DELETE SET NULL
+);
+-- RLS: admin/counselor read tenant; teacher read/write own students; student reads own row.
+
+CREATE TABLE public.student_notes (
+  id         uuid NOT NULL DEFAULT uuid_generate_v4(),
+  tenant_id  uuid NOT NULL,
+  student_id uuid NOT NULL,
+  author_id  uuid NOT NULL,
+  body       text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT student_notes_pkey PRIMARY KEY (id),
+  CONSTRAINT student_notes_tenant_id_fkey  FOREIGN KEY (tenant_id)  REFERENCES public.tenants(id) ON DELETE CASCADE,
+  CONSTRAINT student_notes_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
+  CONSTRAINT student_notes_author_id_fkey  FOREIGN KEY (author_id)  REFERENCES public.profiles(id)
+);
+-- RLS: admin/counselor + teacher-of-student read+insert; delete own or admin. Students: no access.
+
+CREATE TABLE public.student_documents (
+  id          uuid NOT NULL DEFAULT uuid_generate_v4(),
+  tenant_id   uuid NOT NULL,
+  student_id  uuid NOT NULL,
+  doc_type    text NOT NULL DEFAULT 'other' CHECK (doc_type IN ('contract', 'disability', 'other')),
+  file_name   text NOT NULL,
+  file_url    text NOT NULL,
+  note        text,
+  uploaded_by uuid NOT NULL,
+  created_at  timestamp with time zone DEFAULT now(),
+  CONSTRAINT student_documents_pkey PRIMARY KEY (id),
+  CONSTRAINT student_documents_tenant_id_fkey   FOREIGN KEY (tenant_id)   REFERENCES public.tenants(id) ON DELETE CASCADE,
+  CONSTRAINT student_documents_student_id_fkey  FOREIGN KEY (student_id)  REFERENCES public.profiles(id) ON DELETE CASCADE,
+  CONSTRAINT student_documents_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.profiles(id)
+);
+-- RLS: same as student_notes. Private storage bucket 'student-documents'
+-- path {tenant_id}/{student_id}/{ts}_{name}, folder-scoped (no student access).
+
+-- ---- Migration 15: student fees + payroll (admin-only) -----
+
+CREATE TABLE public.fee_config (
+  id                uuid NOT NULL DEFAULT uuid_generate_v4(),
+  tenant_id         uuid NOT NULL,
+  school_year_id    uuid NOT NULL,
+  membership_amount numeric NOT NULL DEFAULT 0 CHECK (membership_amount >= 0),
+  chart_amount      numeric NOT NULL DEFAULT 0 CHECK (chart_amount >= 0),
+  membership_due    date,
+  chart_due         date,
+  created_at        timestamp with time zone DEFAULT now(),
+  updated_at        timestamp with time zone DEFAULT now(),
+  CONSTRAINT fee_config_pkey PRIMARY KEY (id),
+  CONSTRAINT fee_config_tenant_year_key UNIQUE (tenant_id, school_year_id),
+  CONSTRAINT fee_config_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE,
+  CONSTRAINT fee_config_school_year_id_fkey FOREIGN KEY (school_year_id) REFERENCES public.school_years(id) ON DELETE CASCADE
+);
+
+CREATE TABLE public.fee_payments (
+  id             uuid NOT NULL DEFAULT uuid_generate_v4(),
+  tenant_id      uuid NOT NULL,
+  school_year_id uuid NOT NULL,
+  fee_type       text NOT NULL CHECK (fee_type IN ('membership', 'chart')),
+  student_id     uuid,
+  family_id      uuid,
+  amount         numeric NOT NULL CHECK (amount >= 0),
+  paid_at        date,
+  note           text,
+  created_at     timestamp with time zone DEFAULT now(),
+  CONSTRAINT fee_payments_pkey PRIMARY KEY (id),
+  CONSTRAINT fee_payments_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE,
+  CONSTRAINT fee_payments_school_year_id_fkey FOREIGN KEY (school_year_id) REFERENCES public.school_years(id) ON DELETE CASCADE,
+  CONSTRAINT fee_payments_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
+  CONSTRAINT fee_payments_family_id_fkey FOREIGN KEY (family_id) REFERENCES public.families(id) ON DELETE CASCADE,
+  CONSTRAINT fee_payments_target_check CHECK (
+    (fee_type = 'membership' AND student_id IS NOT NULL AND family_id IS NULL)
+    OR (fee_type = 'chart' AND family_id IS NOT NULL AND student_id IS NULL)
+  )
+);
+-- Partial unique indexes: one membership per student/year, one chart per family/year.
+
+CREATE TABLE public.staff_pay (
+  staff_id    uuid NOT NULL,
+  tenant_id   uuid NOT NULL,
+  hourly_rate numeric NOT NULL CHECK (hourly_rate >= 0),
+  updated_at  timestamp with time zone DEFAULT now(),
+  CONSTRAINT staff_pay_pkey PRIMARY KEY (staff_id),
+  CONSTRAINT staff_pay_staff_id_fkey FOREIGN KEY (staff_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
+  CONSTRAINT staff_pay_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE
+);
+
+CREATE TABLE public.payroll_entries (
+  id            uuid NOT NULL DEFAULT uuid_generate_v4(),
+  tenant_id     uuid NOT NULL,
+  staff_id      uuid NOT NULL,
+  period_month  text NOT NULL,
+  hours         numeric NOT NULL CHECK (hours >= 0),
+  rate_snapshot numeric NOT NULL CHECK (rate_snapshot >= 0),
+  amount        numeric NOT NULL CHECK (amount >= 0),
+  created_at    timestamp with time zone DEFAULT now(),
+  CONSTRAINT payroll_entries_pkey PRIMARY KEY (id),
+  CONSTRAINT payroll_entries_staff_month_key UNIQUE (staff_id, period_month),
+  CONSTRAINT payroll_entries_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE,
+  CONSTRAINT payroll_entries_staff_id_fkey FOREIGN KEY (staff_id) REFERENCES public.profiles(id) ON DELETE CASCADE
+);
+-- period_month CHECK (YYYY-MM) omitted here for readability; see migration 15.
+-- RLS for all four: admin + super_admin only, tenant-scoped. NO teacher/student/counselor.
+
+-- ---- Migration 16: manual test / offline scores ------------
+
+CREATE TABLE public.class_tests (
+  id         uuid NOT NULL DEFAULT uuid_generate_v4(),
+  class_id   uuid NOT NULL,
+  title      character varying NOT NULL,
+  max_score  numeric NOT NULL CHECK (max_score > 0),
+  test_date  date NOT NULL DEFAULT CURRENT_DATE,
+  created_by uuid NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT class_tests_pkey PRIMARY KEY (id),
+  CONSTRAINT class_tests_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE CASCADE,
+  CONSTRAINT class_tests_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+
+CREATE TABLE public.test_scores (
+  id         uuid NOT NULL DEFAULT uuid_generate_v4(),
+  test_id    uuid NOT NULL,
+  student_id uuid NOT NULL,
+  score      numeric NOT NULL CHECK (score >= 0),
+  updated_at timestamp with time zone DEFAULT now(),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT test_scores_pkey PRIMARY KEY (id),
+  CONSTRAINT test_scores_test_student_key UNIQUE (test_id, student_id),
+  CONSTRAINT test_scores_test_id_fkey FOREIGN KEY (test_id) REFERENCES public.class_tests(id) ON DELETE CASCADE,
+  CONSTRAINT test_scores_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id) ON DELETE CASCADE
+);
+-- RLS mirrors exam_scores: teacher manages own classes, admin tenant, student reads own.
+
+-- ---- Migration 18: oudercontact slots ----------------------
+
+CREATE TABLE public.oudercontact_slots (
+  id         uuid NOT NULL DEFAULT uuid_generate_v4(),
+  tenant_id  uuid NOT NULL,
+  teacher_id uuid NOT NULL,
+  class_id   uuid,
+  starts_at  timestamp with time zone NOT NULL,
+  ends_at    timestamp with time zone NOT NULL,
+  capacity   integer NOT NULL DEFAULT 1 CHECK (capacity > 0),
+  note       text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT oudercontact_slots_pkey PRIMARY KEY (id),
+  CONSTRAINT oudercontact_slots_time_check CHECK (ends_at > starts_at),
+  CONSTRAINT oudercontact_slots_tenant_id_fkey  FOREIGN KEY (tenant_id)  REFERENCES public.tenants(id) ON DELETE CASCADE,
+  CONSTRAINT oudercontact_slots_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
+  CONSTRAINT oudercontact_slots_class_id_fkey   FOREIGN KEY (class_id)   REFERENCES public.classes(id) ON DELETE SET NULL
+);
+
+CREATE TABLE public.oudercontact_bookings (
+  id         uuid NOT NULL DEFAULT uuid_generate_v4(),
+  slot_id    uuid NOT NULL,
+  student_id uuid NOT NULL,
+  booked_by  uuid NOT NULL,
+  note       text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT oudercontact_bookings_pkey PRIMARY KEY (id),
+  CONSTRAINT oudercontact_bookings_slot_student_key UNIQUE (slot_id, student_id),
+  CONSTRAINT oudercontact_bookings_slot_id_fkey    FOREIGN KEY (slot_id)    REFERENCES public.oudercontact_slots(id) ON DELETE CASCADE,
+  CONSTRAINT oudercontact_bookings_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
+  CONSTRAINT oudercontact_bookings_booked_by_fkey  FOREIGN KEY (booked_by)  REFERENCES public.profiles(id)
+);
+-- RLS: tenant reads slots; teacher/admin manage own/tenant slots; student books
+-- own (or admin on behalf); the slot's teacher + admin read bookings.
