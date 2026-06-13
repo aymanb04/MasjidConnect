@@ -3,7 +3,7 @@
 import { supabase } from '@/lib/supabase/singleton'
 
 interface Props {
-    bucket: 'submission-files' | 'module-documents'
+    bucket: 'submission-files' | 'module-documents' | 'student-documents'
     path: string
     className?: string
     children: React.ReactNode
