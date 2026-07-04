@@ -67,7 +67,7 @@ export default function HuiswerkDetailPage() {
       } else {
         setAllSubmissions([])
       }
-      const { count } = await supabase.from('class_students').select('*', { count: 'exact', head: true }).eq('class_id', a.class_id)
+      const { count } = await supabase.from('class_students').select('*', { count: 'estimated', head: true }).eq('class_id', a.class_id)
       setStudentCount(count ?? 0)
     }
     setLoading(false)

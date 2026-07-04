@@ -42,7 +42,7 @@ export default function SuperAdminPage() {
   async function loadData() {
     const [{ data: t }, { count }, { data: classRows }] = await Promise.all([
       supabase.from('tenants').select('*').order('created_at', { ascending: false }),
-      supabase.from('profiles').select('*', { count: 'exact', head: true }),
+      supabase.from('profiles').select('*', { count: 'estimated', head: true }),
       supabase.from('classes').select('tenant_id').eq('is_archived', false),
     ])
     const map: Record<string, number> = {}

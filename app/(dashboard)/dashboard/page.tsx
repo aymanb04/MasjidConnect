@@ -38,33 +38,33 @@ export default function DashboardPage() {
           assignments = assignments.filter((a: any) => !submittedIds.has(a.id))
         }
       }
-      const { count: submittedCount } = await supabase.from('submissions').select('*', { count: 'exact', head: true }).eq('student_id', profile!.id)
+      const { count: submittedCount } = await supabase.from('submissions').select('*', { count: 'estimated', head: true }).eq('student_id', profile!.id)
       setData({ enrollments, assignments: assignments.slice(0, 5), submittedCount })
     } else if (role === 'teacher') {
       const { data: teaching } = await supabase.from('class_teachers').select('classes(id, name, color)').eq('teacher_id', profile!.id)
       const classIds = teaching?.map((c: any) => c.classes?.id).filter(Boolean) ?? []
-      const { count: assignmentCount } = await supabase.from('assignments').select('*', { count: 'exact', head: true }).in('class_id', classIds)
+      const { count: assignmentCount } = await supabase.from('assignments').select('*', { count: 'estimated', head: true }).in('class_id', classIds)
       const { data: assignmentRows } = classIds.length > 0
         ? await supabase.from('assignments').select('id').in('class_id', classIds)
         : { data: [] }
       const assignmentIds = assignmentRows?.map((a: any) => a.id) ?? []
       const { count: submissionCount } = assignmentIds.length > 0
-        ? await supabase.from('submissions').select('*', { count: 'exact', head: true }).in('assignment_id', assignmentIds).eq('status', 'submitted')
+        ? await supabase.from('submissions').select('*', { count: 'estimated', head: true }).in('assignment_id', assignmentIds).eq('status', 'submitted')
         : { count: 0 }
       setData({ teachingClasses: teaching, assignmentCount, submissionCount })
     } else if (role === 'super_admin') {
       const [{ count: classCount }, { count: teacherCount }, { count: studentCount }, { count: tenantCount }] = await Promise.all([
-        supabase.from('classes').select('*', { count: 'exact', head: true }).eq('is_archived', false),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'teacher'),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'student'),
-        supabase.from('tenants').select('*', { count: 'exact', head: true }).eq('is_active', true),
+        supabase.from('classes').select('*', { count: 'estimated', head: true }).eq('is_archived', false),
+        supabase.from('profiles').select('*', { count: 'estimated', head: true }).eq('role', 'teacher'),
+        supabase.from('profiles').select('*', { count: 'estimated', head: true }).eq('role', 'student'),
+        supabase.from('tenants').select('*', { count: 'estimated', head: true }).eq('is_active', true),
       ])
       setData({ classCount, teacherCount, studentCount, tenantCount })
     } else {
       const tid = profile!.tenant_id
-      const { count: classCount } = await supabase.from('classes').select('*', { count: 'exact', head: true }).eq('tenant_id', tid).eq('is_archived', false)
-      const { count: teacherCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('tenant_id', tid).eq('role', 'teacher')
-      const { count: studentCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('tenant_id', tid).eq('role', 'student')
+      const { count: classCount } = await supabase.from('classes').select('*', { count: 'estimated', head: true }).eq('tenant_id', tid).eq('is_archived', false)
+      const { count: teacherCount } = await supabase.from('profiles').select('*', { count: 'estimated', head: true }).eq('tenant_id', tid).eq('role', 'teacher')
+      const { count: studentCount } = await supabase.from('profiles').select('*', { count: 'estimated', head: true }).eq('tenant_id', tid).eq('role', 'student')
       setData({ classCount, teacherCount, studentCount })
     }
     setLoading(false)
