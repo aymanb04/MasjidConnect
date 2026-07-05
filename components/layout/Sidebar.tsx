@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { cn, getInitials } from '@/lib/utils'
 import type { Profile, Tenant } from '@/lib/types'
-import { LayoutDashboard, BookOpen, FileText, GraduationCap, Settings, LogOut, Shield, ChevronRight, ExternalLink, CalendarDays, Clock, Lock, ClipboardCheck, FolderOpen, Euro, CalendarClock } from 'lucide-react'
+import { LayoutDashboard, BookOpen, FileText, GraduationCap, Settings, LogOut, Shield, ChevronRight, ExternalLink, CalendarDays, Clock, Lock, ClipboardCheck, FolderOpen, Euro, CalendarClock, ScrollText } from 'lucide-react'
 
 interface Props {
   profile: Profile
@@ -22,6 +22,7 @@ const navItems = [
   { label: 'Rooster',     href: '/rooster',      icon: Clock,           roles: ['admin','teacher','student'] },
   { label: 'Agenda',      href: '/agenda',       icon: CalendarDays,    roles: ['admin','teacher','student'] },
   { label: 'Oudercontact', href: '/oudercontact', icon: CalendarClock,  roles: ['admin','teacher','student'] },
+  { label: 'Rapporten',   href: '/rapporten',    icon: ScrollText,      roles: ['admin','teacher','student','leerlingenbegeleiding'] },
   { label: 'Dossiers',    href: '/dossiers',     icon: FolderOpen,      roles: ['admin','teacher','leerlingenbegeleiding'] },
   { label: 'Betalingen',  href: '/betalingen',   icon: Euro,            roles: ['admin'] },
   { label: 'Beheer',      href: '/beheer',      icon: Settings,        roles: ['admin'] },

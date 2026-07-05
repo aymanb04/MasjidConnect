@@ -255,6 +255,39 @@ export interface ExamScore {
   updated_at: string
 }
 
+export type RapportStatus = 'draft' | 'published'
+
+export interface RapportCard {
+  id: string
+  tenant_id: string
+  student_id: string
+  school_year_id: string
+  semester: 1 | 2
+  status: RapportStatus
+  level_snapshot?: string
+  generated_by?: string
+  published_by?: string
+  created_at: string
+  updated_at: string
+  published_at?: string
+  // joined
+  student?: Pick<Profile, 'id' | 'first_name' | 'last_name'>
+  lines?: RapportLine[]
+}
+
+export interface RapportLine {
+  id: string
+  rapport_card_id: string
+  class_id: string
+  subject_snapshot?: string
+  result?: number | null
+  comment?: string
+  updated_by?: string
+  updated_at: string
+  // joined
+  class?: Pick<Class, 'id' | 'name' | 'color'>
+}
+
 export interface Family {
   id: string
   tenant_id: string
