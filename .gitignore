@@ -47,3 +47,6 @@ Schermafbeelding*.png
 Rapport_template.pdf
 test.ts
 healthy_unhealthy.png
+
+# Internal security/logic screen (2026-07-06) — contains findings; keep private
+CODE_SCREEN_2026-07-06.md
