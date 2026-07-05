@@ -6,7 +6,7 @@ import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { getDeadlineLabel, getSubmissionStatusBadge } from '@/lib/utils'
-import { ArrowLeft, FileText, BookOpen, Users, Plus, Clock, GraduationCap, Mail, BarChart2, X, Loader2, ScrollText } from 'lucide-react'
+import { ArrowLeft, FileText, BookOpen, Users, Plus, Clock, GraduationCap, Mail, BarChart2, X, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function KlasDetailPage() {
@@ -127,9 +127,6 @@ export default function KlasDetailPage() {
             </p>
           </div>
           <div className="flex gap-2 flex-shrink-0">
-            <Link href={`/klassen/${klasId}/rapporten`} className="btn-secondary text-xs py-1.5 px-3">
-              <ScrollText size={13}/> Rapporten
-            </Link>
             {isTeacher && (
               <Link href={`/klassen/${klasId}/scores`} className="btn-secondary text-xs py-1.5 px-3">
                 <BarChart2 size={13}/> Puntenlijst
