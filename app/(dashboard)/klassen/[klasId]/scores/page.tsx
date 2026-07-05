@@ -7,8 +7,18 @@ import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { ArrowLeft, GraduationCap, Plus, X, Check, Pencil, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import StudentScores from '@/components/features/scores/StudentScores'
 
+// Route entry: students get the read-only self-scoped view; staff get the full
+// editable gradebook below.
 export default function ScoresPage() {
+  const { profile, loading } = useProfile()
+  if (loading) return <PageLoader />
+  if (profile?.role === 'student') return <StudentScores />
+  return <StaffScoresPage />
+}
+
+function StaffScoresPage() {
   const { klasId } = useParams()
   const { profile, loading: profileLoading } = useProfile()
   const router = useRouter()

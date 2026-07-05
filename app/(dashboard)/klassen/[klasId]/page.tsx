@@ -132,6 +132,11 @@ export default function KlasDetailPage() {
                 <BarChart2 size={13}/> Puntenlijst
               </Link>
             )}
+            {profile?.role === 'student' && (
+              <Link href={`/klassen/${klasId}/scores`} className="btn-secondary text-xs py-1.5 px-3">
+                <BarChart2 size={13}/> Mijn punten
+              </Link>
+            )}
           </div>
         </div>
       </div>
