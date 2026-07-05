@@ -18,6 +18,11 @@ SECURITY
 TOEKOMSTIGE_FUNCTIES.txt
 
 # Local-only working files (not tracked)
+# Consolidated internal docs (2026-07-05) + archived originals
+PROJECT.md
+ROADMAP.md
+SECURITY_AND_INFRA.md
+docs/_archive/
 SECURITY_TODO.md
 SECURITY_FINDINGS.md
 FEEDBACK_BUILD_PLAN.md
@@ -41,3 +46,4 @@ Smartschool-Privacyverklaring.pdf
 Schermafbeelding*.png
 Rapport_template.pdf
 test.ts
+healthy_unhealthy.png
