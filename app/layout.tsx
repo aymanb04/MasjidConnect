@@ -1,5 +1,14 @@
 import type { Metadata, Viewport } from 'next'
+import { Inter } from 'next/font/google'
 import './globals.css'
+
+// Self-hosted via next/font: no render-blocking Google Fonts request,
+// no flash of fallback font on slow connections.
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+})
 
 export const metadata: Metadata = {
   title: { default: 'MasjidConnect', template: '%s — MasjidConnect' },
@@ -25,7 +34,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="nl">
+    <html lang="nl" className={inter.variable}>
       <body>{children}</body>
     </html>
   )

@@ -58,14 +58,14 @@ export default function AkkoordPage() {
     // While loading, or while a redirect (no profile / already accepted) is in flight.
     if (loading || !profile || !needsTermsAcceptance(profile)) {
         return (
-            <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F8F7F4' }}>
+            <div className="min-h-dvh flex items-center justify-center" style={{ backgroundColor: '#F8F7F4' }}>
                 <Loader2 size={24} className="animate-spin" style={{ color: '#1B6B4A' }} />
             </div>
         )
     }
 
     return (
-        <div className="min-h-screen px-4 py-8 sm:py-12" style={{ backgroundColor: '#F8F7F4' }}>
+        <div className="min-h-dvh px-4 py-8 sm:py-12" style={{ backgroundColor: '#F8F7F4' }}>
             <div className="max-w-2xl mx-auto">
                 {/* Header */}
                 <div className="flex items-center gap-2 mb-6">

@@ -10,6 +10,7 @@ import {
   Loader2, ArrowRight, Users, GraduationCap,
 } from 'lucide-react'
 import Link from 'next/link'
+import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -53,6 +54,7 @@ export default function JaarovergangPage() {
 
   // Create modal
   const [showCreateModal, setShowCreateModal] = useState(false)
+  useScrollLock(showCreateModal)
   const [newYearForm, setNewYearForm] = useState({ name: '', start_date: '', end_date: '' })
   const [creating, setCreating] = useState(false)
 

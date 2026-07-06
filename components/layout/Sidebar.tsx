@@ -45,7 +45,10 @@ export default function Sidebar({ profile, tenant, onClose }: Props) {
   const filtered = navItems.filter(item => item.roles.includes(profile.role))
 
   return (
-    <aside className="w-[240px] bg-white border-r border-border flex flex-col h-screen">
+    <aside
+      className="w-[240px] bg-white border-r border-border flex flex-col h-full"
+      style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+    >
       <div className="px-5 py-5 border-b border-border">
         <div className="flex items-center gap-2.5">
           <div

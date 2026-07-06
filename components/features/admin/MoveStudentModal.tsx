@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { X, Loader2, Plus, Trash2, ArrowLeftRight, CheckCircle2 } from 'lucide-react'
+import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
 interface Props {
   student: { id: string; first_name: string; last_name: string }
@@ -20,6 +21,7 @@ interface ClassOption {
 }
 
 export function MoveStudentModal({ student, tenantId, onClose, onSaved }: Props) {
+  useScrollLock() // mounted = open
   const [currentClasses, setCurrentClasses] = useState<ClassOption[]>([])
   const [availableClasses, setAvailableClasses] = useState<ClassOption[]>([])
   const [toAdd,    setToAdd]    = useState<string[]>([])       // class IDs to enroll

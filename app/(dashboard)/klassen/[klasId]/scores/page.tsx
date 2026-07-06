@@ -350,7 +350,7 @@ function StaffScoresPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-gray-50/60">
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[160px] sticky left-0 bg-gray-50/60 z-10">
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[160px] sticky left-0 bg-gray-50 z-10">
                     Leerling
                   </th>
                   {assignments.map((a: any) => (
@@ -385,7 +385,7 @@ function StaffScoresPage() {
                   const avg = studentAvg(s.id)
                   return (
                     <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3 sticky left-0 bg-white hover:bg-gray-50/50 z-10">
+                      <td className="px-4 py-3 sticky left-0 bg-white hover:bg-gray-50 z-10">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-medium flex-shrink-0">
                             {s.first_name[0]}{s.last_name[0]}
@@ -489,7 +489,7 @@ function StaffScoresPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border bg-gray-50/60">
-                  <td className="px-4 py-3 text-xs font-semibold text-gray-500 sticky left-0 bg-gray-50/60 z-10">
+                  <td className="px-4 py-3 text-xs font-semibold text-gray-500 sticky left-0 bg-gray-50 z-10">
                     Klasgemiddelde
                   </td>
                   {assignments.map((a: any) => {

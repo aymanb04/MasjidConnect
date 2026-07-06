@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { Plus, X, Loader2, GraduationCap } from 'lucide-react'
+import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
 interface Props {
   tenantId: string
@@ -11,6 +12,7 @@ interface Props {
 
 export function CreateClassButton({ tenantId, onCreated }: Props) {
   const [open, setOpen]               = useState(false)
+  useScrollLock(open)
   const [loading, setLoading]         = useState(false)
   const [loadingYears, setLoadingYears]   = useState(false)
   const [loadingGroups, setLoadingGroups] = useState(false)

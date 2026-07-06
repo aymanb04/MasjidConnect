@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 import { DeleteUserButton } from '@/components/features/admin/DeleteUserButton'
 import { ReactivateUserButton } from '@/components/features/admin/ReactivateUserButton'
+import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
 export default function SuperAdminPage() {
   const { profile, loading: profileLoading } = useProfile()
@@ -427,6 +428,7 @@ export default function SuperAdminPage() {
 }
 
 function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  useScrollLock() // mounted = open
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [form, setForm]       = useState({
@@ -634,6 +636,7 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
 }
 
 function EditMoskeeModal({ tenant, onClose, onSaved }: { tenant: any; onClose: () => void; onSaved: () => void }) {
+  useScrollLock() // mounted = open
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [form, setForm]       = useState({

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { Plus, X, Loader2, Mail } from 'lucide-react'
+import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
 interface Props {
   tenantId?: string
@@ -13,6 +14,7 @@ interface Props {
 export function InviteUserButton({ tenantId, onInvited }: Props) {
   const { profile } = useProfile()
   const [open, setOpen]       = useState(false)
+  useScrollLock(open)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError]     = useState('')

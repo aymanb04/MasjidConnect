@@ -5,12 +5,14 @@ import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Plus, X, Loader2, BookOpen } from 'lucide-react'
+import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
 export default function CreateModuleButton() {
   const { profile } = useProfile()
   const searchParams = useSearchParams()
   const router = useRouter()
   const [open, setOpen]       = useState(false)
+  useScrollLock(open)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [classes, setClasses] = useState<any[]>([])

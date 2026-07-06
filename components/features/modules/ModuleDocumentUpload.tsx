@@ -5,11 +5,13 @@ import { getSupabase } from '@/lib/supabase/singleton'
 import { useRouter } from 'next/navigation'
 import { Upload, X, Loader2, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
 interface Props { moduleId: string; onUploaded?: () => void }
 
 export default function ModuleDocumentUpload({ moduleId, onUploaded }: Props) {
   const [open, setOpen]       = useState(false)
+  useScrollLock(open)
   const [file, setFile]       = useState<File | null>(null)
   const [title, setTitle]     = useState('')
   const [loading, setLoading] = useState(false)

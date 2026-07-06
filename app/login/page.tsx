@@ -30,7 +30,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-dvh flex">
       <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden flex-col" style={{ backgroundColor: '#1B6B4A' }}>
         <div className="absolute inset-0 pattern-bg" />
         <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />

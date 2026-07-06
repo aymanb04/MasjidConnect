@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { Upload, X, Loader2, CheckCircle2, AlertCircle, FileText, ArrowRight } from 'lucide-react'
+import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
 interface ImportResult {
     email: string
@@ -28,6 +29,7 @@ const SYSTEM_FIELDS = [
 
 export default function CsvImportButton({ tenantId, onImported }: Props) {
     const [open, setOpen]           = useState(false)
+    useScrollLock(open)
     const [step, setStep]           = useState<'upload' | 'mapping' | 'preview' | 'done'>('upload')
     const [rawHeaders, setRawHeaders] = useState<string[]>([])
     const [rawRows, setRawRows]     = useState<Record<string, string>[]>([])

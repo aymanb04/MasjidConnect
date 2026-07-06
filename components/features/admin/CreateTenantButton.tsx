@@ -3,9 +3,11 @@ import { useState } from 'react'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { Plus, X, Loader2, Building2 } from 'lucide-react'
 import { slugify } from '@/lib/utils'
+import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
 export default function CreateTenantButton({ onCreated }: { onCreated?: () => void }) {
   const [open, setOpen] = useState(false)
+  useScrollLock(open)
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({ name: '', slug: '', city: '', email: '', subscription_status: 'active', subscription_price: '500', subscription_interval: 'yearly', admin_email: '', admin_first: '', admin_last: '' })
 

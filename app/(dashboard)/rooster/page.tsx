@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, EmptyState } from '@/components/ui/PageShell'
 import { Clock, Plus, X, Loader2 } from 'lucide-react'
+import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
 const DAYS = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag']
 const DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo']
@@ -155,6 +156,7 @@ export default function RoosterPage() {
 function AddSessionModal({ classes, tenantId, onClose, onAdded }: {
   classes: any[]; tenantId: string; onClose: () => void; onAdded: () => void
 }) {
+  useScrollLock() // mounted = open
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [form, setForm]       = useState({

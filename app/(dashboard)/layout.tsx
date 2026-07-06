@@ -34,7 +34,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     if (loading) {
         return (
-            <div className="flex h-screen items-center justify-center" style={{ backgroundColor: '#F8F7F4' }}>
+            <div className="flex h-dvh items-center justify-center" style={{ backgroundColor: '#F8F7F4' }}>
                 <div className="flex flex-col items-center gap-3">
                     <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#1B6B4A', borderTopColor: 'transparent' }} />
                     <p className="text-sm text-gray-500">Laden…</p>
@@ -47,23 +47,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!profile || needsTermsAcceptance(profile)) return null
 
     return (
-        <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#F8F7F4' }}>
+        <div className="flex h-dvh overflow-hidden" style={{ backgroundColor: '#F8F7F4' }}>
             {/* Mobile overlay */}
             {sidebarOpen && (
                 <div
-                    className="fixed inset-0 z-40 bg-black/50 md:hidden"
+                    className="fixed inset-0 z-40 bg-black/50 sidenav:hidden"
                     onClick={() => setSidebarOpen(false)}
                 />
             )}
 
             {/* Sidebar — fixed overlay on mobile, static on desktop */}
-            <div className={`fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0 flex-shrink-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className={`fixed inset-y-0 left-0 z-50 transition-transform duration-200 sidenav:static sidenav:translate-x-0 flex-shrink-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <Sidebar profile={profile} tenant={tenant} onClose={() => setSidebarOpen(false)} />
             </div>
 
-            <main className="flex-1 overflow-y-auto min-w-0">
+            <main
+                data-scroll-container
+                className="flex-1 overflow-y-auto overscroll-y-contain min-w-0"
+                style={{
+                    // Keep content clear of the notch (landscape) and home indicator
+                    paddingLeft: 'env(safe-area-inset-left, 0px)',
+                    paddingRight: 'env(safe-area-inset-right, 0px)',
+                    paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+                }}
+            >
                 {/* Mobile top bar */}
-                <div className="sticky top-0 z-30 flex items-center justify-between px-4 bg-white border-b border-gray-200 md:hidden" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: '0.75rem' }}>
+                <div className="sticky top-0 z-30 flex items-center justify-between px-4 bg-white border-b border-gray-200 sidenav:hidden" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: '0.75rem' }}>
                     <button
                         onClick={() => setSidebarOpen(true)}
                         className="p-1 -ml-1 text-gray-600 hover:text-gray-900"

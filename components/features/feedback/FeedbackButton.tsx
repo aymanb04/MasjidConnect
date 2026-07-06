@@ -62,8 +62,14 @@ export function FeedbackButton() {
       <button
         onClick={openPanel}
         title="Feedback geven"
-        className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2"
-        style={{ backgroundColor: '#1B6B4A', outlineColor: '#1B6B4A' }}
+        className="fixed z-50 w-12 h-12 rounded-full shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2"
+        style={{
+          backgroundColor: '#1B6B4A',
+          outlineColor: '#1B6B4A',
+          // Clear the iOS home indicator / notch in landscape
+          bottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))',
+          right: 'calc(1.5rem + env(safe-area-inset-right, 0px))',
+        }}
       >
         <MessageSquare size={20} className="text-white" />
       </button>
@@ -77,7 +83,13 @@ export function FeedbackButton() {
             onClick={() => setOpen(false)}
           />
 
-          <div className="fixed bottom-20 right-6 z-50 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden animate-slide-up">
+          <div
+            className="fixed z-50 w-80 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden animate-slide-up"
+            style={{
+              bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))',
+              right: 'calc(1.5rem + env(safe-area-inset-right, 0px))',
+            }}
+          >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <span className="font-semibold text-sm text-gray-900">Feedback geven</span>

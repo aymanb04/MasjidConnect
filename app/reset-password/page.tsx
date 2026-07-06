@@ -94,7 +94,7 @@ export default function ResetPasswordPage() {
     // Laadscherm
     if (!ready && !error) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-surface-warm">
+            <div className="min-h-dvh flex items-center justify-center bg-surface-warm">
                 <div className="text-center">
                     <Loader2 size={24} className="animate-spin mx-auto mb-3" style={{ color: '#1B6B4A' }}/>
                     <p className="text-sm text-gray-500">Bezig met verificatie…</p>
@@ -106,7 +106,7 @@ export default function ResetPasswordPage() {
     // Foutscherm (verlopen link)
     if (error && !ready) {
         return (
-            <div className="min-h-screen flex items-center justify-center p-8 bg-surface-warm">
+            <div className="min-h-dvh flex items-center justify-center p-8 bg-surface-warm">
                 <div className="w-full max-w-[380px] text-center">
                     <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <span className="text-2xl">⚠️</span>
@@ -122,7 +122,7 @@ export default function ResetPasswordPage() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-8 bg-surface-warm">
+        <div className="min-h-dvh flex items-center justify-center p-8 bg-surface-warm">
             <div className="w-full max-w-[380px]">
                 <div className="flex items-center gap-2 mb-8">
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#1B6B4A' }}>

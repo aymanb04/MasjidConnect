@@ -1,6 +1,9 @@
 import type { Config } from 'tailwindcss'
 
 const config: Config = {
+  // hover: utilities only on devices with a real pointer — on touch screens
+  // :hover otherwise sticks after a tap (lifted cards, highlighted nav items).
+  future: { hoverOnlyWhenSupported: true },
   content: [
     './pages/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -8,6 +11,11 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      screens: {
+        // Static sidebar needs width AND height: landscape phones are ≥768px
+        // wide but ~400px tall — they get the mobile drawer instead.
+        sidenav: { raw: '(min-width: 768px) and (min-height: 480px)' },
+      },
       colors: {
         primary: {
           50:  '#EEF6F1',
@@ -56,7 +64,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
         arabic: ['Amiri', 'serif'],
       },
       borderRadius: {
