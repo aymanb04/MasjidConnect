@@ -25,6 +25,32 @@ export default function DashboardPage() {
     const supabase = getSupabase()
     const role = profile!.role
 
+    // One round-trip instead of a query waterfall (migration 20). Falls back
+    // to the separate queries while the RPC isn't applied in prod yet.
+    const { data: d, error } = await supabase.rpc('get_dashboard_data')
+    if (!error && d) {
+      if (role === 'student') {
+        setData({
+          enrollments: (d.classes ?? []).map((c: any) => ({ classes: c })),
+          assignments: (d.open_assignments ?? []).map((a: any) => ({ ...a, classes: { name: a.class_name } })),
+          openCount: d.open_count,
+          submittedCount: d.submitted_count,
+        })
+      } else if (role === 'teacher') {
+        setData({
+          teachingClasses: (d.classes ?? []).map((c: any) => ({ classes: c })),
+          assignmentCount: d.assignment_count,
+          submissionCount: d.to_grade_count,
+        })
+      } else if (role === 'super_admin') {
+        setData({ classCount: d.class_count, teacherCount: d.teacher_count, studentCount: d.student_count, tenantCount: d.tenant_count })
+      } else {
+        setData({ classCount: d.class_count, teacherCount: d.teacher_count, studentCount: d.student_count })
+      }
+      setLoading(false)
+      return
+    }
+
     if (role === 'student') {
       const { data: enrollments } = await supabase.from('class_students').select('classes(id, name, color)').eq('student_id', profile!.id)
       const classIds = enrollments?.map((e: any) => e.classes?.id).filter(Boolean) ?? []
@@ -75,7 +101,7 @@ export default function DashboardPage() {
   const role = profile?.role
 
   if (role === 'student') {
-    const { enrollments, assignments, submittedCount } = data
+    const { enrollments, assignments, openCount, submittedCount } = data
     return (
       <div className="animate-slide-up">
         <div className="page-header">
@@ -85,7 +111,7 @@ export default function DashboardPage() {
         <AnnouncementsCard profile={profile!} />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <Link href="/klassen" className="stat-card hover:border-primary-200 transition-colors"><div className="stat-icon bg-primary-50"><GraduationCap className="text-primary-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{enrollments?.length ?? 0}</div><div className="text-sm text-gray-500">Klassen</div></div></Link>
-          <Link href="/huiswerk" className="stat-card hover:border-primary-200 transition-colors"><div className="stat-icon bg-amber-50"><Clock className="text-amber-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{assignments?.length ?? 0}</div><div className="text-sm text-gray-500">Openstaand huiswerk</div></div></Link>
+          <Link href="/huiswerk" className="stat-card hover:border-primary-200 transition-colors"><div className="stat-icon bg-amber-50"><Clock className="text-amber-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{openCount ?? assignments?.length ?? 0}</div><div className="text-sm text-gray-500">Openstaand huiswerk</div></div></Link>
           <Link href="/huiswerk" className="stat-card hover:border-primary-200 transition-colors"><div className="stat-icon bg-blue-50"><CheckCircle2 className="text-blue-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{submittedCount ?? 0}</div><div className="text-sm text-gray-500">Ingediende taken</div></div></Link>
         </div>
         <div className="card p-6 mb-6">
