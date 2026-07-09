@@ -11,7 +11,10 @@ function getStoredSession() {
         const raw = localStorage.getItem(`sb-${projectId}-auth-token`)
         if (!raw) return null
         const parsed = JSON.parse(raw)
-        if (parsed.expires_at && parsed.expires_at * 1000 < Date.now()) return null
+        // An expired access token is NOT "logged out": getSession() mints a new
+        // one from the refresh token. Treating it as logged out made the layout
+        // redirect to /login before that refresh could run (PWA re-login bug).
+        if (!parsed.refresh_token) return null
         return parsed
     } catch { return null }
 }
@@ -36,16 +39,21 @@ export function useProfile() {
         }
         init()
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_OUT') { setProfile(null); setLoading(false) }
             if (event === 'TOKEN_REFRESHED' && session?.user) {
-                const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
-                if (data?.is_active === false) {
-                    await supabase.auth.signOut()
-                    window.location.href = '/login'
-                    return
-                }
-                setProfile(data)
+                // Deferred via setTimeout: awaiting a PostgREST call inside this
+                // callback deadlocks supabase-js — the auth lock is held while
+                // events are emitted, and .from() waits on that same lock.
+                setTimeout(async () => {
+                    const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
+                    if (data?.is_active === false) {
+                        await supabase.auth.signOut()
+                        window.location.href = '/login'
+                        return
+                    }
+                    setProfile(data)
+                }, 0)
             }
         })
         return () => subscription.unsubscribe()
