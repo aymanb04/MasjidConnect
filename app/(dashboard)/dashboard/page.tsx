@@ -25,73 +25,31 @@ export default function DashboardPage() {
     const supabase = getSupabase()
     const role = profile!.role
 
-    // One round-trip instead of a query waterfall (migration 20). Falls back
-    // to the separate queries while the RPC isn't applied in prod yet.
+    // One round-trip instead of a query waterfall (migration 20).
     const { data: d, error } = await supabase.rpc('get_dashboard_data')
-    if (!error && d) {
-      if (role === 'student') {
-        setData({
-          enrollments: (d.classes ?? []).map((c: any) => ({ classes: c })),
-          assignments: (d.open_assignments ?? []).map((a: any) => ({ ...a, classes: { name: a.class_name } })),
-          openCount: d.open_count,
-          submittedCount: d.submitted_count,
-        })
-      } else if (role === 'teacher') {
-        setData({
-          teachingClasses: (d.classes ?? []).map((c: any) => ({ classes: c })),
-          assignmentCount: d.assignment_count,
-          submissionCount: d.to_grade_count,
-        })
-      } else if (role === 'super_admin') {
-        setData({ classCount: d.class_count, teacherCount: d.teacher_count, studentCount: d.student_count, tenantCount: d.tenant_count })
-      } else {
-        setData({ classCount: d.class_count, teacherCount: d.teacher_count, studentCount: d.student_count })
-      }
+    if (error || !d) {
+      console.error(error)
       setLoading(false)
       return
     }
 
     if (role === 'student') {
-      const { data: enrollments } = await supabase.from('class_students').select('classes(id, name, color)').eq('student_id', profile!.id)
-      const classIds = enrollments?.map((e: any) => e.classes?.id).filter(Boolean) ?? []
-      let assignments: any[] = []
-      if (classIds.length > 0) {
-        const { data: a } = await supabase.from('assignments').select('*, classes(name)').in('class_id', classIds).eq('is_published', true).order('due_date', { ascending: true })
-        assignments = a ?? []
-        if (assignments.length > 0) {
-          const { data: subs } = await supabase.from('submissions').select('assignment_id').eq('student_id', profile!.id).in('assignment_id', assignments.map((x: any) => x.id))
-          const submittedIds = new Set(subs?.map((s: any) => s.assignment_id) ?? [])
-          assignments = assignments.filter((a: any) => !submittedIds.has(a.id))
-        }
-      }
-      const { count: submittedCount } = await supabase.from('submissions').select('*', { count: 'estimated', head: true }).eq('student_id', profile!.id)
-      setData({ enrollments, assignments: assignments.slice(0, 5), submittedCount })
+      setData({
+        enrollments: (d.classes ?? []).map((c: any) => ({ classes: c })),
+        assignments: (d.open_assignments ?? []).map((a: any) => ({ ...a, classes: { name: a.class_name } })),
+        openCount: d.open_count,
+        submittedCount: d.submitted_count,
+      })
     } else if (role === 'teacher') {
-      const { data: teaching } = await supabase.from('class_teachers').select('classes(id, name, color)').eq('teacher_id', profile!.id)
-      const classIds = teaching?.map((c: any) => c.classes?.id).filter(Boolean) ?? []
-      const { count: assignmentCount } = await supabase.from('assignments').select('*', { count: 'estimated', head: true }).in('class_id', classIds)
-      const { data: assignmentRows } = classIds.length > 0
-        ? await supabase.from('assignments').select('id').in('class_id', classIds)
-        : { data: [] }
-      const assignmentIds = assignmentRows?.map((a: any) => a.id) ?? []
-      const { count: submissionCount } = assignmentIds.length > 0
-        ? await supabase.from('submissions').select('*', { count: 'estimated', head: true }).in('assignment_id', assignmentIds).eq('status', 'submitted')
-        : { count: 0 }
-      setData({ teachingClasses: teaching, assignmentCount, submissionCount })
+      setData({
+        teachingClasses: (d.classes ?? []).map((c: any) => ({ classes: c })),
+        assignmentCount: d.assignment_count,
+        submissionCount: d.to_grade_count,
+      })
     } else if (role === 'super_admin') {
-      const [{ count: classCount }, { count: teacherCount }, { count: studentCount }, { count: tenantCount }] = await Promise.all([
-        supabase.from('classes').select('*', { count: 'estimated', head: true }).eq('is_archived', false),
-        supabase.from('profiles').select('*', { count: 'estimated', head: true }).eq('role', 'teacher'),
-        supabase.from('profiles').select('*', { count: 'estimated', head: true }).eq('role', 'student'),
-        supabase.from('tenants').select('*', { count: 'estimated', head: true }).eq('is_active', true),
-      ])
-      setData({ classCount, teacherCount, studentCount, tenantCount })
+      setData({ classCount: d.class_count, teacherCount: d.teacher_count, studentCount: d.student_count, tenantCount: d.tenant_count })
     } else {
-      const tid = profile!.tenant_id
-      const { count: classCount } = await supabase.from('classes').select('*', { count: 'estimated', head: true }).eq('tenant_id', tid).eq('is_archived', false)
-      const { count: teacherCount } = await supabase.from('profiles').select('*', { count: 'estimated', head: true }).eq('tenant_id', tid).eq('role', 'teacher')
-      const { count: studentCount } = await supabase.from('profiles').select('*', { count: 'estimated', head: true }).eq('tenant_id', tid).eq('role', 'student')
-      setData({ classCount, teacherCount, studentCount })
+      setData({ classCount: d.class_count, teacherCount: d.teacher_count, studentCount: d.student_count })
     }
     setLoading(false)
   }
