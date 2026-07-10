@@ -18,7 +18,10 @@ const nextConfig = {
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in",
+      // https: (not just supabase) so tenant-supplied logo URLs (tenants.logo_url,
+      // rendered as <img src>) render regardless of where the mosque hosts them.
+      // Images can't execute script, so allowing any https image source is low-risk.
+      "img-src 'self' data: blob: https:",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.supabase.in wss://*.supabase.in",
       "font-src 'self' https://fonts.gstatic.com",
       "frame-ancestors 'none'",
