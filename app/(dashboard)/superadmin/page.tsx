@@ -175,9 +175,9 @@ export default function SuperAdminPage() {
                 className="flex-1 flex items-center gap-4 px-6 py-4 hover:bg-gray-50/70 transition-colors text-left"
               >
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center font-semibold text-sm flex-shrink-0 overflow-hidden"
-                  style={{ backgroundColor: '#EEF6F1', color: '#1B6B4A' }}>
+                  style={{ backgroundColor: t.logo_url ? '#fff' : '#EEF6F1', color: '#1B6B4A' }}>
                   {t.logo_url ? (
-                    <img src={t.logo_url} alt="" className="w-full h-full object-cover rounded-xl"/>
+                    <img src={t.logo_url} alt="" className="w-full h-full object-contain p-0.5 rounded-xl"/>
                   ) : (
                     t.name[0]
                   )}
