@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useProfile } from '@/lib/hooks/useProfile'
+import { MeemMark } from '@/components/ui/MeemMark'
 import { supabase } from '@/lib/supabase/singleton'
 import { needsTermsAcceptance } from '@/lib/terms'
 import { PrivacyContent } from '@/components/legal/PrivacyContent'
@@ -70,7 +71,7 @@ export default function AkkoordPage() {
                 {/* Header */}
                 <div className="flex items-center gap-2 mb-6">
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#1B6B4A' }}>
-                        <span className="text-white font-bold text-sm">م</span>
+                        <MeemMark className="text-white" />
                     </div>
                     <span className="font-semibold text-gray-900">MasjidConnect</span>
                 </div>

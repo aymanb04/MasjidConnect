@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { MeemMark } from '@/components/ui/MeemMark'
 import { supabase } from '@/lib/supabase/singleton'
 import { cn, getInitials } from '@/lib/utils'
 import type { Profile, Tenant } from '@/lib/types'
@@ -63,7 +64,7 @@ export default function Sidebar({ profile, tenant, onClose }: Props) {
             ) : tenant?.logo_url ? (
               <img src={tenant.logo_url} alt="" className="w-full h-full object-contain p-0.5" />
             ) : (
-              <span className="text-white font-bold text-sm">م</span>
+              <MeemMark className="text-white" />
             )}
           </div>
           <div className="min-w-0 flex-1">

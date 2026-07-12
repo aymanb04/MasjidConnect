@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { MeemMark } from '@/components/ui/MeemMark'
 import { cn } from '@/lib/utils'
 import Link from "next/link";
 
@@ -49,7 +50,7 @@ export default function LoginPage() {
         <div className="relative z-10 flex flex-col h-full p-12 justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-              <span className="text-white font-bold text-base">م</span>
+              <MeemMark className="text-white" size={24} />
             </div>
             <span className="text-white font-semibold text-lg">MasjidConnect</span>
           </div>
@@ -75,7 +76,7 @@ export default function LoginPage() {
         <div className="w-full max-w-[380px] animate-fade-in">
           <div className="flex items-center gap-2 mb-8 lg:hidden">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#1B6B4A' }}>
-              <span className="text-white font-bold text-sm">م</span>
+              <MeemMark className="text-white" />
             </div>
             <span className="font-semibold text-gray-900">MasjidConnect</span>
           </div>

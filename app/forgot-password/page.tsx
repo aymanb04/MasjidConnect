@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
+import { MeemMark } from '@/components/ui/MeemMark'
 import { Loader2, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -36,7 +37,7 @@ export default function ForgotPasswordPage() {
                 <div className="flex items-center gap-2 mb-8">
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center"
                          style={{ backgroundColor: '#1B6B4A' }}>
-                        <span className="text-white font-bold text-sm">م</span>
+                        <MeemMark className="text-white" />
                     </div>
                     <span className="font-semibold text-gray-900">MasjidConnect</span>
                 </div>
