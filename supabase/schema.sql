@@ -149,6 +149,7 @@ CREATE TABLE public.tenants (
   phone                 character varying,
   email                 character varying,
   logo_url              text,
+  logo_icon_url         text,               -- square icon for small slots (mig 22)
   website_url           text,
   is_active             boolean          DEFAULT true,
   subscription_status   character varying DEFAULT 'trial'
