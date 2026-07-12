@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 import { DeleteUserButton } from '@/components/features/admin/DeleteUserButton'
 import { ReactivateUserButton } from '@/components/features/admin/ReactivateUserButton'
+import LogoIconCropper from '@/components/features/admin/LogoIconCropper'
 import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
 export default function SuperAdminPage() {
@@ -562,10 +563,17 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
               </div>
               <div>
                 <label className="label">Icoon (vierkant)</label>
-                <input type="url" value={form.logo_icon_url}
-                  onChange={e => setForm(p => ({ ...p, logo_icon_url: e.target.value }))}
-                  placeholder="https://.../icoon.png" className="input"/>
+                <div className="flex items-center gap-2">
+                  {form.logo_icon_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={form.logo_icon_url} alt="" className="w-9 h-9 rounded-lg border border-border object-contain bg-white flex-shrink-0" />
+                  )}
+                  <input type="url" value={form.logo_icon_url}
+                    onChange={e => setForm(p => ({ ...p, logo_icon_url: e.target.value }))}
+                    placeholder="https://.../icoon.png" className="input"/>
+                </div>
                 <p className="text-xs text-gray-400 mt-1">Vierkante versie van het logo, voor het kleine vakje in de zijbalk. Leeg = het volledige logo wordt gebruikt.</p>
+                <LogoIconCropper logoUrl={form.logo_url} onChange={url => setForm(p => ({ ...p, logo_icon_url: url }))} />
               </div>
             </div>
           </div>
@@ -706,9 +714,16 @@ function EditMoskeeModal({ tenant, onClose, onSaved }: { tenant: any; onClose: (
           </div>
           <div>
             <label className="label">Icoon (vierkant)</label>
-            <input type="url" value={form.logo_icon_url} onChange={e => setForm(p => ({ ...p, logo_icon_url: e.target.value }))}
-              placeholder="https://…/icoon.png" className="input"/>
+            <div className="flex items-center gap-2">
+              {form.logo_icon_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={form.logo_icon_url} alt="" className="w-9 h-9 rounded-lg border border-border object-contain bg-white flex-shrink-0" />
+              )}
+              <input type="url" value={form.logo_icon_url} onChange={e => setForm(p => ({ ...p, logo_icon_url: e.target.value }))}
+                placeholder="https://…/icoon.png" className="input"/>
+            </div>
             <p className="text-xs text-gray-400 mt-1">Vierkante versie van het logo, voor het kleine vakje in de zijbalk. Leeg = het volledige logo wordt gebruikt.</p>
+            <LogoIconCropper logoUrl={form.logo_url} onChange={url => setForm(p => ({ ...p, logo_icon_url: url }))} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

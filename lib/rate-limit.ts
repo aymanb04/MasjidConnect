@@ -9,6 +9,7 @@ const LIMITS: Record<string, number> = {
   '/api/user/reactivate': 30,
   '/api/invite':          30,
   '/api/feedback':        10,
+  '/api/tenant/logo-icon': 60,
 }
 
 let redis: Redis | null = null
