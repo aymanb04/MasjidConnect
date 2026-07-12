@@ -16,6 +16,7 @@ export interface Tenant {
   phone?: string
   email?: string
   logo_url?: string
+  logo_icon_url?: string
   website_url?: string
   is_active: boolean
   subscription_status: SubscriptionStatus

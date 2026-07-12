@@ -52,13 +52,15 @@ export default function Sidebar({ profile, tenant, onClose }: Props) {
       <div className="px-5 py-5 border-b border-border">
         <div className="flex items-center gap-2.5">
           <div
-            className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden ${tenant?.logo_url ? 'bg-white border border-border' : ''}`}
-            style={tenant?.logo_url ? undefined : { backgroundColor: '#1B6B4A' }}
+            className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden ${(tenant?.logo_icon_url || tenant?.logo_url) ? 'bg-white border border-border' : ''}`}
+            style={(tenant?.logo_icon_url || tenant?.logo_url) ? undefined : { backgroundColor: '#1B6B4A' }}
           >
-            {tenant?.logo_url ? (
-              // object-contain (not cover) so a wide logo-with-text fits whole
-              // instead of being cropped to a square; white bg so transparent
-              // logos don't clash with the brand green.
+            {/* Prefer the square icon in this small slot; fall back to containing
+                the full (often wide) logo, then the glyph. object-contain so a
+                wide logo fits whole instead of being cropped. */}
+            {tenant?.logo_icon_url ? (
+              <img src={tenant.logo_icon_url} alt="" className="w-full h-full object-contain p-0.5" />
+            ) : tenant?.logo_url ? (
               <img src={tenant.logo_url} alt="" className="w-full h-full object-contain p-0.5" />
             ) : (
               <span className="text-white font-bold text-sm">م</span>

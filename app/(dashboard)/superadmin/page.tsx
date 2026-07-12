@@ -175,9 +175,9 @@ export default function SuperAdminPage() {
                 className="flex-1 flex items-center gap-4 px-6 py-4 hover:bg-gray-50/70 transition-colors text-left"
               >
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center font-semibold text-sm flex-shrink-0 overflow-hidden"
-                  style={{ backgroundColor: t.logo_url ? '#fff' : '#EEF6F1', color: '#1B6B4A' }}>
-                  {t.logo_url ? (
-                    <img src={t.logo_url} alt="" className="w-full h-full object-contain p-0.5 rounded-xl"/>
+                  style={{ backgroundColor: (t.logo_icon_url || t.logo_url) ? '#fff' : '#EEF6F1', color: '#1B6B4A' }}>
+                  {(t.logo_icon_url || t.logo_url) ? (
+                    <img src={t.logo_icon_url || t.logo_url} alt="" className="w-full h-full object-contain p-0.5 rounded-xl"/>
                   ) : (
                     t.name[0]
                   )}
@@ -432,7 +432,7 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [form, setForm]       = useState({
-    name: '', slug: '', city: '', email: '', logo_url: '', website_url: '',
+    name: '', slug: '', city: '', email: '', logo_url: '', logo_icon_url: '', website_url: '',
     subscription_price: '500', subscription_status: 'active',
     subscription_interval: 'yearly',
     admin_first: '', admin_last: '', admin_email: '',
@@ -456,6 +456,7 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
         city: form.city || null,
         email: form.email || null,
         logo_url: form.logo_url || null,
+        logo_icon_url: form.logo_icon_url || null,
         website_url: form.website_url || null,
         subscription_status: form.subscription_status,
         subscription_price: parseFloat(form.subscription_price),
@@ -559,6 +560,13 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
                     placeholder="https://moskee.be" className="input"/>
                 </div>
               </div>
+              <div>
+                <label className="label">Icoon (vierkant)</label>
+                <input type="url" value={form.logo_icon_url}
+                  onChange={e => setForm(p => ({ ...p, logo_icon_url: e.target.value }))}
+                  placeholder="https://.../icoon.png" className="input"/>
+                <p className="text-xs text-gray-400 mt-1">Vierkante versie van het logo, voor het kleine vakje in de zijbalk. Leeg = het volledige logo wordt gebruikt.</p>
+              </div>
             </div>
           </div>
 
@@ -642,6 +650,7 @@ function EditMoskeeModal({ tenant, onClose, onSaved }: { tenant: any; onClose: (
   const [form, setForm]       = useState({
     name:                  tenant.name ?? '',
     logo_url:              tenant.logo_url ?? '',
+    logo_icon_url:         tenant.logo_icon_url ?? '',
     website_url:           tenant.website_url ?? '',
     city:                  tenant.city ?? '',
     email:                 tenant.email ?? '',
@@ -657,6 +666,7 @@ function EditMoskeeModal({ tenant, onClose, onSaved }: { tenant: any; onClose: (
     const { error: err } = await supabase.from('tenants').update({
       name:                  form.name.trim(),
       logo_url:              form.logo_url.trim() || null,
+      logo_icon_url:         form.logo_icon_url.trim() || null,
       website_url:           form.website_url.trim() || null,
       city:                  form.city.trim() || null,
       email:                 form.email.trim() || null,
@@ -693,6 +703,12 @@ function EditMoskeeModal({ tenant, onClose, onSaved }: { tenant: any; onClose: (
               <input type="url" value={form.website_url} onChange={e => setForm(p => ({ ...p, website_url: e.target.value }))}
                 placeholder="https://moskee.be" className="input"/>
             </div>
+          </div>
+          <div>
+            <label className="label">Icoon (vierkant)</label>
+            <input type="url" value={form.logo_icon_url} onChange={e => setForm(p => ({ ...p, logo_icon_url: e.target.value }))}
+              placeholder="https://…/icoon.png" className="input"/>
+            <p className="text-xs text-gray-400 mt-1">Vierkante versie van het logo, voor het kleine vakje in de zijbalk. Leeg = het volledige logo wordt gebruikt.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
