@@ -50,7 +50,7 @@ export default function LoginPage() {
         <div className="relative z-10 flex flex-col h-full p-12 justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-              <MeemMark className="text-white" size={24} />
+              <MeemMark className="text-white" size={28} />
             </div>
             <span className="text-white font-semibold text-lg">MasjidConnect</span>
           </div>

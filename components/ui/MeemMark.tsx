@@ -5,7 +5,7 @@
 // the ink, so the glyph reads low. The -0.27em lift optically centres the ink —
 // measured empirically from the rendered glyph's bounding box (equal gap above and
 // below to ~1px), and in em so it scales with `size`.
-export function MeemMark({ size = 22, className = '' }: { size?: number; className?: string }) {
+export function MeemMark({ size = 25, className = '' }: { size?: number; className?: string }) {
     return (
         <span
             className={className}
