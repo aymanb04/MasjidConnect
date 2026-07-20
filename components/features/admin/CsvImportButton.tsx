@@ -18,6 +18,12 @@ interface Props {
 
 const MAX_IMPORT_ROWS = 500
 const IMPORT_DISABLED = false
+// /api/invite is rate-limited to 30 requests/hour per caller (lib/rate-limit.ts).
+// Above this, the tail of a bulk import gets 429'd and must be retried in the
+// next hour — fine for a small mid-year intake, painful for onboarding a whole
+// school. Warn the admin so a large first-time load goes through the operator
+// instead (server-side bulk onboard, no per-student email storm).
+const INVITE_HOURLY_LIMIT = 30
 
 const SYSTEM_FIELDS = [
     { key: 'voornaam',   label: 'Voornaam',   required: true  },
@@ -383,6 +389,16 @@ export default function CsvImportButton({ tenantId, onImported }: Props) {
                                 {IMPORT_DISABLED && (
                                     <div className="mt-3 p-3 bg-orange-50 border border-orange-300 rounded-xl text-xs text-orange-700 font-medium">
                                         Import is tijdelijk uitgeschakeld tijdens de demofase. Er worden geen accounts aangemaakt of uitnodigingsmails verstuurd.
+                                    </div>
+                                )}
+                                {!IMPORT_DISABLED && mappedRows.length > INVITE_HOURLY_LIMIT && (
+                                    <div className="mt-3 p-3 bg-orange-50 border border-orange-300 rounded-xl text-xs text-orange-800">
+                                        <strong>Grote import.</strong> Er kunnen maximaal {INVITE_HOURLY_LIMIT} uitnodigingen
+                                        per uur verstuurd worden. Deze import van {mappedRows.length} gebruikers duurt daardoor
+                                        ± {Math.ceil(mappedRows.length / INVITE_HOURLY_LIMIT)} uur en verstuurt {mappedRows.length} uitnodigingsmails —
+                                        het deel boven de {INVITE_HOURLY_LIMIT} mislukt en moet je het volgende uur opnieuw importeren.
+                                        Voor het in één keer opzetten van een volledige school: neem contact op met MasjidConnect
+                                        (info@masjidconnect.be) voor een eenmalige bulk-import.
                                     </div>
                                 )}
                                 {!IMPORT_DISABLED && (
