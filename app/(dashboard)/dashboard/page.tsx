@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { getDeadlineLabel } from '@/lib/utils'
 import { BookOpen, FileText, GraduationCap, Users, Clock, CheckCircle2, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
@@ -14,6 +14,7 @@ export default function DashboardPage() {
   const { profile, loading: profileLoading } = useProfile()
   const [data, setData] = useState<any>({})
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<unknown>(null)
 
   useEffect(() => {
     if (!profile) return
@@ -25,10 +26,12 @@ export default function DashboardPage() {
     const supabase = getSupabase()
     const role = profile!.role
 
+    setError(null)
     // One round-trip instead of a query waterfall (migration 20).
-    const { data: d, error } = await supabase.rpc('get_dashboard_data')
-    if (error || !d) {
-      console.error(error)
+    const { data: d, error: rpcError } = await supabase.rpc('get_dashboard_data')
+    if (rpcError || !d) {
+      console.error(rpcError)
+      setError(rpcError ?? new Error('empty dashboard payload'))
       setLoading(false)
       return
     }
@@ -55,6 +58,14 @@ export default function DashboardPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (error) return (
+    <div className="animate-slide-up">
+      <div className="page-header">
+        <h1 className="page-title">Salam {profile?.first_name} 👋</h1>
+      </div>
+      <LoadError error={error} onRetry={() => { setLoading(true); loadData() }} retrying={loading} />
+    </div>
+  )
 
   const role = profile?.role
 

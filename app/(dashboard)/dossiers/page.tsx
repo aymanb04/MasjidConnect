@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Search, FolderOpen, ChevronRight, Users } from 'lucide-react'
@@ -22,6 +22,7 @@ export default function DossiersPage() {
   const router = useRouter()
   const [students, setStudents] = useState<StudentRow[]>([])
   const [loading,  setLoading]  = useState(true)
+  const [loadErr,  setLoadErr]  = useState<unknown>(null)
   const [search,   setSearch]   = useState('')
 
   useEffect(() => {
@@ -31,28 +32,33 @@ export default function DossiersPage() {
   }, [profile])
 
   async function load() {
+    setLoading(true)
+    setLoadErr(null)
     if (profile!.role === 'teacher') {
       // Teachers: only students of their own classes
-      const { data: teaching } = await supabase
+      const { data: teaching, error: tErr } = await supabase
         .from('class_teachers')
         .select('class_id')
         .eq('teacher_id', profile!.id)
+      if (tErr) { console.error(tErr); setLoadErr(tErr); setLoading(false); return }
       const classIds = (teaching ?? []).map((t: any) => t.class_id)
-      if (classIds.length === 0) { setLoading(false); return }
+      if (classIds.length === 0) { setStudents([]); setLoading(false); return }
 
-      const { data: links } = await supabase
+      const { data: links, error: lErr } = await supabase
         .from('class_students')
         .select('student_id')
         .in('class_id', classIds)
+      if (lErr) { console.error(lErr); setLoadErr(lErr); setLoading(false); return }
       const studentIds = Array.from(new Set((links ?? []).map((l: any) => l.student_id)))
-      if (studentIds.length === 0) { setLoading(false); return }
+      if (studentIds.length === 0) { setStudents([]); setLoading(false); return }
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('id, first_name, last_name, email')
         .in('id', studentIds)
         .eq('is_active', true)
         .order('last_name')
+      if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
       setStudents(data ?? [])
     } else {
       let query = supabase
@@ -64,7 +70,8 @@ export default function DossiersPage() {
       if (profile!.role !== 'super_admin') {
         query = query.eq('tenant_id', profile!.tenant_id!)
       }
-      const { data } = await query
+      const { data, error } = await query
+      if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
       setStudents(data ?? [])
     }
     setLoading(false)
@@ -72,6 +79,12 @@ export default function DossiersPage() {
 
   if (profileLoading || loading) return <PageLoader />
   if (!profile || !STAFF_ROLES.includes(profile.role)) return null
+  if (loadErr) return (
+    <div className="animate-slide-up max-w-3xl">
+      <div className="page-header mb-6"><h1 className="page-title">Dossiers</h1></div>
+      <LoadError error={loadErr} onRetry={load} retrying={loading} />
+    </div>
+  )
 
   const filtered = search
     ? students.filter(s =>

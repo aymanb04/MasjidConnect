@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import RapportDocument from '@/components/features/rapport/RapportDocument'
 import { ArrowLeft, Printer, Loader2, CheckCircle2, Undo2, Save, Lock } from 'lucide-react'
 
@@ -32,6 +32,7 @@ export default function RapportCardPage() {
   const [saving, setSaving]   = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [notFound, setNotFound] = useState(false)
+  const [loadErr, setLoadErr] = useState<unknown>(null)
 
   const isAdmin = profile ? ['admin', 'super_admin'].includes(profile.role) : false
   const isOwner = profile && card ? card.student_id === profile.id : false
@@ -43,11 +44,13 @@ export default function RapportCardPage() {
 
   async function loadData() {
     setLoading(true)
+    setLoadErr(null)
     const supabase = getSupabase()
 
-    const { data: c } = await supabase.from('rapport_cards')
+    const { data: c, error: cErr } = await supabase.from('rapport_cards')
       .select('id, tenant_id, student_id, school_year_id, semester, status, level_snapshot')
       .eq('id', cardId).maybeSingle()
+    if (cErr) { console.error(cErr); setLoadErr(cErr); setLoading(false); return }
     if (!c) { setNotFound(true); setLoading(false); return }
     setCard(c as Card)
 
@@ -113,6 +116,12 @@ export default function RapportCardPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up max-w-lg">
+      <Link href="/rapporten" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4"><ArrowLeft size={15} /> Terug</Link>
+      <LoadError error={loadErr} onRetry={loadData} retrying={loading} />
+    </div>
+  )
   if (notFound) return (
     <div className="animate-slide-up max-w-lg">
       <Link href="/rapporten" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4"><ArrowLeft size={15} /> Terug</Link>

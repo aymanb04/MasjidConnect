@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { formatDate, getRoleBadge } from '@/lib/utils'
 import { Building2, Users, TrendingUp, Shield, Plus, X, Loader2, ChevronDown, ChevronRight, GraduationCap, Pencil, MessageSquare, CheckCheck, Trash2, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
@@ -21,6 +21,7 @@ export default function SuperAdminPage() {
   const [totalUsers, setTotalUsers] = useState(0)
   const [classCount, setClassCount] = useState<Record<string, number>>({})
   const [loading, setLoading]       = useState(true)
+  const [loadErr, setLoadErr]       = useState<unknown>(null)
   const [showAdd, setShowAdd]         = useState(false)
   const [editingTenant, setEditingTenant] = useState<any>(null)
   const [expandedTenant, setExpandedTenant] = useState<string | null>(null)
@@ -42,11 +43,14 @@ export default function SuperAdminPage() {
   }, [profile])
 
   async function loadData() {
-    const [{ data: t }, { count }, { data: classRows }] = await Promise.all([
+    setLoading(true)
+    setLoadErr(null)
+    const [{ data: t, error: tErr }, { count }, { data: classRows }] = await Promise.all([
       supabase.from('tenants').select('*').order('created_at', { ascending: false }),
       supabase.from('profiles').select('*', { count: 'estimated', head: true }),
       supabase.from('classes').select('tenant_id').eq('is_archived', false),
     ])
+    if (tErr) { console.error(tErr); setLoadErr(tErr); setLoading(false); return }
     const map: Record<string, number> = {}
     classRows?.forEach((c: any) => { map[c.tenant_id] = (map[c.tenant_id] ?? 0) + 1 })
     setTenants(t ?? [])
@@ -112,6 +116,12 @@ export default function SuperAdminPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up">
+      <div className="page-header"><h1 className="page-title flex items-center gap-2"><Shield size={22} className="text-primary-600"/> Super Admin</h1></div>
+      <LoadError error={loadErr} onRetry={loadData} retrying={loading} />
+    </div>
+  )
 
   const activeTenants  = tenants.filter(t => t.subscription_status === 'active')
   const monthlyRevenue = activeTenants.reduce((sum, t) =>

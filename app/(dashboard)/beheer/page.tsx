@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { getRoleBadge, formatDate } from '@/lib/utils'
 import { Users, GraduationCap, Mail, Shield, Archive, ChevronDown, ChevronRight, X, Loader2, Search, CalendarDays, ArrowLeftRight } from 'lucide-react'
 import Link from 'next/link'
@@ -22,6 +22,7 @@ export default function BeheerPage() {
   const [classes, setClasses]         = useState<any[]>([])
   const [invitations, setInvitations] = useState<any[]>([])
   const [loading, setLoading]         = useState(true)
+  const [loadErr, setLoadErr]         = useState<unknown>(null)
 
   const [showArchived, setShowArchived]       = useState(false)
   const [archivedUsers, setArchivedUsers]     = useState<any[]>([])
@@ -45,8 +46,10 @@ export default function BeheerPage() {
 
   async function loadData() {
     const tid = profile!.tenant_id
+    setLoading(true)
+    setLoadErr(null)
 
-    const [{ data: u }, { data: c }, { data: inv }] = await Promise.all([
+    const [{ data: u, error: uErr }, { data: c, error: cErr }, { data: inv }] = await Promise.all([
       supabase.from('profiles').select('*').eq('tenant_id', tid).eq('is_active', true).order('last_name'),
       supabase.from('classes')
         .select('*, school_years(name), groups(name), class_students(id), class_teachers(profiles(first_name, last_name))')
@@ -55,6 +58,7 @@ export default function BeheerPage() {
         .order('created_at', { ascending: false }),
     ])
 
+    if (uErr || cErr) { console.error(uErr || cErr); setLoadErr(uErr || cErr); setLoading(false); return }
     setUsers(u ?? [])
     setClasses(c ?? [])
     setInvitations(inv ?? [])
@@ -100,6 +104,12 @@ export default function BeheerPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up">
+      <div className="page-header"><h1 className="page-title">Beheer</h1></div>
+      <LoadError error={loadErr} onRetry={loadData} retrying={loading} />
+    </div>
+  )
 
   const teachers   = users.filter(u => u.role === 'teacher')
   const students   = users.filter(u => u.role === 'student')

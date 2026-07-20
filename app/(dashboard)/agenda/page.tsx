@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { getDeadlineLabel } from '@/lib/utils'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
@@ -29,6 +29,7 @@ export default function AgendaPage() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
   const [assignments, setAssignments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<unknown>(null)
 
   useEffect(() => {
     if (!profile) return
@@ -38,53 +39,61 @@ export default function AgendaPage() {
 
   async function loadAssignments() {
     const supabase = getSupabase()
+    setLoading(true)
+    setLoadErr(null)
     let data: any[] = []
 
     if (profile!.role === 'student') {
-      const { data: enr } = await supabase
+      const { data: enr, error: enrErr } = await supabase
         .from('class_students')
         .select('class_id')
         .eq('student_id', profile!.id)
+      if (enrErr) { console.error(enrErr); setLoadErr(enrErr); setLoading(false); return }
       const ids = enr?.map((e: any) => e.class_id) ?? []
       if (ids.length > 0) {
-        const { data: a } = await supabase
+        const { data: a, error: aErr } = await supabase
           .from('assignments')
           .select('*, classes(name, color)')
           .in('class_id', ids)
           .eq('is_published', true)
           .not('due_date', 'is', null)
           .order('due_date', { ascending: true })
+        if (aErr) { console.error(aErr); setLoadErr(aErr); setLoading(false); return }
         data = a ?? []
       }
     } else if (profile!.role === 'teacher') {
-      const { data: t } = await supabase
+      const { data: t, error: tErr } = await supabase
         .from('class_teachers')
         .select('class_id')
         .eq('teacher_id', profile!.id)
+      if (tErr) { console.error(tErr); setLoadErr(tErr); setLoading(false); return }
       const ids = t?.map((x: any) => x.class_id) ?? []
       if (ids.length > 0) {
-        const { data: a } = await supabase
+        const { data: a, error: aErr } = await supabase
           .from('assignments')
           .select('*, classes(name, color)')
           .in('class_id', ids)
           .not('due_date', 'is', null)
           .order('due_date', { ascending: true })
+        if (aErr) { console.error(aErr); setLoadErr(aErr); setLoading(false); return }
         data = a ?? []
       }
     } else {
-      const { data: cls } = await supabase
+      const { data: cls, error: clsErr } = await supabase
         .from('classes')
         .select('id')
         .eq('tenant_id', profile!.tenant_id)
         .eq('is_archived', false)
+      if (clsErr) { console.error(clsErr); setLoadErr(clsErr); setLoading(false); return }
       const ids = cls?.map((c: any) => c.id) ?? []
       if (ids.length > 0) {
-        const { data: a } = await supabase
+        const { data: a, error: aErr } = await supabase
           .from('assignments')
           .select('*, classes(name, color)')
           .in('class_id', ids)
           .not('due_date', 'is', null)
           .order('due_date', { ascending: true })
+        if (aErr) { console.error(aErr); setLoadErr(aErr); setLoading(false); return }
         data = a ?? []
       }
     }
@@ -94,6 +103,12 @@ export default function AgendaPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up">
+      <div className="page-header"><h1 className="page-title">Agenda</h1></div>
+      <LoadError error={loadErr} onRetry={loadAssignments} retrying={loading} />
+    </div>
+  )
 
   const today = new Date()
   const totalDays = daysInMonth(currentMonth)

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { formatDateTime, getDeadlineLabel } from '@/lib/utils'
 import { ArrowLeft, Clock } from 'lucide-react'
 import Link from 'next/link'
@@ -19,6 +19,7 @@ export default function HuiswerkDetailPage() {
   const [allSubmissions, setAllSubmissions] = useState<any[]>([])
   const [studentCount, setStudentCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<unknown>(null)
 
   useEffect(() => {
     if (!profile || !id) return
@@ -28,8 +29,11 @@ export default function HuiswerkDetailPage() {
   async function loadData() {
     const supabase = getSupabase()
     const isTeacher = ['teacher','admin','super_admin'].includes(profile!.role)
+    setLoading(true)
+    setLoadErr(null)
 
-    const { data: a } = await supabase.from('assignments').select('*, classes(name, color), profiles!assignments_created_by_fkey(first_name, last_name)').eq('id', id).single()
+    const { data: a, error: aErr } = await supabase.from('assignments').select('*, classes(name, color), profiles!assignments_created_by_fkey(first_name, last_name)').eq('id', id).single()
+    if (aErr) { console.error(aErr); setLoadErr(aErr); setLoading(false); return }
     setAssignment(a)
 
     if (profile!.role === 'student') {
@@ -74,6 +78,12 @@ export default function HuiswerkDetailPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up max-w-3xl">
+      <Link href="/huiswerk" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-5 transition-colors"><ArrowLeft size={15}/> Terug naar huiswerk</Link>
+      <LoadError error={loadErr} onRetry={loadData} retrying={loading} />
+    </div>
+  )
   if (!assignment) return null
 
   const dl = getDeadlineLabel(assignment.due_date)

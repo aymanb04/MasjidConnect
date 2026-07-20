@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { getDeadlineLabel, getSubmissionStatusBadge } from '@/lib/utils'
 import { ArrowLeft, FileText, BookOpen, Users, Plus, Clock, GraduationCap, Mail, BarChart2, X, Loader2 } from 'lucide-react'
 import Link from 'next/link'
@@ -19,6 +19,7 @@ export default function KlasDetailPage() {
   const [students, setStudents] = useState<any[]>([])
   const [mySubmissions, setMySubmissions] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<unknown>(null)
   const [allTeachers, setAllTeachers] = useState<any[]>([])
   const [addingTeacher, setAddingTeacher] = useState(false)
   const [selectedTeacherId, setSelectedTeacherId] = useState('')
@@ -34,14 +35,17 @@ export default function KlasDetailPage() {
   async function loadData() {
     const supabase = getSupabase()
     const isTeacher = ['teacher','admin','super_admin'].includes(profile!.role)
+    setLoading(true)
+    setLoadErr(null)
 
-    const [{ data: k }, { data: a }, { data: m }, { data: tc }] = await Promise.all([
+    const [{ data: k, error: kErr }, { data: a, error: aErr }, { data: m }, { data: tc }] = await Promise.all([
       supabase.from('classes').select('*, school_years(name), groups(name)').eq('id', klasId).single(),
       supabase.from('assignments').select('*').eq('class_id', klasId).eq('is_published', true).order('due_date', { ascending: true }),
       supabase.from('lesson_modules').select('*, module_documents(id)').eq('class_id', klasId).eq('is_visible', true).order('order_index'),
       supabase.from('class_teachers').select('profiles(id, first_name, last_name, email)').eq('class_id', klasId),
     ])
 
+    if (kErr || aErr) { console.error(kErr || aErr); setLoadErr(kErr || aErr); setLoading(false); return }
     setKlas(k)
     setAssignments(a ?? [])
     setModules(m ?? [])
@@ -104,6 +108,16 @@ export default function KlasDetailPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up">
+      <div className="mb-6">
+        <Link href="/klassen" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4 transition-colors">
+          <ArrowLeft size={15} /> Terug naar klassen
+        </Link>
+      </div>
+      <LoadError error={loadErr} onRetry={loadData} retrying={loading} />
+    </div>
+  )
   if (!klas) return null
 
   const isTeacher = ['teacher','admin','super_admin'].includes(profile?.role ?? '')

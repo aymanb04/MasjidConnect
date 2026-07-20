@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { ArrowLeft, GraduationCap, Plus, X, Check, Pencil, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import StudentScores from '@/components/features/scores/StudentScores'
@@ -29,6 +29,7 @@ function StaffScoresPage() {
   const [scoreMap, setScoreMap]       = useState<Record<string, Record<string, { status: string; score: number | null }>>>({})
   const [examScores, setExamScores]   = useState<any[]>([])
   const [loading, setLoading]         = useState(true)
+  const [loadErr, setLoadErr]         = useState<unknown>(null)
 
   // Manual test columns (in-class tests / offline homework — migration 16)
   const [tests, setTests]             = useState<any[]>([])
@@ -62,8 +63,10 @@ function StaffScoresPage() {
 
   async function loadData() {
     const supabase = getSupabase()
+    setLoading(true)
+    setLoadErr(null)
 
-    const [{ data: k }, { data: studentRows }, { data: a }, { data: exams }] = await Promise.all([
+    const [{ data: k, error: kErr }, { data: studentRows, error: sErr }, { data: a, error: aErr }, { data: exams, error: eErr }] = await Promise.all([
       supabase.from('classes').select('id, name, color').eq('id', klasId).single(),
       supabase.from('class_students')
         .select('profiles!class_students_student_id_fkey(id, first_name, last_name)')
@@ -77,6 +80,9 @@ function StaffScoresPage() {
         .select('*')
         .eq('class_id', klasId),
     ])
+
+    const firstErr = kErr || sErr || aErr || eErr
+    if (firstErr) { console.error(firstErr); setLoadErr(firstErr); setLoading(false); return }
 
     const studentList = studentRows?.map((r: any) => r.profiles).filter(Boolean) ?? []
     studentList.sort((a: any, b: any) => a.last_name.localeCompare(b.last_name))
@@ -133,6 +139,16 @@ function StaffScoresPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up">
+      <div className="mb-6">
+        <Link href={`/klassen/${klasId}`} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4 transition-colors">
+          <ArrowLeft size={15}/> Terug naar klas
+        </Link>
+      </div>
+      <LoadError error={loadErr} onRetry={loadData} retrying={loading} />
+    </div>
+  )
   if (!klas) return null
 
   // ── helpers ──────────────────────────────────────────────────────────

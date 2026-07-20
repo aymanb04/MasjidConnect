@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader, EmptyState } from '@/components/ui/PageShell'
+import { PageLoader, EmptyState, LoadError } from '@/components/ui/PageShell'
 import { Clock, Plus, X, Loader2 } from 'lucide-react'
 import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
@@ -17,6 +17,7 @@ export default function RoosterPage() {
   const [sessions, setSessions]   = useState<any[]>([])
   const [classes, setClasses]     = useState<any[]>([])
   const [loading, setLoading]     = useState(true)
+  const [loadErr, setLoadErr]     = useState<unknown>(null)
   const [showModal, setShowModal] = useState(false)
 
   const isAdmin = profile?.role === 'admin'
@@ -28,29 +29,37 @@ export default function RoosterPage() {
 
   async function loadData() {
     const supabase = getSupabase()
+    setLoading(true)
+    setLoadErr(null)
     let data: any[] = []
 
     if (profile!.role === 'student') {
-      const { data: enr } = await supabase.from('class_students').select('class_id').eq('student_id', profile!.id)
+      const { data: enr, error: enrErr } = await supabase.from('class_students').select('class_id').eq('student_id', profile!.id)
+      if (enrErr) { console.error(enrErr); setLoadErr(enrErr); setLoading(false); return }
       const ids = enr?.map((e: any) => e.class_id) ?? []
       if (ids.length) {
-        const { data: s } = await supabase.from('class_sessions').select('*, classes(name, color)').in('class_id', ids).order('day_of_week').order('start_time')
+        const { data: s, error: sErr } = await supabase.from('class_sessions').select('*, classes(name, color)').in('class_id', ids).order('day_of_week').order('start_time')
+        if (sErr) { console.error(sErr); setLoadErr(sErr); setLoading(false); return }
         data = s ?? []
       }
     } else if (profile!.role === 'teacher') {
-      const { data: t } = await supabase.from('class_teachers').select('class_id').eq('teacher_id', profile!.id)
+      const { data: t, error: tErr } = await supabase.from('class_teachers').select('class_id').eq('teacher_id', profile!.id)
+      if (tErr) { console.error(tErr); setLoadErr(tErr); setLoading(false); return }
       const ids = t?.map((x: any) => x.class_id) ?? []
       if (ids.length) {
-        const { data: s } = await supabase.from('class_sessions').select('*, classes(name, color)').in('class_id', ids).order('day_of_week').order('start_time')
+        const { data: s, error: sErr } = await supabase.from('class_sessions').select('*, classes(name, color)').in('class_id', ids).order('day_of_week').order('start_time')
+        if (sErr) { console.error(sErr); setLoadErr(sErr); setLoading(false); return }
         data = s ?? []
       }
     } else if (profile!.role === 'admin') {
-      const { data: s } = await supabase.from('class_sessions').select('*, classes(name, color)').eq('tenant_id', profile!.tenant_id).order('day_of_week').order('start_time')
+      const { data: s, error: sErr } = await supabase.from('class_sessions').select('*, classes(name, color)').eq('tenant_id', profile!.tenant_id).order('day_of_week').order('start_time')
+      if (sErr) { console.error(sErr); setLoadErr(sErr); setLoading(false); return }
       data = s ?? []
       const { data: c } = await supabase.from('classes').select('id, name, color').eq('tenant_id', profile!.tenant_id).eq('is_archived', false).order('name')
       setClasses(c ?? [])
     } else {
-      const { data: s } = await supabase.from('class_sessions').select('*, classes(name, color), tenants(name)').order('day_of_week').order('start_time')
+      const { data: s, error: sErr } = await supabase.from('class_sessions').select('*, classes(name, color), tenants(name)').order('day_of_week').order('start_time')
+      if (sErr) { console.error(sErr); setLoadErr(sErr); setLoading(false); return }
       data = s ?? []
     }
 
@@ -64,6 +73,12 @@ export default function RoosterPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up">
+      <div className="page-header"><h1 className="page-title">Rooster</h1></div>
+      <LoadError error={loadErr} onRetry={loadData} retrying={loading} />
+    </div>
+  )
 
   const byDay: Record<number, any[]> = {}
   sessions.forEach(s => {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
@@ -20,6 +20,7 @@ export default function BetalingenPage() {
   const [tab, setTab] = useState<Tab>('membership')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [loadErr, setLoadErr] = useState<unknown>(null)
 
   const [year, setYear] = useState<any>(null)
   const [config, setConfig] = useState<any>(null)
@@ -52,14 +53,17 @@ export default function BetalingenPage() {
 
   async function load() {
     const tid = profile!.tenant_id
-    const { data: yr } = await supabase
+    setLoading(true)
+    setLoadErr(null)
+    const { data: yr, error: yrErr } = await supabase
       .from('school_years').select('id, name')
       .eq('tenant_id', tid).eq('is_active', true)
       .limit(1).maybeSingle()
+    if (yrErr) { console.error(yrErr); setLoadErr(yrErr); setLoading(false); return }
     if (!yr) { setLoading(false); return }
     setYear(yr)
 
-    const [{ data: cfg }, { data: studs }, { data: fams }, { data: details }, { data: pays }, { data: staff }, { data: staffRates }] =
+    const [{ data: cfg }, { data: studs, error: studsErr }, { data: fams }, { data: details }, { data: pays, error: paysErr }, { data: staff }, { data: staffRates }] =
       await Promise.all([
         supabase.from('fee_config').select('*').eq('school_year_id', yr.id).eq('tenant_id', tid).maybeSingle(),
         supabase.from('profiles').select('id, first_name, last_name').eq('tenant_id', tid).eq('role', 'student').eq('is_active', true).order('last_name'),
@@ -70,6 +74,7 @@ export default function BetalingenPage() {
         supabase.from('staff_pay').select('staff_id, hourly_rate').eq('tenant_id', tid),
       ])
 
+    if (studsErr || paysErr) { console.error(studsErr || paysErr); setLoadErr(studsErr || paysErr); setLoading(false); return }
     setConfig(cfg)
     setConfigForm({
       membership_amount: cfg?.membership_amount?.toString() ?? '',
@@ -174,6 +179,12 @@ export default function BetalingenPage() {
 
   if (profileLoading || loading) return <PageLoader />
   if (!isAdmin) return null
+  if (loadErr) return (
+    <div className="animate-slide-up max-w-4xl">
+      <div className="page-header mb-6"><h1 className="page-title">Betalingen</h1></div>
+      <LoadError error={loadErr} onRetry={load} retrying={loading} />
+    </div>
+  )
 
   if (!year) {
     return (

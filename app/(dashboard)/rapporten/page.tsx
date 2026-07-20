@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { FileText, Loader2, Sparkles, ChevronRight, CheckCircle2, PencilLine } from 'lucide-react'
 
 type Student = { id: string; first_name: string; last_name: string }
@@ -26,6 +26,7 @@ export default function RapportenPage() {
   const [busy, setBusy]           = useState<string | null>(null)           // student_id being generated
   const [bulkRunning, setBulk]    = useState(false)
   const [err, setErr]             = useState<string | null>(null)
+  const [loadErr, setLoadErr]     = useState<unknown>(null)
 
   const isStaff = profile ? STAFF.includes(profile.role) : false
   const isAdmin = profile ? ['admin', 'super_admin'].includes(profile.role) : false
@@ -36,20 +37,22 @@ export default function RapportenPage() {
   }, [profile, semester])
 
   async function loadData() {
-    setLoading(true); setErr(null)
+    setLoading(true); setErr(null); setLoadErr(null)
     const supabase = getSupabase()
     const tid = profile!.tenant_id
 
-    const { data: yr } = await supabase.from('school_years')
+    const { data: yr, error: yrErr } = await supabase.from('school_years')
       .select('id, name').eq('tenant_id', tid).eq('is_active', true).maybeSingle()
+    if (yrErr) { console.error(yrErr); setLoadErr(yrErr); setLoading(false); return }
     setYear(yr ?? null)
 
     if (!yr) { setLoading(false); return }
 
     if (!isStaff) {
       // Student: their own cards (RLS returns only published)
-      const { data: mine } = await supabase.from('rapport_cards')
+      const { data: mine, error: mineErr } = await supabase.from('rapport_cards')
         .select('id, student_id, status').eq('student_id', profile!.id).eq('school_year_id', yr.id).eq('semester', semester)
+      if (mineErr) { console.error(mineErr); setLoadErr(mineErr); setLoading(false); return }
       setMyCards(mine ?? [])
       setLoading(false)
       return
@@ -58,9 +61,10 @@ export default function RapportenPage() {
     // Staff: the students they may see + existing cards for this semester
     let studentList: Student[] = []
     if (isAdmin || profile!.role === 'leerlingenbegeleiding') {
-      const { data } = await supabase.from('profiles')
+      const { data, error } = await supabase.from('profiles')
         .select('id, first_name, last_name')
         .eq('tenant_id', tid).eq('role', 'student').eq('is_active', true).order('last_name')
+      if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
       studentList = data ?? []
     } else {
       // teacher: students in classes they teach (active year)
@@ -81,8 +85,9 @@ export default function RapportenPage() {
     }
     setStudents(studentList)
 
-    const { data: cardRows } = await supabase.from('rapport_cards')
+    const { data: cardRows, error: cardErr } = await supabase.from('rapport_cards')
       .select('id, student_id, status').eq('tenant_id', tid).eq('school_year_id', yr.id).eq('semester', semester)
+    if (cardErr) { console.error(cardErr); setLoadErr(cardErr); setLoading(false); return }
     const map: Record<string, CardRow> = {}
     ;(cardRows ?? []).forEach((c: any) => { map[c.student_id] = c })
     setCards(map)
@@ -187,6 +192,12 @@ export default function RapportenPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up">
+      <div className="mb-6"><h1 className="page-title">Rapporten</h1></div>
+      <LoadError error={loadErr} onRetry={loadData} retrying={loading} />
+    </div>
+  )
 
   const statusBadge = (status: 'draft' | 'published') => status === 'published'
     ? <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-lg"><CheckCircle2 size={12} /> Gepubliceerd</span>

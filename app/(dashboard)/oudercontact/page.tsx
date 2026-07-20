@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { CalendarClock, Plus, X, Loader2, Check, Trash2, Users } from 'lucide-react'
@@ -26,6 +26,7 @@ export default function OudercontactPage() {
   const [slots, setSlots] = useState<Slot[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [loadErr, setLoadErr] = useState<unknown>(null)
 
   // teacher/admin slot creation
   const [showForm, setShowForm] = useState(false)
@@ -48,11 +49,14 @@ export default function OudercontactPage() {
 
   async function load() {
     const tid = profile!.tenant_id
+    setLoading(true)
+    setLoadErr(null)
 
-    const { data: slotRows } = await supabase
+    const { data: slotRows, error: slotErr } = await supabase
       .from('oudercontact_slots')
       .select('*')
       .order('starts_at', { ascending: true })
+    if (slotErr) { console.error(slotErr); setLoadErr(slotErr); setLoading(false); return }
 
     const slotIds = (slotRows ?? []).map((s: any) => s.id)
     const teacherIds = Array.from(new Set((slotRows ?? []).map((s: any) => s.teacher_id)))
@@ -164,6 +168,12 @@ export default function OudercontactPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up max-w-3xl">
+      <div className="page-header mb-6"><h1 className="page-title">Oudercontact</h1></div>
+      <LoadError error={loadErr} onRetry={load} retrying={loading} />
+    </div>
+  )
 
   const now = new Date()
   const upcoming = slots.filter(s => new Date(s.ends_at) >= now)

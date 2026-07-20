@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader, EmptyState } from '@/components/ui/PageShell'
+import { PageLoader, EmptyState, LoadError } from '@/components/ui/PageShell'
 import { BookOpen, EyeOff } from 'lucide-react'
 import Link from 'next/link'
 import CreateModuleButton from '@/components/features/modules/CreateModuleButton'
@@ -12,6 +12,7 @@ export default function LesmodulesPage() {
   const { profile, loading: profileLoading } = useProfile()
   const [modules, setModules] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<unknown>(null)
 
   useEffect(() => {
     if (!profile) return
@@ -20,24 +21,31 @@ export default function LesmodulesPage() {
 
   async function loadData() {
     const supabase = getSupabase()
+    setLoading(true)
+    setLoadErr(null)
     let data: any[] = []
 
     if (profile!.role === 'student') {
-      const { data: enr } = await supabase.from('class_students').select('class_id').eq('student_id', profile!.id)
+      const { data: enr, error: enrErr } = await supabase.from('class_students').select('class_id').eq('student_id', profile!.id)
+      if (enrErr) { console.error(enrErr); setLoadErr(enrErr); setLoading(false); return }
       const ids = enr?.map((e: any) => e.class_id) ?? []
       if (ids.length > 0) {
-        const { data: m } = await supabase.from('lesson_modules').select('*, classes(name, color), module_documents(id)').in('class_id', ids).eq('is_visible', true).order('order_index')
+        const { data: m, error: mErr } = await supabase.from('lesson_modules').select('*, classes(name, color), module_documents(id)').in('class_id', ids).eq('is_visible', true).order('order_index')
+        if (mErr) { console.error(mErr); setLoadErr(mErr); setLoading(false); return }
         data = m ?? []
       }
     } else if (profile!.role === 'teacher') {
-      const { data: t } = await supabase.from('class_teachers').select('class_id').eq('teacher_id', profile!.id)
+      const { data: t, error: tErr } = await supabase.from('class_teachers').select('class_id').eq('teacher_id', profile!.id)
+      if (tErr) { console.error(tErr); setLoadErr(tErr); setLoading(false); return }
       const ids = t?.map((x: any) => x.class_id) ?? []
       if (ids.length > 0) {
-        const { data: m } = await supabase.from('lesson_modules').select('*, classes(name, color), module_documents(id)').in('class_id', ids).order('order_index')
+        const { data: m, error: mErr } = await supabase.from('lesson_modules').select('*, classes(name, color), module_documents(id)').in('class_id', ids).order('order_index')
+        if (mErr) { console.error(mErr); setLoadErr(mErr); setLoading(false); return }
         data = m ?? []
       }
     } else {
-      const { data: m } = await supabase.from('lesson_modules').select('*, classes(name, color), module_documents(id)').order('created_at', { ascending: false })
+      const { data: m, error: mErr } = await supabase.from('lesson_modules').select('*, classes(name, color), module_documents(id)').order('created_at', { ascending: false })
+      if (mErr) { console.error(mErr); setLoadErr(mErr); setLoading(false); return }
       data = m ?? []
     }
 
@@ -46,6 +54,12 @@ export default function LesmodulesPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up">
+      <div className="page-header"><h1 className="page-title">Lesmodules</h1></div>
+      <LoadError error={loadErr} onRetry={loadData} retrying={loading} />
+    </div>
+  )
 
   const isTeacher = ['teacher','admin','super_admin'].includes(profile?.role ?? '')
 

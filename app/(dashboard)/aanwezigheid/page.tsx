@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { CheckCircle2, XCircle, Clock, FileCheck, ArrowLeft, Loader2, Users, ChevronRight, AlertTriangle, X } from 'lucide-react'
@@ -73,6 +73,7 @@ export default function AanwezigheidPage() {
   const [view,    setView]    = useState<View>({ type: 'classes' })
   const [classes, setClasses] = useState<ClassItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<unknown>(null)
 
   useEffect(() => {
     if (profile) loadClasses()
@@ -80,13 +81,15 @@ export default function AanwezigheidPage() {
 
   async function loadClasses() {
     setLoading(true)
+    setLoadErr(null)
     const role = profile!.role
 
     if (role === 'student') {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('class_students')
         .select('classes(id, name, color, groups(name), school_years(name))')
         .eq('student_id', profile!.id)
+      if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
       setClasses(
         (data ?? []).map((r: any) => ({
           id: r.classes.id, name: r.classes.name, color: r.classes.color,
@@ -94,10 +97,11 @@ export default function AanwezigheidPage() {
         }))
       )
     } else if (role === 'teacher') {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('class_teachers')
         .select('classes(id, name, color, groups(name), school_years(name))')
         .eq('teacher_id', profile!.id)
+      if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
       setClasses(
         (data ?? []).map((r: any) => ({
           id: r.classes.id, name: r.classes.name, color: r.classes.color,
@@ -106,12 +110,13 @@ export default function AanwezigheidPage() {
       )
     } else {
       // admin / super_admin
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('classes')
         .select('id, name, color, groups(name), school_years(name)')
         .eq('tenant_id', profile!.tenant_id)
         .eq('is_archived', false)
         .order('name')
+      if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
       setClasses(
         (data ?? []).map((c: any) => ({
           id: c.id, name: c.name, color: c.color,
@@ -123,6 +128,12 @@ export default function AanwezigheidPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up max-w-3xl">
+      <div className="page-header mb-6"><h1 className="page-title">Aanwezigheid</h1></div>
+      <LoadError error={loadErr} onRetry={loadClasses} retrying={loading} />
+    </div>
+  )
 
   return (
     <div className="animate-slide-up max-w-3xl">

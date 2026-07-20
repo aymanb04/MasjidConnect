@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader, EmptyState } from '@/components/ui/PageShell'
+import { PageLoader, EmptyState, LoadError } from '@/components/ui/PageShell'
 import { GraduationCap, Users, BookOpen, Building2 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -14,6 +14,7 @@ export default function KlassenPage() {
   const [classes, setClasses]   = useState<any[]>([])
   const [countMap, setCountMap] = useState<Record<string, number>>({})
   const [loading, setLoading]   = useState(true)
+  const [loadErr, setLoadErr]   = useState<unknown>(null)
   const [mosques, setMosques]   = useState<{ id: string; name: string }[]>([])
   const [mosqueFilter, setMosqueFilter] = useState<string>(searchParams?.get('mosque') ?? '')
 
@@ -33,6 +34,7 @@ export default function KlassenPage() {
 
   async function loadClasses(requestedYearId?: string) {
     setLoading(true)
+    setLoadErr(null)
     let data: any[] = []
 
     if (profile!.role === 'student') {
@@ -44,10 +46,11 @@ export default function KlassenPage() {
         .eq('is_active', true)
         .maybeSingle()
 
-      const { data: d } = await supabase
+      const { data: d, error: e } = await supabase
         .from('class_students')
         .select('classes(*, school_years(name), groups(name))')
         .eq('student_id', profile!.id)
+      if (e) { console.error('[klassen] student query error:', e); setLoadErr(e); setLoading(false); return }
       const all = d?.map((x: any) => x.classes).filter(Boolean) ?? []
       data = activeYear
         ? all.filter((c: any) => c.school_year_id === activeYear.id)
@@ -70,10 +73,11 @@ export default function KlassenPage() {
 
       const effectiveYearId = requestedYearId || active?.id || null
 
-      const { data: d } = await supabase
+      const { data: d, error: e } = await supabase
         .from('class_teachers')
         .select('classes(*, school_years(name), groups(name))')
         .eq('teacher_id', profile!.id)
+      if (e) { console.error('[klassen] teacher query error:', e); setLoadErr(e); setLoading(false); return }
       const all = d?.map((x: any) => x.classes).filter(Boolean) ?? []
       data = effectiveYearId
         ? all.filter((c: any) => c.school_year_id === effectiveYearId)
@@ -114,7 +118,7 @@ export default function KlassenPage() {
       }
 
       const { data: d, error: e } = await query
-      if (e) console.error('[klassen] admin query error:', e)
+      if (e) { console.error('[klassen] admin query error:', e); setLoadErr(e); setLoading(false); return }
       data = d ?? []
 
     } else if (profile!.role === 'super_admin') {
@@ -123,7 +127,7 @@ export default function KlassenPage() {
         .select('*, school_years(name), groups(name), tenants!classes_tenant_id_fkey(id, name)')
         .eq('is_archived', false)
         .order('name')
-      if (e) console.error('[klassen] super_admin query error:', e)
+      if (e) { console.error('[klassen] super_admin query error:', e); setLoadErr(e); setLoading(false); return }
       data = d ?? []
 
       // Build mosque list for filter dropdown
@@ -156,6 +160,14 @@ export default function KlassenPage() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up">
+      <div className="page-header">
+        <h1 className="page-title">Klassen</h1>
+      </div>
+      <LoadError error={loadErr} onRetry={() => loadClasses(yearFilterRef.current)} retrying={loading} />
+    </div>
+  )
 
   const isSuperAdmin = profile?.role === 'super_admin'
   const isAdmin = ['admin', 'super_admin'].includes(profile?.role ?? '')

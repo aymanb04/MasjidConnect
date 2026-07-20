@@ -10,7 +10,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { ArrowLeft, GraduationCap, FileText, ClipboardList } from 'lucide-react'
 
 type Item = {
@@ -39,6 +39,7 @@ export default function StudentScores() {
   const [exams, setExams] = useState<any[]>([])
   const [avg, setAvg]     = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<unknown>(null)
 
   useEffect(() => {
     if (!profile || !klasId) return
@@ -48,15 +49,19 @@ export default function StudentScores() {
   async function load() {
     const supabase = getSupabase()
     const sid = profile!.id
+    setLoading(true)
+    setLoadErr(null)
 
-    const { data: k } = await supabase.from('classes').select('id, name, color').eq('id', klasId).single()
+    const { data: k, error: kErr } = await supabase.from('classes').select('id, name, color').eq('id', klasId).single()
+    if (kErr) { console.error(kErr); setLoadErr(kErr); setLoading(false); return }
     setKlas(k)
 
     // Homework (published assignments) → my submission → feedback score
-    const { data: assignments } = await supabase
+    const { data: assignments, error: aErr } = await supabase
       .from('assignments').select('id, title, max_score')
       .eq('class_id', klasId).eq('is_published', true)
       .order('due_date', { ascending: true })
+    if (aErr) { console.error(aErr); setLoadErr(aErr); setLoading(false); return }
 
     let hwItems: Item[] = []
     if (assignments?.length) {
@@ -117,6 +122,16 @@ export default function StudentScores() {
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up max-w-2xl">
+      <div className="mb-6">
+        <Link href={`/klassen/${klasId}`} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4 transition-colors">
+          <ArrowLeft size={15}/> Terug naar klas
+        </Link>
+      </div>
+      <LoadError error={loadErr} onRetry={load} retrying={loading} />
+    </div>
+  )
   if (!klas) return null
 
   const hasExams = exams.length > 0

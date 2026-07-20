@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import {
   Calendar, Plus, ChevronDown, ChevronUp, CheckCircle2,
   Loader2, ArrowRight, Users, GraduationCap,
@@ -50,6 +50,7 @@ export default function JaarovergangPage() {
 
   const [schoolYears, setSchoolYears] = useState<SchoolYear[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<unknown>(null)
   const [activeYear, setActiveYear] = useState<SchoolYear | null>(null)
 
   // Create modal
@@ -81,12 +82,13 @@ export default function JaarovergangPage() {
 
   async function loadYears() {
     setLoading(true)
+    setLoadErr(null)
     const { data, error } = await supabase
       .from('school_years')
       .select('*')
       .eq('tenant_id', profile!.tenant_id)
       .order('start_date', { ascending: false })
-    if (error) { console.error(error); setLoading(false); return }
+    if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
     const years: SchoolYear[] = data ?? []
     setSchoolYears(years)
     setActiveYear(years.find(y => y.is_active) ?? null)
@@ -380,6 +382,14 @@ export default function JaarovergangPage() {
   // ── Guards ─────────────────────────────────────────────────────────────────
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up max-w-3xl">
+      <Link href="/beheer" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4">
+        <ArrowRight size={15} className="rotate-180" /> Terug naar beheer
+      </Link>
+      <LoadError error={loadErr} onRetry={loadYears} retrying={loading} />
+    </div>
+  )
 
   // ── Render ─────────────────────────────────────────────────────────────────
 

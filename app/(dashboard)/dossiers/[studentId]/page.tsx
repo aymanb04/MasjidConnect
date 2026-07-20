@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { SignedFileLink } from '@/components/SignedFileLink'
 import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
@@ -50,6 +50,7 @@ export default function DossierDetailPage() {
   const [notes,     setNotes]     = useState<any[]>([])
   const [documents, setDocuments] = useState<any[]>([])
   const [loading,   setLoading]   = useState(true)
+  const [loadErr,   setLoadErr]   = useState<unknown>(null)
   const [editing,   setEditing]   = useState(false)
   const [saving,    setSaving]    = useState(false)
   const [error,     setError]     = useState('')
@@ -71,12 +72,15 @@ export default function DossierDetailPage() {
   }, [profile])
 
   async function load() {
+    setLoading(true)
+    setLoadErr(null)
     // Separate queries throughout — nested joins silently fail under RLS here.
-    const { data: stud } = await supabase
+    const { data: stud, error: studErr } = await supabase
       .from('profiles')
       .select('id, first_name, last_name, email, phone, tenant_id, role, is_active')
       .eq('id', studentId)
       .maybeSingle()
+    if (studErr) { console.error(studErr); setLoadErr(studErr); setLoading(false); return }
     if (!stud || stud.role !== 'student') { setStudent(null); setLoading(false); return }
     setStudent(stud)
 
@@ -226,6 +230,14 @@ export default function DossierDetailPage() {
 
   if (profileLoading || loading) return <PageLoader />
   if (!profile || !STAFF_ROLES.includes(profile.role)) return null
+  if (loadErr) return (
+    <div className="animate-slide-up max-w-3xl">
+      <button onClick={() => router.push('/dossiers')} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4">
+        <ArrowLeft size={15} /> Terug
+      </button>
+      <LoadError error={loadErr} onRetry={load} retrying={loading} />
+    </div>
+  )
 
   if (!student) {
     return (

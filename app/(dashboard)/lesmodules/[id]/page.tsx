@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
-import { PageLoader } from '@/components/ui/PageShell'
+import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { getFileIcon, formatFileSize } from '@/lib/utils'
 import { ArrowLeft, BookOpen, FileText } from 'lucide-react'
 import Link from 'next/link'
@@ -16,6 +16,7 @@ export default function ModuleDetailPage() {
   const { profile, loading: profileLoading } = useProfile()
   const [module, setModule] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<unknown>(null)
 
   useEffect(() => {
     if (!profile || !id) return
@@ -24,12 +25,21 @@ export default function ModuleDetailPage() {
 
   async function loadData() {
     const supabase = getSupabase()
-    const { data } = await supabase.from('lesson_modules').select('*, classes(name, color), module_documents(*), profiles!lesson_modules_created_by_fkey(first_name, last_name)').eq('id', id).single()
+    setLoading(true)
+    setLoadErr(null)
+    const { data, error } = await supabase.from('lesson_modules').select('*, classes(name, color), module_documents(*), profiles!lesson_modules_created_by_fkey(first_name, last_name)').eq('id', id).single()
+    if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
     setModule(data)
     setLoading(false)
   }
 
   if (profileLoading || loading) return <PageLoader />
+  if (loadErr) return (
+    <div className="animate-slide-up max-w-3xl">
+      <Link href="/lesmodules" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-5 transition-colors"><ArrowLeft size={15}/> Terug naar lesmodules</Link>
+      <LoadError error={loadErr} onRetry={loadData} retrying={loading} />
+    </div>
+  )
   if (!module) return null
 
   const isTeacher = ['teacher','admin','super_admin'].includes(profile?.role ?? '')
