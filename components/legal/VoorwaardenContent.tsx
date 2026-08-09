@@ -1,3 +1,5 @@
+'use client'
+
 // In-app rendering of the Gebruikersovereenkomst (legal/gebruikersovereenkomst.md).
 // Keep this in sync with that file when the Voorwaarden change, and bump
 // CURRENT_TERMS_VERSION in lib/terms.ts.

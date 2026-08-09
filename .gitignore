@@ -1,53 +1,53 @@
+# ─── Build / deps / env ───────────────────────────────────────────────
 node_modules/
 .next/
-.env.local
-.env
-.idea/
 out/
 build/
+tsconfig.tsbuildinfo
+.env
+.env.local
 *.log
 .DS_Store
+.idea/
 
-# Dev-only scripts and demo files (contain hardcoded demo passwords)
+# ─── Secrets & demo credentials (NEVER commit) ────────────────────────
 scripts/rls-smoke.accounts.json
+scripts/bulk-onboard.mjs
 supabase/seed.ts
 supabase/reset.sql
-DEMO_ACCOUNTS.txt
--aankodigingen per klas (filter).txt
-csv_test.txt
-SECURITY
-TOEKOMSTIGE_FUNCTIES.txt
+onboard-credentials.csv
+DEMO_ACCOUNT*.txt
 
-# Local-only working files (not tracked)
-# Consolidated internal docs (2026-07-05) + archived originals
+# ─── Internal documentation (PRIVATE — public repo) ───────────────────
+# One rule covers ALL internal docs, notes and the archive.
+# Map + reading order: docs/internal/00_INDEX.md
+docs/internal/
+#   Defense-in-depth: if any of these are ever recreated at the repo root
+#   (wrong place), keep them out of the public repo anyway.
 PROJECT.md
 ROADMAP.md
 SECURITY_AND_INFRA.md
-docs/_archive/
-SECURITY_TODO.md
-SECURITY_FINDINGS.md
-FEEDBACK_BUILD_PLAN.md
----FEEDBACK*.txt
+SALES_READINESS.md
+FEATURE_REVIEW.md
 GDPR_NOTES.txt
-DEMO_ACCOUNT.txt
-INTERVIEW_AUDIT.md
-INTERVIEW_SAM_PREP.md
-PROJECT_STATUS.md
-PROJECT_KNOWLEDGE.md
-SECURITY_AUDIT_REPORT.md
-legal/
+INTERVIEW_*.md
+CODE_SCREEN_*.md
 
-# Local-only dev tooling — the run-app walkthrough skill (+ its Playwright install)
+# ─── Legal contract drafts (PRIVATE) ──────────────────────────────────
+# Leading slash matters: unanchored `legal/` also swallowed app/legal/, the
+# PUBLIC route that renders the privacy statement for visitors without an account.
+/legal/
+
+# ─── Local-only dev tooling (run-app walkthrough skill + Playwright) ──
 .claude/skills/run-app/
 
-# Local references, test data and build artifacts
+# ─── Local references, test data, misc artifacts ──────────────────────
+-aankodigingen per klas (filter).txt
+csv_test.txt
 test_import.csv
-tsconfig.tsbuildinfo
-Smartschool-Privacyverklaring.pdf
-Schermafbeelding*.png
-Rapport_template.pdf
 test.ts
+Smartschool-Privacyverklaring.pdf
+Rapport_template.pdf
+Schermafbeelding*.png
 healthy_unhealthy.png
-
-# Internal security/logic screen (2026-07-06) — contains findings; keep private
-CODE_SCREEN_2026-07-06.md
+SECURITY

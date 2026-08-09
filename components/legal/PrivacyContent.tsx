@@ -1,3 +1,8 @@
+// Client boundary: lucide-react ships forwardRef icons without a 'use client'
+// directive, so this can't render inside a server component. Marked explicitly
+// now that the public /legal pages render it from a server page.
+'use client'
+
 import { Shield, Users, Clock, FileCheck, Mail, Building2, Scale, Server } from 'lucide-react'
 import { EntityFooter } from './EntityFooter'
 
@@ -20,7 +25,9 @@ const sections = [
       'Klas- en groepsinschrijvingen',
       'Ingediende taken, scores, feedback en examenresultaten',
       'Aanwezigheidsregistraties en rapporten',
-      'Wij verzamelen geen geboortedatum of gevoelige gegevens en doen niet aan reclame of profilering.',
+      'Leerlingendossier: geboortedatum, geslacht, adres, contactgegevens van de ouder(s) en noodcontact, familieverband, notities en documenten die de school toevoegt.',
+      'Zorg- of gezondheidsinformatie (bijzondere categorieën, art. 9 AVG) verwerken wij enkel wanneer de school die toevoegt met de uitdrukkelijke toestemming van de ouder(s).',
+      'Wij doen niet aan reclame of profilering en gebruiken uw gegevens niet om AI-modellen te trainen.',
     ],
   },
   {

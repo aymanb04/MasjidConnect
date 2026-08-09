@@ -5,7 +5,7 @@
 // NOT throw, so the React error boundaries in app/error.tsx never see a failed
 // data load — the page just renders empty. Pages classify the error here and
 // render <LoadError> instead. Ties to the nano IO-throttle overload behaviour
-// documented in SECURITY_AND_INFRA.md §1: overload shows visible, transient
+// documented in docs/internal/SECURITY_AND_INFRA.md §1: overload shows visible, transient
 // errors (522/504/timeout), and we want "probeer opnieuw" instead of a blank page.
 
 export type LoadErrorInfo = {
