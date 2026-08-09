@@ -72,7 +72,10 @@ const AUDIENCES = [
 ]
 
 const FEATURES = [
-    { icon: Layers, title: 'Groepen & vakken', body: 'Een groep per niveau, een vak per leerkracht. Wie in een groep zit, zit meteen in alle vakken van die groep.' },
+    // "Wie in een groep zit, zit in alle vakken" read as a standing invariant.
+    // The cascade runs when the student is invited/geïmporteerd into the group;
+    // a vak added to that group later does not backfill existing leerlingen.
+    { icon: Layers, title: 'Groepen & vakken', body: 'Een groep per niveau, een vak per leerkracht. Wie u in een groep plaatst, komt meteen in alle vakken van die groep terecht.' },
     { icon: FileText, title: 'Huiswerk', body: 'Opdrachten met deadline en maximumscore. Leerlingen dienen tekst of bestanden in, u verbetert met score en commentaar.' },
     { icon: ClipboardCheck, title: 'Puntenlijst', body: 'Toetsen op papier, online opdrachten en examens in één raster, met een gewogen gemiddelde per leerling.' },
     { icon: CheckCircle2, title: 'Aanwezigheden', body: 'Per les afvinken in minder dan een minuut, met jaaroverzicht per leerling en een signaal bij herhaalde afwezigheid.' },
@@ -95,7 +98,11 @@ const TRUST = [
     {
         icon: Server,
         title: 'Gegevens in de EU',
-        body: 'Alles staat op servers in Ierland (AWS eu-west-1). Alle bestanden staan in privéopslag: links zijn tijdelijk en worden per klik aangemaakt.',
+        // "Alle bestanden" was wrong: tenant-logos and avatars are public
+        // buckets. Everything carrying student data — ingediende taken,
+        // lesmateriaal, dossierdocumenten, rapporten — is private, so the claim
+        // is now scoped to exactly those.
+        body: 'Alles staat op servers in Ierland (AWS eu-west-1). Ingediende taken, lesmateriaal en dossierdocumenten staan in privéopslag: links zijn tijdelijk en worden per klik aangemaakt.',
     },
     {
         icon: ShieldCheck,
