@@ -26,10 +26,12 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: '/icon.svg',
-    // icon-192.png, not a separate apple-touch-icon.png — that file was
-    // referenced here but never existed, so iOS "add to home screen" fetched a
-    // 404 and fell back to a screenshot of the page.
-    apple: '/icon-192.png',
+    // This path was referenced for a long time without the file existing, so
+    // iOS "add to home screen" fetched a 404. The asset now exists and is
+    // full-bleed on purpose: iOS applies its own mask and composites any
+    // transparency to black, so the transparent-cornered `any` icons would
+    // come out with black corners here.
+    apple: '/apple-touch-icon.png',
   },
 }
 
