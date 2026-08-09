@@ -11,5 +11,14 @@
 //
 // The canonical origin is a property of the product, not of the deployment:
 // there is exactly one public domain, and a preview build should still declare
-// it. Change this only if the domain itself changes.
-export const SITE_URL = 'https://masjidconnect.be'
+// it.
+//
+// It must be the host that actually SERVES the site, not the prettier one:
+// Vercel's primary domain is `www`, and the apex 307-redirects to it. Declaring
+// the apex made every canonical tag point at a URL that redirects elsewhere, and
+// left the OG image reachable only through that redirect — which some link
+// scrapers refuse to follow for images.
+//
+// If the Vercel primary domain is ever flipped to the bare apex, change this
+// line back to `https://masjidconnect.be` in the same deploy.
+export const SITE_URL = 'https://www.masjidconnect.be'

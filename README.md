@@ -2,7 +2,9 @@
 
 Digital platform for educational centres — built with Next.js 14 + Supabase.
 
-**Production:** [https://masjidconnect.be](https://masjidconnect.be)
+**Production:** [https://www.masjidconnect.be](https://www.masjidconnect.be)
+(the bare `masjidconnect.be` redirects here — `www` is the Vercel primary domain
+and the canonical host, pinned in `lib/site.ts`)
 
 ## Stack
 
