@@ -19,6 +19,40 @@ function getStoredSession() {
     } catch { return null }
 }
 
+/**
+ * Clear the session and leave for /login.
+ *
+ * A valid session whose profiles row is missing used to spin the app: the
+ * dashboard layout pushes /login whenever `profile` is null, and /login pushes
+ * authenticated visitors back to /dashboard — several redirects per second,
+ * pinning the browser (hit 2026-08-11). It happens whenever an auth user
+ * outlives its profile row, which is easy to cause: deleting a row in the
+ * profiles table does NOT delete the auth user. Since the session is
+ * unusable either way, drop it so the cycle cannot start.
+ */
+async function endSession(reason: string) {
+    await supabase.auth.signOut()
+    window.location.href = `/login?reden=${reason}`
+}
+
+type Loaded = { profile: Profile | null; fatal: string | null }
+
+async function loadProfile(userId: string): Promise<Loaded> {
+    // maybeSingle(), not single(): zero rows comes back as data=null/error=null,
+    // which is how a genuinely missing profile stays distinguishable from a
+    // transient query failure. single() reports both as an error, and signing a
+    // user out on a network blip would be worse than the bug being fixed.
+    const first = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+    if (first.error) {
+        const retry = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+        if (retry.error) return { profile: null, fatal: 'profiel-onbereikbaar' }
+        if (!retry.data) return { profile: null, fatal: 'geen-profiel' }
+        return { profile: retry.data as Profile, fatal: null }
+    }
+    if (!first.data) return { profile: null, fatal: 'geen-profiel' }
+    return { profile: first.data as Profile, fatal: null }
+}
+
 export function useProfile() {
     const stored = getStoredSession()
     const [profile, setProfile] = useState<Profile | null>(null)
@@ -28,13 +62,10 @@ export function useProfile() {
         async function init() {
             const { data: { session } } = await supabase.auth.getSession()
             if (!session?.user) { setLoading(false); return }
-            const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
-            if (data?.is_active === false) {
-                await supabase.auth.signOut()
-                window.location.href = '/login'
-                return
-            }
-            setProfile(data)
+            const { profile: loaded, fatal } = await loadProfile(session.user.id)
+            if (fatal) { await endSession(fatal); return }
+            if (loaded?.is_active === false) { await endSession('gearchiveerd'); return }
+            setProfile(loaded)
             setLoading(false)
         }
         init()
@@ -46,13 +77,10 @@ export function useProfile() {
                 // callback deadlocks supabase-js — the auth lock is held while
                 // events are emitted, and .from() waits on that same lock.
                 setTimeout(async () => {
-                    const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
-                    if (data?.is_active === false) {
-                        await supabase.auth.signOut()
-                        window.location.href = '/login'
-                        return
-                    }
-                    setProfile(data)
+                    const { profile: loaded, fatal } = await loadProfile(session.user.id)
+                    if (fatal) { await endSession(fatal); return }
+                    if (loaded?.is_active === false) { await endSession('gearchiveerd'); return }
+                    setProfile(loaded)
                 }, 0)
             }
         })
