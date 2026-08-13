@@ -77,7 +77,26 @@ export async function POST(request: Request) {
 
         if (error) {
             console.error('[/api/invite] inviteUserByEmail:', error.message)
-            return NextResponse.json({ error: 'Uitnodiging kon niet worden verzonden.' }, { status: 400 })
+            // "Uitnodiging kon niet worden verzonden" reads as a mail problem, but
+            // this branch fires for ANY GoTrue failure — including a database error
+            // from the handle_new_user trigger. On 2026-08-13 that cost an evening:
+            // the real cause was profiles.role being varchar(20) while
+            // 'leerlingenbegeleiding' is 21 chars (fixed in migration 23), and the
+            // message pointed at e-mail delivery instead. Name the two causes we can
+            // recognise; everything else stays generic on purpose (no address
+            // enumeration, no raw GoTrue text leaked to the client).
+            const exists = /already( been)? registered|already exists|duplicate/i.test(error.message)
+            const dbFault = /database error|value too long|violates/i.test(error.message)
+            return NextResponse.json(
+                {
+                    error: exists
+                        ? 'Dit e-mailadres heeft al een account. Eén adres kan maar één account (en één rol) hebben — gebruik een ander adres, of wijzig de rol van het bestaande account via Beheer.'
+                        : dbFault
+                            ? 'De uitnodiging kon niet worden opgeslagen (databasefout). Dit ligt niet aan het e-mailadres — meld dit even, dan wordt het nagekeken.'
+                            : 'Uitnodiging kon niet worden verzonden.',
+                },
+                { status: 400 }
+            )
         }
 
         if (invited_by) {
