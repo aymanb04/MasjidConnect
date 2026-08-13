@@ -17,6 +17,9 @@ supabase/seed.ts
 supabase/reset.sql
 onboard-credentials.csv
 DEMO_ACCOUNT*.txt
+# Real production credentials (NOT demo values) — move into a password manager
+# and delete the file. Never committed, never pasted into a chat transcript.
+PROD_CREDENTIALS.txt
 
 # ─── Internal documentation (PRIVATE — public repo) ───────────────────
 # One rule covers ALL internal docs, notes and the archive.
@@ -32,6 +35,13 @@ FEATURE_REVIEW.md
 GDPR_NOTES.txt
 INTERVIEW_*.md
 CODE_SCREEN_*.md
+
+# ─── Real client data (PRIVATE — GDPR) ────────────────────────────────
+# Per-tenant working files: class lists, contact details, rapport templates.
+# This holds REAL personal data of minors and their parents. It was sitting
+# untracked-but-not-ignored on 2026-08-10, i.e. one `git add -A` away from a
+# public repo. Root-anchored so it cannot swallow an app route named Tenants/.
+/Tenants/
 
 # ─── Legal contract drafts (PRIVATE) ──────────────────────────────────
 # Leading slash matters: unanchored `legal/` also swallowed app/legal/, the
