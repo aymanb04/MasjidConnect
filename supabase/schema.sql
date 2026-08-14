@@ -167,7 +167,10 @@ CREATE TABLE public.tenants (
 CREATE TABLE public.profiles (
   id             uuid             NOT NULL,
   tenant_id      uuid,
-  role           character varying NOT NULL
+  -- varchar(50), not unbounded: this file claimed unbounded while the live column
+  -- was varchar(20), and 'leerlingenbegeleiding' is 21 chars — so that role could
+  -- never be created at all. Widened + this line corrected by migration 23.
+  role           character varying(50) NOT NULL
     CHECK (role IN ('super_admin', 'admin', 'teacher', 'student', 'leerlingenbegeleiding')),
   first_name     character varying NOT NULL,
   last_name      character varying NOT NULL,
@@ -471,7 +474,7 @@ CREATE TABLE public.invitations (
   id          uuid             NOT NULL DEFAULT uuid_generate_v4(),
   tenant_id   uuid             NOT NULL,
   email       character varying NOT NULL,
-  role        character varying NOT NULL
+  role        character varying(50) NOT NULL   -- see profiles.role note (migration 23)
     CHECK (role IN ('admin', 'teacher', 'student', 'leerlingenbegeleiding')),
   class_id    uuid,
   token       character varying NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex') UNIQUE,
