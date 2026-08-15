@@ -16,10 +16,10 @@ interface Props {
 
 const navItems = [
   { label: 'Dashboard',   href: '/dashboard',   icon: LayoutDashboard, roles: ['super_admin','admin','teacher','student','leerlingenbegeleiding'] },
-  { label: 'Klassen',     href: '/klassen',     icon: GraduationCap,   roles: ['admin','teacher','student'] },
+  { label: 'Klassen',     href: '/klassen',     icon: GraduationCap,   roles: ['admin','teacher','student','leerlingenbegeleiding'] },
   { label: 'Huiswerk',    href: '/huiswerk',    icon: FileText,        roles: ['teacher','student'] },
   { label: 'Lesmodules',  href: '/lesmodules',  icon: BookOpen,        roles: ['teacher','student'] },
-  { label: 'Aanwezigheid', href: '/aanwezigheid', icon: ClipboardCheck,  roles: ['admin','teacher','student'] },
+  { label: 'Aanwezigheid', href: '/aanwezigheid', icon: ClipboardCheck,  roles: ['admin','teacher','student','leerlingenbegeleiding'] },
   { label: 'Rooster',     href: '/rooster',      icon: Clock,           roles: ['admin','teacher','student'] },
   { label: 'Agenda',      href: '/agenda',       icon: CalendarDays,    roles: ['admin','teacher','student'] },
   { label: 'Oudercontact', href: '/oudercontact', icon: CalendarClock,  roles: ['admin','teacher','student'] },

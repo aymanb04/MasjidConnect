@@ -83,7 +83,12 @@ export default function KlassenPage() {
         ? all.filter((c: any) => c.school_year_id === effectiveYearId)
         : all
 
-    } else if (profile!.role === 'admin') {
+    // Counselors read the same tenant-wide list as an admin (RLS allows it since
+    // migration 13; attendance data since 25). They get no management
+    // affordances — `isAdmin` below stays admin/super_admin only. Without this
+    // branch a counselor fell through every case and saw an empty page telling
+    // them they weren't assigned to a class, which they never are by design.
+    } else if (profile!.role === 'admin' || profile!.role === 'leerlingenbegeleiding') {
       // Fetch school years first
       const { data: years } = await supabase
         .from('school_years')
@@ -265,7 +270,13 @@ export default function KlassenPage() {
         <EmptyState
           icon={<GraduationCap size={40}/>}
           title="Geen klassen gevonden"
-          subtitle={isAdmin ? 'Maak uw eerste klas aan via Beheer.' : 'U bent nog niet aan een klas toegewezen.'}
+          subtitle={
+            isAdmin ? 'Maak uw eerste klas aan via Beheer.'
+            // A counselor is never assigned to a class, so the teacher/student
+            // copy reads as a fault rather than an empty school.
+            : profile?.role === 'leerlingenbegeleiding' ? 'Er zijn nog geen klassen in deze school.'
+            : 'U bent nog niet aan een klas toegewezen.'
+          }
         />
       ) : (
         <div className="space-y-8">
