@@ -179,8 +179,44 @@ async function main() {
         check('super_admin can read audit_logs', !auditErr, auditErr?.message)
     }
 
+    // ── cross-tenant, empirically ────────────────────────────────────────────
+    // Until 2026-08-15 this file could only assert isolation *structurally*,
+    // because prod had one tenant. It now has two (De Kroon + De Kroon demo),
+    // and that is what exposed migration 24: reads were correctly blocked while
+    // WRITES were not — a demo-tenant student could insert an attendance session
+    // into a real-tenant class it could not even SELECT. Assert both directions
+    // here so the write side can never silently regress again.
+    console.log('\ncross-tenant:')
+    const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!SERVICE) {
+        skipped += 2
+        console.log('  SKIP  cross-tenant checks — no SUPABASE_SERVICE_ROLE_KEY to locate a foreign tenant')
+    } else {
+        const svc = createClient(URL_!, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } })
+        const { data: me } = await svc.from('profiles').select('tenant_id').eq('id', student.uid).single()
+        const { data: foreign } = await svc.from('classes')
+            .select('id').neq('tenant_id', me!.tenant_id).limit(1).maybeSingle()
+
+        if (!foreign) {
+            skipped += 2
+            console.log('  SKIP  cross-tenant checks — only one tenant in this database')
+        } else {
+            const { data: seen } = await student.client.from('classes').select('id').eq('id', foreign.id)
+            check('foreign-tenant class not readable', (seen ?? []).length === 0, `saw ${seen?.length} rows`)
+
+            const { data: wrote, error: wErr } = await student.client.from('attendance_sessions')
+                .insert({ class_id: foreign.id, teacher_id: student.uid, session_date: '2099-01-01' })
+                .select('id').maybeSingle()
+            check('foreign-tenant attendance write denied', !!wErr,
+                wErr ? '' : 'INSERT SUCCEEDED — migration 24 has regressed')
+            // Only reachable if the check above failed; leave nothing behind either way.
+            if (wrote) await svc.from('attendance_sessions').delete().eq('id', wrote.id)
+        }
+    }
+
     console.log(`\n${passed} passed, ${failed} failed${skipped ? `, ${skipped} skipped` : ''}`)
-    console.log('(Note: demo DB has a single tenant — cross-tenant isolation is asserted structurally, not empirically.)')
+    console.log('(Cross-tenant isolation is now asserted empirically against a real second tenant —')
+    console.log(' keep the demo tenant: without it these two checks silently downgrade to a SKIP.)')
     process.exit(failed ? 1 : 0)
 }
 
