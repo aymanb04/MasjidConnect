@@ -14,44 +14,54 @@ export default function ResetPasswordPage() {
     const [done, setDone]         = useState(false)
     const [error, setError]       = useState('')
     const [ready, setReady]       = useState(false)
+    // Gescheiden van `error`: dat is voor formulierfouten (wachtwoord te kort,
+    // komt niet overeen). Eén gedeelde state liet een verlopen-link-melding in
+    // het formulier opduiken terwijl de gebruiker aan het typen was.
+    const [linkError, setLinkError] = useState<'expired' | 'invalid' | null>(null)
     const router = useRouter()
 
     useEffect(() => {
-        // Verwerk de token uit de URL hash direct
-        const hash = window.location.hash
-        if (hash && hash.includes('access_token')) {
-            const params = new URLSearchParams(hash.substring(1))
-            const accessToken  = params.get('access_token')
-            const refreshToken = params.get('refresh_token')
+        // `settled` is een closure-variabele, geen state: de timeout hieronder las
+        // anders altijd de beginwaarde van `ready` (lege deps) en zette een fout
+        // op een reset die net wél gelukt was.
+        let settled = false
+        const finish = (fn: () => void) => { if (!settled) { settled = true; fn() } }
 
-            if (accessToken && refreshToken) {
-                supabase.auth.setSession({
-                    access_token: accessToken,
-                    refresh_token: refreshToken,
-                }).then(({ error }) => {
-                    if (error) {
-                        setError('Ongeldige of verlopen reset link. Vraag een nieuwe aan.')
-                    } else {
-                        setReady(true)
-                    }
-                })
-                return
-            }
+        const hash  = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+        const query = new URLSearchParams(window.location.search)
+
+        // Een dode link komt terug ZONDER access_token, met de reden in de hash
+        // (of query, afhankelijk van de flow): #error=access_denied&error_code=
+        // otp_expired. Dit eerst afhandelen, anders valt zo'n link in de fallback
+        // hieronder en blijft de gebruiker 5 seconden naar een spinner kijken.
+        const errorCode = hash.get('error_code') ?? query.get('error_code')
+        const errorKind = hash.get('error') ?? query.get('error')
+        if (errorCode || errorKind) {
+            finish(() => setLinkError(errorCode === 'otp_expired' ? 'expired' : 'invalid'))
+            return
+        }
+
+        // Verwerk de token uit de URL hash direct
+        const accessToken  = hash.get('access_token')
+        const refreshToken = hash.get('refresh_token')
+        if (accessToken && refreshToken) {
+            supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+            }).then(({ error }) => finish(() => {
+                if (error) setLinkError('invalid')
+                else setReady(true)
+            }))
+            return
         }
 
         // Fallback: luister naar PASSWORD_RECOVERY event
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-            if (event === 'PASSWORD_RECOVERY') {
-                setReady(true)
-            }
+            if (event === 'PASSWORD_RECOVERY') finish(() => setReady(true))
         })
 
         // Als na 5 seconden nog niks: toon foutmelding
-        const timeout = setTimeout(() => {
-            if (!ready) {
-                setError('Ongeldige of verlopen reset link. Vraag een nieuwe aan via "Wachtwoord vergeten".')
-            }
-        }, 5000)
+        const timeout = setTimeout(() => finish(() => setLinkError('invalid')), 5000)
 
         return () => {
             subscription.unsubscribe()
@@ -93,7 +103,7 @@ export default function ResetPasswordPage() {
     }
 
     // Laadscherm
-    if (!ready && !error) {
+    if (!ready && !linkError) {
         return (
             <div className="min-h-dvh flex items-center justify-center bg-surface-warm">
                 <div className="text-center">
@@ -105,15 +115,22 @@ export default function ResetPasswordPage() {
     }
 
     // Foutscherm (verlopen link)
-    if (error && !ready) {
+    if (linkError && !ready) {
+        const expired = linkError === 'expired'
         return (
             <div className="min-h-dvh flex items-center justify-center p-8 bg-surface-warm">
                 <div className="w-full max-w-[380px] text-center">
-                    <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <span className="text-2xl">⚠️</span>
+                    <div className={`w-14 h-14 ${expired ? 'bg-amber-100' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-4`}>
+                        <span className="text-2xl">{expired ? '⏳' : '⚠️'}</span>
                     </div>
-                    <h1 className="text-xl font-semibold text-gray-900 mb-2">Link ongeldig</h1>
-                    <p className="text-gray-500 text-sm mb-6">{error}</p>
+                    <h1 className="text-xl font-semibold text-gray-900 mb-2">
+                        {expired ? 'Link verlopen' : 'Link ongeldig'}
+                    </h1>
+                    <p className="text-gray-500 text-sm mb-6">
+                        {expired
+                            ? 'Deze link is verlopen, of er is intussen een nieuwere link verstuurd. Vraag hieronder een nieuwe aan — die kunt u meteen gebruiken.'
+                            : 'We konden deze link niet verifiëren. Vraag een nieuwe aan via "Wachtwoord vergeten".'}
+                    </p>
                     <a href="/forgot-password" className="btn-primary w-full justify-center">
                         Nieuwe reset link aanvragen
                     </a>
