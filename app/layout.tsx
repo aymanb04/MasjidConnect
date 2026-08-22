@@ -42,10 +42,32 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 }
 
+// Signed-in visitors who open the bookmarked root used to watch the marketing
+// page for as long as it took the JS bundle to hydrate — 229 ms on desktop but
+// ~1.5 s on a phone, because the old redirect lived in a React effect and could
+// not run any earlier. This runs synchronously while the HTML is still being
+// parsed, so the sales pitch is never painted at all.
+//
+// Only the session's PRESENCE is checked, never its validity: an expired access
+// token still means "logged in" (it refreshes on /dashboard), and anything
+// genuinely stale is bounced to /login there. Crawlers have no localStorage, so
+// they always get the full marketing page and SEO is untouched.
+const SUPABASE_REF = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname.split('.')[0]
+const BOUNCE_IF_AUTHED = `(function(){try{
+if(location.pathname!=='/')return;
+if(!localStorage.getItem('sb-${SUPABASE_REF}-auth-token'))return;
+location.replace('/dashboard');
+}catch(e){}})();`
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="nl" className={inter.variable}>
-      <body>{children}</body>
+      <body>
+        {/* Must stay the first thing in <body> — it only beats the paint if the
+            browser runs it before parsing the markup below. */}
+        <script dangerouslySetInnerHTML={{ __html: BOUNCE_IF_AUTHED }} />
+        {children}
+      </body>
     </html>
   )
 }

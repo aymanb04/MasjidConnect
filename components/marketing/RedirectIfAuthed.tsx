@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 
 // The landing page at `/` is public marketing, but the root URL is also what
@@ -9,31 +9,22 @@ import { supabase } from '@/lib/supabase/singleton'
 // here always saw null. Signed-in visitors get bounced to their dashboard;
 // everyone else (including crawlers, which never carry a session) keeps the
 // server-rendered marketing page.
+// Now only a BACKSTOP. The redirect normally happens before paint, in the inline
+// script in app/layout.tsx; this catches the case where that script found no
+// storage key but supabase-js still resolves a session (custom storageKey, a
+// migrated token shape). Reaching here means the marketing page was already
+// shown, which is the thing the inline script exists to prevent.
+//
+// It renders nothing. The old version returned a full-screen spinner, but that
+// never painted once: setRedirecting() and location.replace() ran in the same
+// tick, so the browser started navigating before React committed. Measured
+// `overlay shown: never` across every run.
 export function RedirectIfAuthed() {
-    const [redirecting, setRedirecting] = useState(false)
-
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
-            if (!session) return
-            setRedirecting(true)
-            window.location.replace('/dashboard')
+            if (session) window.location.replace('/dashboard')
         })
     }, [])
 
-    if (!redirecting) return null
-
-    // Covers the marketing page for the moment between "session found" and the
-    // browser actually navigating, so bookmark users don't stare at a sales
-    // pitch for their own school.
-    return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center"
-            style={{ backgroundColor: '#F8F7F4' }}
-        >
-            <div
-                className="h-8 w-8 animate-spin rounded-full border-2 border-t-transparent"
-                style={{ borderColor: '#1B6B4A', borderTopColor: 'transparent' }}
-            />
-        </div>
-    )
+    return null
 }
