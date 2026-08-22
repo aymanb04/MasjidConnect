@@ -13,6 +13,8 @@ tsconfig.tsbuildinfo
 # ─── Secrets & demo credentials (NEVER commit) ────────────────────────
 scripts/rls-smoke.accounts.json
 scripts/bulk-onboard.mjs
+scripts/auth-mail-doctor.mjs
+scripts/auth-mail-resend.mjs
 supabase/seed.ts
 supabase/reset.sql
 onboard-credentials.csv
