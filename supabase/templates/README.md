@@ -10,10 +10,13 @@ Paste the file contents into the matching template's message body, and set the s
 line listed below. Keep this folder in sync whenever you edit one there, otherwise the
 only copy of the wording is behind a login.
 
-| File | Dashboard template | Subject line |
-|---|---|---|
-| `invite.html` | Invite user | `Uitnodiging MasjidConnect` |
-| `recovery.html` | Reset password | `Wachtwoord opnieuw instellen — MasjidConnect` |
+| File | Dashboard template | Subject line | Live? |
+|---|---|---|---|
+| `invite.html` | Invite user | `Uitnodiging MasjidConnect` | yes |
+| `recovery.html` | Reset password | `Wachtwoord opnieuw instellen — MasjidConnect` | yes, since 2026-08-22 |
+
+Both verified by sending a real mail and reading the delivered body back out of the
+Resend API — that is the only way to confirm the dashboard actually took the change.
 
 Mail is delivered through Resend (custom SMTP), sending as
 `"MasjidConnect" <noreply@masjidconnect.be>`.
