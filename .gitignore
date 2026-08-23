@@ -15,6 +15,10 @@ scripts/rls-smoke.accounts.json
 scripts/bulk-onboard.mjs
 scripts/auth-mail-doctor.mjs
 scripts/auth-mail-resend.mjs
+# Both name the demo login e-mails, whose passwords are weak by design.
+# demo-dress.mjs also writes to the live demo tenant.
+scripts/make-screenshots.mjs
+scripts/demo-dress.mjs
 supabase/seed.ts
 supabase/reset.sql
 onboard-credentials.csv
