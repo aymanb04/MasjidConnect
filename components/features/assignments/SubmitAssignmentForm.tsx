@@ -43,13 +43,24 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
 
   function handleFileAdd(incoming: FileList | null) {
     if (!incoming) return
+    // Collect rejections instead of calling setError inside the filter: the
+    // unconditional setError('') that used to follow this loop was batched by
+    // React and always won, so a student who picked a 30 MB file or a .zip saw
+    // NO error at all — the file just never appeared in the list.
+    const rejected: string[] = []
     const valid = Array.from(incoming).filter(f => {
-      if (!ALLOWED_TYPES.includes(f.type)) { setError(`Bestandstype niet toegestaan: ${f.name}`); return false }
-      if (f.size > MAX_SIZE) { setError(`Bestand te groot (max 20 MB): ${f.name}`); return false }
+      if (!ALLOWED_TYPES.includes(f.type)) {
+        rejected.push(`${f.name} (bestandstype niet toegestaan)`)
+        return false
+      }
+      if (f.size > MAX_SIZE) {
+        rejected.push(`${f.name} (te groot, max 20 MB)`)
+        return false
+      }
       return true
     })
     setFiles(prev => [...prev, ...valid])
-    setError('')
+    setError(rejected.length ? `Niet toegevoegd: ${rejected.join(', ')}` : '')
   }
 
   async function handleSubmit() {
@@ -79,17 +90,27 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
         const path = `${userId}/${assignmentId}/${Date.now()}_${safeName}`
         const { error: upErr } = await supabase.storage.from('submission-files').upload(path, file)
         if (upErr) throw upErr
-        await supabase.from('submission_files').insert({
+        const { error: rowErr } = await supabase.from('submission_files').insert({
           submission_id: submission.id,
           file_name: file.name, file_url: path,
           file_size: file.size, file_type: file.type,
         })
+        // Was ignored: the object landed in the bucket, the row did not, and the
+        // student was told the submission succeeded — their work was invisible
+        // to the teacher and orphaned in storage. Roll the object back so the
+        // two never disagree.
+        if (rowErr) {
+          await supabase.storage.from('submission-files').remove([path])
+          throw rowErr
+        }
       }
       setSuccess(true)
       setFiles([])
       setTimeout(() => router.refresh(), 1000)
     } catch (e: any) {
-      setError(e.message ?? 'Er liep iets mis. Probeer opnieuw.')
+      // Never surface e.message: it is the raw English Postgres/Storage string.
+      console.error(e)
+      setError('Indienen mislukt. Probeer het opnieuw.')
     } finally {
       setLoading(false)
     }

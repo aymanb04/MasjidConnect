@@ -38,6 +38,7 @@ export default function BetalingenPage() {
   const [payroll, setPayroll] = useState<any[]>([])
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'))
   const [savingRow, setSavingRow] = useState<string | null>(null)
+  const [payingId, setPayingId]   = useState<string | null>(null)
 
   const isAdmin = profile && ['admin', 'super_admin'].includes(profile.role)
 
@@ -124,28 +125,39 @@ export default function BetalingenPage() {
     setSavingConfig(false)
   }
 
+  // `payingId` guards against a double tap inserting two fee_payments rows for
+  // the same person. There is no unique constraint behind this, and it is
+  // financial data, so the guard is the only thing preventing a duplicate.
   async function markPaid(feeType: 'membership' | 'chart', targetId: string) {
+    if (payingId) return
+    setPayingId(targetId)
     setError('')
-    const amount = feeType === 'membership'
-      ? parseFloat(configForm.membership_amount) || 0
-      : parseFloat(configForm.chart_amount) || 0
-    const { error: err } = await supabase.from('fee_payments').insert({
-      tenant_id: profile!.tenant_id,
-      school_year_id: year.id,
-      fee_type: feeType,
-      student_id: feeType === 'membership' ? targetId : null,
-      family_id: feeType === 'chart' ? targetId : null,
-      amount,
-      paid_at: format(new Date(), 'yyyy-MM-dd'),
-    })
-    if (err) { setError('Betaling registreren mislukt.'); return }
-    const { data: pays } = await supabase.from('fee_payments').select('*')
-      .eq('school_year_id', year.id).eq('tenant_id', profile!.tenant_id)
-    setPayments(pays ?? [])
+    try {
+      const amount = feeType === 'membership'
+        ? parseFloat(configForm.membership_amount) || 0
+        : parseFloat(configForm.chart_amount) || 0
+      const { error: err } = await supabase.from('fee_payments').insert({
+        tenant_id: profile!.tenant_id,
+        school_year_id: year.id,
+        fee_type: feeType,
+        student_id: feeType === 'membership' ? targetId : null,
+        family_id: feeType === 'chart' ? targetId : null,
+        amount,
+        paid_at: format(new Date(), 'yyyy-MM-dd'),
+      })
+      if (err) { console.error(err); setError('Betaling registreren mislukt.'); return }
+      const { data: pays } = await supabase.from('fee_payments').select('*')
+        .eq('school_year_id', year.id).eq('tenant_id', profile!.tenant_id)
+      setPayments(pays ?? [])
+    } finally { setPayingId(null) }
   }
 
   async function undoPayment(paymentId: string) {
-    await supabase.from('fee_payments').delete().eq('id', paymentId)
+    // Deleting a payment record had no confirmation and its result was
+    // discarded, behind an icon-only ✕ — on financial data.
+    if (!confirm('Deze betaling ongedaan maken?')) return
+    const { error: err } = await supabase.from('fee_payments').delete().eq('id', paymentId)
+    if (err) { console.error(err); setError('Betaling ongedaan maken mislukt.'); return }
     setPayments(prev => prev.filter(p => p.id !== paymentId))
   }
 
@@ -311,7 +323,7 @@ export default function BetalingenPage() {
                         <AlertCircle size={11} /> Vervallen
                       </span>
                     )}
-                    <button onClick={() => markPaid('membership', s.id)}
+                    <button onClick={() => markPaid("membership", s.id)} disabled={payingId === s.id}
                       className="text-xs px-2.5 py-1 rounded-lg border border-primary-200 bg-primary-50 text-primary-600 hover:bg-primary-100 font-medium transition-colors flex items-center gap-1 flex-shrink-0">
                       <Check size={11} /> Betaald
                     </button>
@@ -359,7 +371,7 @@ export default function BetalingenPage() {
                         <AlertCircle size={11} /> Vervallen
                       </span>
                     )}
-                    <button onClick={() => markPaid('chart', f.id)}
+                    <button onClick={() => markPaid("chart", f.id)} disabled={payingId === f.id}
                       className="text-xs px-2.5 py-1 rounded-lg border border-primary-200 bg-primary-50 text-primary-600 hover:bg-primary-100 font-medium transition-colors flex items-center gap-1 flex-shrink-0">
                       <Check size={11} /> Betaald
                     </button>

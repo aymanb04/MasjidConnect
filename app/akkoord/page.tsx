@@ -85,17 +85,17 @@ export default function AkkoordPage() {
                 <p className="text-gray-500 mt-1.5 text-sm mb-6">
                     {ackOnly
                         ? 'Hieronder staan de regels van MasjidConnect en wat er met jouw gegevens gebeurt. Je school heeft de voorwaarden aanvaard; wij vragen je alleen te bevestigen dat je ze gelezen hebt.'
-                        : 'Lees onderstaande voorwaarden en ons privacybeleid. Om MasjidConnect te gebruiken, vragen wij je deze te aanvaarden.'}
+                        : 'Lees onderstaande voorwaarden en onze privacyverklaring. Om MasjidConnect te gebruiken, vragen wij je deze te aanvaarden.'}
                 </p>
 
                 {/* Privacy */}
-                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">Privacybeleid</h2>
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">Privacyverklaring</h2>
                 <div className="max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-3 mb-6">
                     <PrivacyContent />
                 </div>
 
                 {/* Voorwaarden */}
-                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">Gebruikersvoorwaarden</h2>
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">Gebruiksvoorwaarden</h2>
                 <div className="max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-3 mb-6">
                     <VoorwaardenContent />
                 </div>
@@ -110,11 +110,11 @@ export default function AkkoordPage() {
                     />
                     <span className="text-sm text-gray-700">
                         {ackOnly ? (
-                            <>Ik heb het <strong>privacybeleid</strong> en de{' '}
+                            <>Ik heb de <strong>privacyverklaring</strong> en de{' '}
                             <strong>regels</strong> van MasjidConnect gelezen.</>
                         ) : (
-                            <>Ik heb het <strong>privacybeleid</strong> gelezen en ga akkoord met de{' '}
-                            <strong>gebruikersvoorwaarden</strong> van MasjidConnect.</>
+                            <>Ik heb de <strong>privacyverklaring</strong> gelezen en ga akkoord met de{' '}
+                            <strong>gebruiksvoorwaarden</strong> van MasjidConnect.</>
                         )}
                     </span>
                 </label>

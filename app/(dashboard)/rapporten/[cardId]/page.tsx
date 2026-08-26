@@ -31,6 +31,7 @@ export default function RapportCardPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [saveMsg, setSaveMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [loadErr, setLoadErr] = useState<unknown>(null)
 
@@ -88,22 +89,37 @@ export default function RapportCardPage() {
   const canEditLine = (l: Line) =>
     (isAdmin || editable.has(l.class_id)) && card?.status === 'draft'
 
+  // Every .update() here used to have its result discarded, and there was no
+  // success message either — the spinner simply stopped. A teacher filling in a
+  // whole report card had no way to tell whether any of it had been written.
   async function saveChanges() {
     if (!card) return
     setSaving(true)
+    setSaveMsg(null)
     const supabase = getSupabase()
     const mine = lines.filter(canEditLine)
+    const failed: string[] = []
     for (const l of mine) {
-      await supabase.from('rapport_lines')
+      const { error } = await supabase.from('rapport_lines')
         .update({ result: l.result, comment: l.comment ?? '', updated_by: profile!.id })
         .eq('id', l.id)
+      if (error) {
+        console.error(error)
+        failed.push(l.id)
+      }
     }
     setSaving(false)
+    setSaveMsg(
+      failed.length === 0
+        ? { kind: 'ok', text: `Opgeslagen (${mine.length} ${mine.length === 1 ? 'regel' : 'regels'}).` }
+        : { kind: 'err', text: `${failed.length} van ${mine.length} regels konden niet worden opgeslagen. Probeer het opnieuw.` }
+    )
   }
 
   async function togglePublish() {
     if (!card) return
     setPublishing(true)
+    setSaveMsg(null)
     const supabase = getSupabase()
     const next = card.status === 'draft' ? 'published' : 'draft'
     const { error } = await supabase.from('rapport_cards').update({
@@ -111,8 +127,20 @@ export default function RapportCardPage() {
       published_by: next === 'published' ? profile!.id : null,
       published_at: next === 'published' ? new Date().toISOString() : null,
     }).eq('id', card.id)
-    if (!error) setCard({ ...card, status: next })
     setPublishing(false)
+    // A failed publish was completely invisible: the button reverted and the
+    // admin assumed the rapport had gone out to the parents.
+    if (error) {
+      console.error(error)
+      setSaveMsg({
+        kind: 'err',
+        text: next === 'published'
+          ? 'Publiceren mislukt. Het rapport is NIET zichtbaar voor de leerling.'
+          : 'Terugzetten naar concept mislukt.',
+      })
+      return
+    }
+    setCard({ ...card, status: next })
   }
 
   if (profileLoading || loading) return <PageLoader />
@@ -187,6 +215,18 @@ export default function RapportCardPage() {
                 </button>
               : <span className="text-xs text-gray-400">Gepubliceerd — zet terug naar concept om te wijzigen</span>}
           </div>
+          {saveMsg && (
+            <div
+              role="status"
+              className={`px-4 py-2.5 text-sm border-b border-border ${
+                saveMsg.kind === 'ok'
+                  ? 'bg-primary-50 text-primary-700'
+                  : 'bg-red-50 text-red-600'
+              }`}
+            >
+              {saveMsg.text}
+            </div>
+          )}
           <div className="divide-y divide-border">
             {lines.map(l => {
               const editableLine = canEditLine(l)

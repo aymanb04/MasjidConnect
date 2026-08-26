@@ -44,6 +44,12 @@ export default function DossierDetailPage() {
 
   const [student,   setStudent]   = useState<any>(null)
   const [form,      setForm]      = useState<DetailsForm>(EMPTY_FORM)
+  // The last values loaded from the database. `form` is the working copy; this
+  // is what Annuleren restores to. Without it, cancelling an edit left the
+  // abandoned values in `form` — and since the read-only <dl> below renders
+  // form.*, the dossier went on DISPLAYING the discarded edits as if they were
+  // the student's saved record until the page was reloaded.
+  const [savedForm, setSavedForm] = useState<DetailsForm>(EMPTY_FORM)
   const [families,  setFamilies]  = useState<any[]>([])
   const [classes,   setClasses]   = useState<any[]>([])
   const [scores,    setScores]    = useState<any[]>([])
@@ -95,7 +101,7 @@ export default function DossierDetailPage() {
     ])
 
     if (det) {
-      setForm({
+      const loaded: DetailsForm = {
         date_of_birth: det.date_of_birth ?? '',
         gender: det.gender ?? '',
         address: det.address ?? '',
@@ -104,7 +110,12 @@ export default function DossierDetailPage() {
         emergency_contact_name: det.emergency_contact_name ?? '',
         emergency_contact_phone: det.emergency_contact_phone ?? '',
         family_id: det.family_id ?? '',
-      })
+      }
+      setForm(loaded)
+      setSavedForm(loaded)
+    } else {
+      setForm(EMPTY_FORM)
+      setSavedForm(EMPTY_FORM)
     }
     setFamilies(fams ?? [])
 
@@ -142,8 +153,14 @@ export default function DossierDetailPage() {
       emergency_contact_phone: form.emergency_contact_phone.trim() || null,
       family_id: form.family_id || null,
     })
-    if (err) setError('Opslaan mislukt.')
-    else setEditing(false)
+    if (err) {
+      console.error(err)
+      setError('Opslaan mislukt.')
+    } else {
+      // Only now do the edits become the stored truth Annuleren falls back to.
+      setSavedForm(form)
+      setEditing(false)
+    }
     setSaving(false)
   }
 
@@ -185,8 +202,18 @@ export default function DossierDetailPage() {
     setAddingNote(false)
   }
 
+  // Deleting a counseling note about a child had no confirmation at all (while
+  // deleteDocument right below it did), and dropped the row from the UI without
+  // checking the result — so an RLS refusal looked exactly like a success until
+  // the next reload brought the note back.
   async function deleteNote(id: string) {
-    await supabase.from('student_notes').delete().eq('id', id)
+    if (!confirm('Deze notitie verwijderen? Dit kan niet ongedaan worden gemaakt.')) return
+    const { error: err } = await supabase.from('student_notes').delete().eq('id', id)
+    if (err) {
+      console.error(err)
+      setError('Notitie verwijderen mislukt.')
+      return
+    }
     setNotes(prev => prev.filter(n => n.id !== id))
   }
 
@@ -223,8 +250,20 @@ export default function DossierDetailPage() {
 
   async function deleteDocument(doc: any) {
     if (!confirm(`Document "${doc.file_name}" verwijderen?`)) return
-    await supabase.storage.from('student-documents').remove([doc.file_url])
-    await supabase.from('student_documents').delete().eq('id', doc.id)
+    // Row first: if the DB delete is refused the file must stay, otherwise the
+    // record would point at an object that no longer exists.
+    const { error: rowErr } = await supabase.from('student_documents').delete().eq('id', doc.id)
+    if (rowErr) {
+      console.error(rowErr)
+      setError('Document verwijderen mislukt.')
+      return
+    }
+    const { error: fileErr } = await supabase.storage
+      .from('student-documents').remove([doc.file_url])
+    if (fileErr) {
+      // The row is gone, so the dossier is correct; only the object leaked.
+      console.error('[dossier] storage remove failed, orphaned object:', doc.file_url, fileErr.message)
+    }
     setDocuments(prev => prev.filter(d => d.id !== doc.id))
   }
 
@@ -369,7 +408,10 @@ export default function DossierDetailPage() {
                 <button onClick={saveDetails} disabled={saving} className="btn-primary text-sm flex items-center gap-1.5">
                   {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Opslaan
                 </button>
-                <button onClick={() => setEditing(false)} className="btn-secondary text-sm flex items-center gap-1.5">
+                <button
+                  onClick={() => { setForm(savedForm); setError(''); setEditing(false) }}
+                  className="btn-secondary text-sm flex items-center gap-1.5"
+                >
                   <X size={13} /> Annuleren
                 </button>
               </div>
@@ -463,7 +505,7 @@ export default function DossierDetailPage() {
                     </span>
                     {(n.author_id === profile.id || isAdmin) && (
                       <button onClick={() => deleteNote(n.id)}
-                        className="ml-auto opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"
+                        className="ml-auto opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"
                         title="Verwijderen">
                         <Trash2 size={13} />
                       </button>
@@ -521,7 +563,7 @@ export default function DossierDetailPage() {
                   </span>
                   {(d.uploaded_by === profile.id || isAdmin) && (
                     <button onClick={() => deleteDocument(d)}
-                      className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all flex-shrink-0"
+                      className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all flex-shrink-0"
                       title="Verwijderen">
                       <Trash2 size={13} />
                     </button>

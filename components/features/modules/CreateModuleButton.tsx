@@ -7,7 +7,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { Plus, X, Loader2, BookOpen } from 'lucide-react'
 import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
-export default function CreateModuleButton() {
+export default function CreateModuleButton({ onCreated }: { onCreated?: () => void }) {
   const { profile } = useProfile()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -45,10 +45,19 @@ export default function CreateModuleButton() {
         title: form.title.trim(), description: form.description || null,
         is_visible: form.is_visible,
       })
-      if (err) { setError(err.message); return }
+      // Don't surface err.message: it is the raw Postgres/PostgREST string, in
+      // English, e.g. "duplicate key value violates unique constraint ...".
+      if (err) {
+        console.error(err)
+        setError('De module kon niet worden aangemaakt. Probeer het opnieuw.')
+        return
+      }
       setOpen(false)
       setForm({ class_id: '', title: '', description: '', is_visible: true })
-      router.refresh()
+      // router.refresh() only re-runs server components; the lesmodules list
+      // fetches client-side in a useEffect, so the new module never appeared
+      // until a manual page reload.
+      onCreated?.()
     } finally { setLoading(false) }
   }
 

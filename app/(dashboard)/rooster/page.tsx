@@ -140,7 +140,7 @@ export default function RoosterPage() {
                         {isAdmin && (
                           <button
                             onClick={() => deleteSession(s.id)}
-                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-0.5 text-gray-300 hover:text-red-400 transition-all"
+                            className="absolute top-2 right-2 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-0.5 text-gray-300 hover:text-red-400 transition-all"
                             title="Verwijderen"
                           >
                             <X size={13}/>

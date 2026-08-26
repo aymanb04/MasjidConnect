@@ -278,7 +278,7 @@ export default function OudercontactPage() {
 
                 {/* Student self-booking */}
                 {isStudent && (
-                  <div className="mt-3 pl-13">
+                  <div className="mt-3 pl-14">
                     {myBooking ? (
                       <button onClick={() => cancelBooking(myBooking.id)}
                         className="text-xs px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 text-green-700 font-medium flex items-center gap-1.5 hover:bg-green-100 transition-colors">
@@ -298,7 +298,7 @@ export default function OudercontactPage() {
 
                 {/* Staff: see bookings; admin: book on behalf */}
                 {isStaff && (
-                  <div className="mt-3 pl-13 space-y-1.5">
+                  <div className="mt-3 pl-14 space-y-1.5">
                     {slot.bookings.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {slot.bookings.map(b => (

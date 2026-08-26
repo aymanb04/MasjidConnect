@@ -29,8 +29,12 @@ export async function POST(request: Request) {
             email, first_name, last_name, role, tenant_id,
             group_id,               // student → enroll in all classes of this group
             class_id, class_role,   // teacher → assign to this specific class
-            invited_by,
         } = await request.json()
+
+        // invited_by is deliberately NOT read from the body: it is an audit
+        // field, and taking it from the caller's verified token means it cannot
+        // be spoofed to blame someone else for an invite.
+        const invited_by = caller.id
 
         if (!VALID_ROLES.includes(role)) {
             return NextResponse.json({ error: 'Ongeldig rol' }, { status: 400 })
@@ -99,13 +103,11 @@ export async function POST(request: Request) {
             )
         }
 
-        if (invited_by) {
-            await supabaseAdmin.from('invitations').insert({
-                tenant_id, email, role,
-                class_id: class_id || null,
-                invited_by,
-            })
-        }
+        await supabaseAdmin.from('invitations').insert({
+            tenant_id, email, role,
+            class_id: class_id || null,
+            invited_by,
+        })
 
         if (data.user) {
             // Enrollment writes use upsert with ignoreDuplicates so concurrent CSV

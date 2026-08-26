@@ -227,14 +227,14 @@ export default function KlasDetailPage() {
                       {mailtoHref && (
                         <a
                           href={mailtoHref}
-                          className={`transition-colors p-0.5 ${isStudent ? 'text-primary-500 hover:text-primary-700' : 'text-gray-300 hover:text-primary-600 opacity-0 group-hover:opacity-100'}`}
+                          className={`transition-colors p-0.5 ${isStudent ? 'text-primary-500 hover:text-primary-700' : 'text-gray-300 hover:text-primary-600 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100'}`}
                           title={`Mail ${t.first_name}`}
                         >
                           <Mail size={14}/>
                         </a>
                       )}
                       {isAdmin && (
-                        <button onClick={() => removeTeacher(t.id)} className="text-gray-200 hover:text-red-400 transition-colors p-0.5 opacity-0 group-hover:opacity-100" title="Verwijderen">
+                        <button onClick={() => removeTeacher(t.id)} className="text-gray-200 hover:text-red-400 transition-colors p-0.5 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100" title="Verwijderen">
                           <X size={13}/>
                         </button>
                       )}
@@ -338,7 +338,7 @@ export default function KlasDetailPage() {
                         </div>
                         <span className="text-sm text-gray-700 flex-1 min-w-0 truncate">{s.first_name} {s.last_name}</span>
                         {mailtoHref && (
-                          <a href={mailtoHref} className="text-gray-300 hover:text-primary-600 transition-colors p-0.5 opacity-0 group-hover:opacity-100" title={`Mail ${s.first_name}`}>
+                          <a href={mailtoHref} className="text-gray-300 hover:text-primary-600 transition-colors p-0.5 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100" title={`Mail ${s.first_name}`}>
                             <Mail size={14}/>
                           </a>
                         )}

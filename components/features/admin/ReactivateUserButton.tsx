@@ -49,7 +49,7 @@ export function ReactivateUserButton({ userId, name, onReactivated }: { userId: 
 
   return (
     <button onClick={() => setConfirm(true)}
-      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-primary-600 p-1 flex-shrink-0"
+      className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-primary-600 p-1 flex-shrink-0"
       title="Reactiveren">
       <RotateCcw size={14} />
     </button>

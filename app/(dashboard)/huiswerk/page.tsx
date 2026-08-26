@@ -90,7 +90,7 @@ export default function HuiswerkPage() {
           <h1 className="page-title">Huiswerk</h1>
           <p className="page-subtitle">{isTeacher ? `${assignments.length} opdrachten` : `${assignments.filter(a => !mySubmissions[a.id]).length} openstaand`}</p>
         </div>
-        {isTeacher && <CreateAssignmentButton />}
+        {isTeacher && <CreateAssignmentButton onCreated={loadData} />}
       </div>
 
       {assignments.length === 0 ? (

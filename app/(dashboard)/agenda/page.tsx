@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { getDeadlineLabel } from '@/lib/utils'
+import { format } from 'date-fns'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 
@@ -149,7 +150,11 @@ export default function AgendaPage() {
   if (selectedDay !== null) {
     listAssignments = (assignmentsByDay[selectedDay] ?? [])
   } else {
-    const todayStr = today.toISOString().slice(0, 10)
+    // Local date, not UTC. toISOString() rolls over at 00:00 UTC, so in
+    // Europe/Brussels every evening after 22:00 (23:00 in summer) this produced
+    // TOMORROW's date and silently dropped today's deadlines out of
+    // "Komende taken" — exactly when a student checks what is due.
+    const todayStr = format(today, 'yyyy-MM-dd')
     listAssignments = assignments
       .filter(a => a.due_date && a.due_date >= todayStr)
       .slice(0, 25)

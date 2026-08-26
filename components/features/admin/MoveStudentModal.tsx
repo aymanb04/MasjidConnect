@@ -29,6 +29,7 @@ export function MoveStudentModal({ student, tenantId, onClose, onSaved }: Props)
   const [loading,  setLoading]  = useState(true)
   const [saving,   setSaving]   = useState(false)
   const [done,     setDone]     = useState(false)
+  const [error,    setError]    = useState('')
   const [addSelect, setAddSelect] = useState('')
 
   useEffect(() => { loadData() }, [])
@@ -103,28 +104,40 @@ export function MoveStudentModal({ student, tenantId, onClose, onSaved }: Props)
     if (toAdd.length === 0 && toRemove.size === 0) { onClose(); return }
     setSaving(true)
 
+    // These calls never throw — supabase-js returns { data, error } — so the
+    // try/catch that used to wrap them was dead code and this modal showed
+    // "Opgeslagen!" even when RLS refused every write. Check each result.
     try {
       // Remove enrollments
       for (const classId of Array.from(toRemove)) {
-        await supabase.from('class_students')
+        const { error } = await supabase.from('class_students')
           .delete()
           .eq('class_id', classId)
           .eq('student_id', student.id)
+        if (error) {
+          console.error(error)
+          setError('Wijzigingen konden niet worden opgeslagen. Probeer het opnieuw.')
+          return
+        }
       }
 
       // Add new enrollments
       if (toAdd.length > 0) {
-        await supabase.from('class_students')
+        const { error } = await supabase.from('class_students')
           .upsert(
             toAdd.map(classId => ({ class_id: classId, student_id: student.id })),
             { onConflict: 'class_id,student_id', ignoreDuplicates: true }
           )
+        if (error) {
+          console.error(error)
+          setError('Wijzigingen konden niet worden opgeslagen. Probeer het opnieuw.')
+          return
+        }
       }
 
+      setError('')
       setDone(true)
       setTimeout(() => { onSaved(); onClose() }, 1200)
-    } catch (err: any) {
-      alert('Opslaan mislukt: ' + err.message)
     } finally {
       setSaving(false)
     }
@@ -281,6 +294,12 @@ export function MoveStudentModal({ student, tenantId, onClose, onSaved }: Props)
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {error && !done && (
+          <div className="mx-6 mb-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+            {error}
           </div>
         )}
 

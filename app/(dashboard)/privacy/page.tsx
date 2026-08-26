@@ -7,7 +7,7 @@ export default function PrivacyPage() {
   return (
     <div className="animate-slide-up">
       <div className="page-header">
-        <h1 className="page-title">Privacybeleid</h1>
+        <h1 className="page-title">Privacyverklaring</h1>
         <p className="page-subtitle">Hoe MasjidConnect uw gegevens verwerkt</p>
       </div>
 

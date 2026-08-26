@@ -319,6 +319,7 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
   const [statuses,  setStatuses]  = useState<Record<string, AttendanceStatus>>({})
   const [existing,  setExisting]  = useState<string | null>(null) // session id if already exists
   const [loading,   setLoading]   = useState(true)
+  const [loadErr,   setLoadErr]   = useState<unknown>(null)
   const [saving,    setSaving]    = useState(false)
   const [done,      setDone]      = useState(false)
   const [prevAbsent,    setPrevAbsent]    = useState<{ date: string; names: string[] } | null>(null)
@@ -331,34 +332,45 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
     loadData()
   }, [date])
 
+  // Every query here is checked. This loader used to destructure `{ data }` only
+  // and fall back to `?? []`, which meant a failed student query rendered the
+  // class as EMPTY and handleSave() would then write an attendance session with
+  // zero records — a register that reads as "taken" but recorded nobody. That is
+  // the exact failure the nano Disk-IO throttle produces under load
+  // (SECURITY_AND_INFRA §1), so it is a realistic path, not a theoretical one.
   async function loadData() {
+    setLoadErr(null)
+
     // Check for existing session on the selected date
-    const { data: sess } = await supabase
+    const { data: sess, error: sessErr } = await supabase
       .from('attendance_sessions')
       .select('id')
       .eq('class_id', cls.id)
       .eq('session_date', date)
       .maybeSingle()
+    if (sessErr) { console.error(sessErr); setLoadErr(sessErr); setLoading(false); return }
 
     let initStatuses: Record<string, AttendanceStatus> = {}
 
     if (sess) {
       setExisting(sess.id)
       // Load existing records
-      const { data: records } = await supabase
+      const { data: records, error: recErr } = await supabase
         .from('attendance_records')
         .select('student_id, status')
         .eq('session_id', sess.id)
+      if (recErr) { console.error(recErr); setLoadErr(recErr); setLoading(false); return }
       for (const r of (records ?? [])) {
         initStatuses[r.student_id] = r.status as AttendanceStatus
       }
     }
 
     // Load enrolled students
-    const { data: links } = await supabase
+    const { data: links, error: linkErr } = await supabase
       .from('class_students')
       .select('profiles(id, first_name, last_name)')
       .eq('class_id', cls.id)
+    if (linkErr) { console.error(linkErr); setLoadErr(linkErr); setLoading(false); return }
     const studs: StudentItem[] = (links ?? [])
       .map((l: any) => l.profiles)
       .filter(Boolean)
@@ -409,6 +421,16 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
   }
 
   async function handleSave() {
+    // Refuse to create a session for an empty roster. A class with no enrolled
+    // students is a legitimate state, but saving one writes a session row with
+    // zero attendance_records that is indistinguishable from a register that was
+    // taken and had nobody present — and the alerts/statistics downstream then
+    // treat it as real data. If the roster is empty because the load failed, the
+    // LoadError above is showing instead and this is unreachable.
+    if (students.length === 0) {
+      alert('Deze klas heeft geen leerlingen. Er is niets om op te slaan.')
+      return
+    }
     setSaving(true)
     try {
       let sessionId = existing
@@ -508,6 +530,11 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
         <div className="flex items-center justify-center gap-2 py-12 text-gray-400">
           <Loader2 size={16} className="animate-spin" /> Laden…
         </div>
+      ) : loadErr ? (
+        // Must come BEFORE the empty-state branch: without it a failed load fell
+        // through to "Geen leerlingen ingeschreven in deze klas", which reads as
+        // a real (and wrong) answer rather than a failure.
+        <LoadError error={loadErr} onRetry={loadData} retrying={loading} />
       ) : students.length === 0 ? (
         <div className="card p-8 text-center text-gray-400 text-sm">
           Geen leerlingen ingeschreven in deze klas.
@@ -614,25 +641,30 @@ function HistoryView({
 }) {
   const [sessions, setSessions] = useState<SessionItem[]>([])
   const [loading,  setLoading]  = useState(true)
+  const [loadErr,  setLoadErr]  = useState<unknown>(null)
   const [tab,      setTab]      = useState<'sessions' | 'students'>('sessions')
 
   useEffect(() => { loadSessions() }, [])
 
   async function loadSessions() {
-    const { data } = await supabase
+    setLoading(true)
+    setLoadErr(null)
+    const { data, error } = await supabase
       .from('attendance_sessions')
       .select('id, session_date, teacher_id, profiles!attendance_sessions_teacher_id_fkey(first_name, last_name)')
       .eq('class_id', cls.id)
       .order('session_date', { ascending: false })
       .limit(30)
+    if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
 
-    if (!data || data.length === 0) { setLoading(false); return }
+    if (!data || data.length === 0) { setSessions([]); setLoading(false); return }
 
     const sessionIds = data.map((s: any) => s.id)
-    const { data: records } = await supabase
+    const { data: records, error: recErr } = await supabase
       .from('attendance_records')
       .select('session_id, status')
       .in('session_id', sessionIds)
+    if (recErr) { console.error(recErr); setLoadErr(recErr); setLoading(false); return }
 
     // Group records by session
     const rMap: Record<string, AttendanceStatus[]> = {}
@@ -700,6 +732,11 @@ function HistoryView({
         <div className="flex items-center justify-center gap-2 py-12 text-gray-400">
           <Loader2 size={16} className="animate-spin" /> Laden…
         </div>
+      ) : loadErr ? (
+        // Before this branch existed, a failed load rendered "Nog geen
+        // aanwezigheid geregistreerd voor deze klas" — a teacher would conclude
+        // the register was never taken and mark it a second time.
+        <LoadError error={loadErr} onRetry={loadSessions} retrying={loading} />
       ) : sessions.length === 0 ? (
         <div className="card p-8 text-center text-gray-400 text-sm">
           Nog geen aanwezigheid geregistreerd voor deze klas.
@@ -967,37 +1004,43 @@ function MyRecordsView({
 }) {
   const [records,  setRecords]  = useState<any[]>([])
   const [loading,  setLoading]  = useState(true)
+  const [loadErr,  setLoadErr]  = useState<unknown>(null)
   const [classFilter, setClassFilter] = useState<string>('all')
 
   useEffect(() => { loadMyRecords() }, [])
 
   async function loadMyRecords() {
+    setLoading(true)
+    setLoadErr(null)
     // Split into separate queries to avoid the nested-join + RLS silent-failure
     // gotcha: attendance_sessions RLS does a subquery to class_students (also
     // RLS-protected), which causes nested PostgREST joins to silently return [].
 
     // 1. My attendance records (whole year — a student has at most a few
     // hundred records, well under the PostgREST row cap)
-    const { data: recs } = await supabase
+    const { data: recs, error: recsErr } = await supabase
       .from('attendance_records')
       .select('status, session_id')
       .eq('student_id', profile.id)
+    if (recsErr) { console.error(recsErr); setLoadErr(recsErr); setLoading(false); return }
 
-    if (!recs || recs.length === 0) { setLoading(false); return }
+    if (!recs || recs.length === 0) { setRecords([]); setLoading(false); return }
 
     // 2. The sessions those records belong to
     const sessionIds = Array.from(new Set(recs.map((r: any) => r.session_id)))
-    const { data: sessions } = await supabase
+    const { data: sessions, error: sessErr } = await supabase
       .from('attendance_sessions')
       .select('id, session_date, class_id')
       .in('id', sessionIds)
       .order('session_date', { ascending: false })
+    if (sessErr) { console.error(sessErr); setLoadErr(sessErr); setLoading(false); return }
 
     // 3. The classes for those sessions
     const classIds = Array.from(new Set((sessions ?? []).map((s: any) => s.class_id)))
-    const { data: classRows } = classIds.length
+    const { data: classRows, error: clsErr } = classIds.length
       ? await supabase.from('classes').select('id, name, color').in('id', classIds)
-      : { data: [] }
+      : { data: [], error: null }
+    if (clsErr) { console.error(clsErr); setLoadErr(clsErr); setLoading(false); return }
 
     // Merge into a flat structure mirroring the old shape
     const sessMap  = Object.fromEntries((sessions  ?? []).map((s: any) => [s.id, s]))
@@ -1067,6 +1110,8 @@ function MyRecordsView({
         <div className="flex items-center justify-center gap-2 py-12 text-gray-400">
           <Loader2 size={16} className="animate-spin" /> Laden…
         </div>
+      ) : loadErr ? (
+        <LoadError error={loadErr} onRetry={loadMyRecords} retrying={loading} />
       ) : filtered.length === 0 ? (
         <div className="card p-8 text-center text-gray-400 text-sm">
           Geen aanwezigheidsrecords gevonden.

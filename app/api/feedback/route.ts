@@ -8,6 +8,8 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+const MAX_MESSAGE_LEN = 4000
+
 export async function POST(req: NextRequest) {
   const auth = await requireRole(req, ['student', 'teacher', 'admin', 'super_admin', 'leerlingenbegeleiding'])
   if ('error' in auth) return auth.error
@@ -24,6 +26,18 @@ export async function POST(req: NextRequest) {
 
   if (!message?.trim()) {
     return NextResponse.json({ error: 'Bericht is verplicht.' }, { status: 400 })
+  }
+  // Cap the payload. Without this any authenticated user can push an unbounded
+  // string into the table; 4000 also keeps us under Discord's 4096-char embed
+  // description limit, so the webhook below can't fail on a long message.
+  if (message.length > MAX_MESSAGE_LEN) {
+    return NextResponse.json(
+      { error: `Bericht is te lang (max ${MAX_MESSAGE_LEN} tekens).` },
+      { status: 400 }
+    )
+  }
+  if (page_url != null && String(page_url).length > 500) {
+    return NextResponse.json({ error: 'Ongeldige pagina-URL.' }, { status: 400 })
   }
 
   const validTypes = ['bug', 'suggestie', 'vraag']

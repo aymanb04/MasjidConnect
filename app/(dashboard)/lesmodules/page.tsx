@@ -76,7 +76,7 @@ export default function LesmodulesPage() {
           <h1 className="page-title">Lesmodules</h1>
           <p className="page-subtitle">{modules.length} module{modules.length !== 1 ? 's' : ''} beschikbaar</p>
         </div>
-        {isTeacher && <CreateModuleButton />}
+        {isTeacher && <CreateModuleButton onCreated={loadData} />}
       </div>
 
       {modules.length === 0 ? (

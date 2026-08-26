@@ -50,11 +50,31 @@ export async function POST(request: Request) {
         }
 
         // Fetch the logo with a timeout; cap the download size.
+        //
+        // redirect: 'manual', not 'follow'. isSafeHttpUrl() only ever sees the
+        // URL the caller submitted, so with 'follow' a remote host could answer
+        // 302 → http://169.254.169.254/ and the guard would never inspect the
+        // hop it actually fetched. Each Location is re-validated here instead.
         const ctrl = new AbortController()
         const timer = setTimeout(() => ctrl.abort(), 8000)
         let res: Response
         try {
-            res = await fetch(logoUrl, { signal: ctrl.signal, redirect: 'follow' })
+            let target = logoUrl
+            let hops = 0
+            for (;;) {
+                res = await fetch(target, { signal: ctrl.signal, redirect: 'manual' })
+                if (res.status < 300 || res.status >= 400) break
+                if (++hops > 3) {
+                    return NextResponse.json({ error: 'Te veel doorverwijzingen.' }, { status: 400 })
+                }
+                const location = res.headers.get('location')
+                if (!location) break
+                // Resolve relative Locations against the hop we just fetched.
+                target = new URL(location, target).toString()
+                if (!isSafeHttpUrl(target)) {
+                    return NextResponse.json({ error: 'Ongeldige logo-URL.' }, { status: 400 })
+                }
+            }
         } catch {
             return NextResponse.json({ error: 'Logo kon niet geladen worden.' }, { status: 400 })
         } finally {

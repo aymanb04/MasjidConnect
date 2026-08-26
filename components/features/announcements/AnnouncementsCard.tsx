@@ -360,7 +360,7 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
                     {canDelete && (
                       <button
                         onClick={() => handleDelete(ann.id)}
-                        className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-all flex-shrink-0 p-0.5"
+                        className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-all flex-shrink-0 p-0.5"
                       >
                         <Trash2 size={13} />
                       </button>

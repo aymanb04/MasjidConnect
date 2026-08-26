@@ -14,6 +14,7 @@ export function CreateClassButton({ tenantId, onCreated }: Props) {
   const [open, setOpen]               = useState(false)
   useScrollLock(open)
   const [loading, setLoading]         = useState(false)
+  const [error, setError]             = useState('')
   const [loadingYears, setLoadingYears]   = useState(false)
   const [loadingGroups, setLoadingGroups] = useState(false)
   const [schoolYears, setSchoolYears] = useState<any[]>([])
@@ -78,7 +79,7 @@ export function CreateClassButton({ tenantId, onCreated }: Props) {
 
       // Create new group on the fly if requested
       if (form.group_id === 'new' && form.new_group_name.trim()) {
-        const { data: newGroup } = await supabase
+        const { data: newGroup, error: groupErr } = await supabase
           .from('groups')
           .insert({
             tenant_id: tenantId,
@@ -87,10 +88,17 @@ export function CreateClassButton({ tenantId, onCreated }: Props) {
           })
           .select('id')
           .single()
-        group_id = newGroup?.id ?? null
+        // Was `group_id = newGroup?.id ?? null`: a failed group insert silently
+        // fell through and created the class with no group at all.
+        if (groupErr || !newGroup) {
+          console.error(groupErr)
+          setError('De groep kon niet worden aangemaakt. Probeer het opnieuw.')
+          return
+        }
+        group_id = newGroup.id
       }
 
-      await supabase.from('classes').insert({
+      const { error: classErr } = await supabase.from('classes').insert({
         tenant_id:      tenantId,
         school_year_id: form.school_year_id,
         group_id,
@@ -98,8 +106,16 @@ export function CreateClassButton({ tenantId, onCreated }: Props) {
         description:    form.description || null,
         color:          form.color,
       })
+      // supabase-js never throws, so without this the modal closed and the form
+      // reset while nothing had been written.
+      if (classErr) {
+        console.error(classErr)
+        setError('De klas kon niet worden aangemaakt. Probeer het opnieuw.')
+        return
+      }
 
       setOpen(false)
+      setError('')
       setForm({ name: '', description: '', school_year_id: '', color: '#1B6B4A', group_id: '', new_group_name: '' })
       onCreated?.()
     } finally { setLoading(false) }
@@ -223,6 +239,12 @@ export function CreateClassButton({ tenantId, onCreated }: Props) {
                 </div>
               </div>
             </div>
+
+            {error && (
+              <div className="mx-6 mb-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+                {error}
+              </div>
+            )}
 
             <div className="flex gap-3 p-6 border-t border-border">
               <button onClick={() => setOpen(false)} className="btn-secondary flex-1 justify-center">

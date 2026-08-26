@@ -13,14 +13,14 @@ export default function PublicVoorwaardenPage() {
     return (
         <div className="animate-slide-up">
             <div className="page-header">
-                <h1 className="page-title">Gebruikersvoorwaarden</h1>
+                <h1 className="page-title">Gebruiksvoorwaarden</h1>
                 <p className="page-subtitle">De regels voor het gebruik van MasjidConnect</p>
             </div>
 
             <VoorwaardenContent />
 
             <p className="mt-8 text-center text-xs text-gray-400">
-                {LEGAL_LAST_UPDATED} · Samen met het privacybeleid vormen deze de Voorwaarden
+                {LEGAL_LAST_UPDATED} · Samen met de privacyverklaring vormen deze de Voorwaarden
             </p>
         </div>
     )

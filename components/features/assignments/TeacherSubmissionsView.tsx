@@ -12,9 +12,12 @@ interface Props {
   studentCount: number
   assignmentId: string
   maxScore?: number
+  /** Re-runs the parent's client-side loader. router.refresh() cannot: the
+   *  detail page fetches in a useEffect, not in a server component. */
+  onGraded?: () => void
 }
 
-export default function TeacherSubmissionsView({ submissions, studentCount, assignmentId, maxScore }: Props) {
+export default function TeacherSubmissionsView({ submissions, studentCount, assignmentId, maxScore, onGraded }: Props) {
   const [expanded, setExpanded]   = useState<string | null>(null)
   const [feedbacks, setFeedbacks] = useState<Record<string, { score: string; comment: string }>>({})
   const [saving, setSaving]       = useState<string | null>(null)
@@ -43,12 +46,18 @@ export default function TeacherSubmissionsView({ submissions, studentCount, assi
 
       if (fbErr) throw fbErr
 
-      await supabase.from('submissions').update({ status: 'graded' }).eq('id', sub.id)
+      // Was ignored: the feedback saved but the submission stayed "submitted",
+      // so the teacher saw it as ungraded and the student never got the badge.
+      const { error: statusErr } = await supabase
+        .from('submissions').update({ status: 'graded' }).eq('id', sub.id)
+      if (statusErr) throw statusErr
 
       setSaved(prev => new Set(prev).add(sub.id))
-      router.refresh()
+      onGraded?.()
     } catch (e: any) {
-      alert('Fout bij opslaan: ' + (e.message ?? e))
+      // e.message is the raw English Postgres string; keep it in the console.
+      console.error(e)
+      alert('Opslaan mislukt. Probeer het opnieuw.')
     } finally {
       setSaving(null)
     }

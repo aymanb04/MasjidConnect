@@ -6,6 +6,7 @@ import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { ArrowLeft, GraduationCap, Plus, X, Check, Pencil, Loader2 } from 'lucide-react'
+import { format } from 'date-fns'
 import Link from 'next/link'
 import StudentScores from '@/components/features/scores/StudentScores'
 
@@ -45,6 +46,10 @@ function StaffScoresPage() {
   const [editScore, setEditScore]     = useState('')
   const [editMaxScore, setEditMaxScore] = useState('20')
   const [savingCell, setSavingCell]   = useState(false)
+  // Surfaces failed/invalid score writes. Before this, every write path here
+  // closed its cell regardless of the result, so a refused save looked identical
+  // to a successful one until the page was reloaded.
+  const [saveErr, setSaveErr]         = useState('')
   const scoreInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -191,40 +196,68 @@ function StaffScoresPage() {
       test_date: newTest.test_date,
       created_by: profile!.id,
     }).select().single()
-    if (!error && data) {
-      setTests(prev => [...prev, data].sort((a, b) => a.test_date.localeCompare(b.test_date)))
-      setNewTest({ title: '', max_score: '20', test_date: new Date().toISOString().slice(0, 10) })
-      setShowNewTest(false)
+    if (error || !data) {
+      console.error(error)
+      setSaveErr('Toets kon niet worden aangemaakt. Probeer het opnieuw.')
+      setCreatingTest(false)
+      return
     }
+    setSaveErr('')
+    setTests(prev => [...prev, data].sort((a, b) => a.test_date.localeCompare(b.test_date)))
+    setNewTest({ title: '', max_score: '20', test_date: format(new Date(), 'yyyy-MM-dd') })
+    setShowNewTest(false)
     setCreatingTest(false)
   }
 
   async function deleteTest(testId: string) {
     if (!confirm('Toets en alle scores verwijderen?')) return
-    await getSupabase().from('class_tests').delete().eq('id', testId)
+    const { error } = await getSupabase().from('class_tests').delete().eq('id', testId)
+    if (error) {
+      console.error(error)
+      setSaveErr('Toets verwijderen mislukt.')
+      return
+    }
+    setSaveErr('')
     setTests(prev => prev.filter(t => t.id !== testId))
   }
 
   async function saveTestScore(studentId: string, test: any) {
     const score = parseFloat(editTestScore)
-    if (isNaN(score) || score < 0 || score > Number(test.max_score)) return
+    // Was a bare `return` with no feedback: an out-of-range or non-numeric entry
+    // just closed the cell and the teacher never learned why nothing changed.
+    if (isNaN(score) || score < 0 || score > Number(test.max_score)) {
+      setSaveErr(`Geef een score tussen 0 en ${test.max_score}.`)
+      return
+    }
     const { data, error } = await getSupabase().from('test_scores').upsert(
       { test_id: test.id, student_id: studentId, score },
       { onConflict: 'test_id,student_id' }
     ).select().single()
-    if (!error && data) {
-      setTestScoreMap(prev => ({
-        ...prev,
-        [studentId]: { ...(prev[studentId] ?? {}), [test.id]: { id: data.id, score: Number(data.score) } },
-      }))
+    // setEditingTestCell(null) used to run unconditionally, so on a DB error the
+    // cell closed showing the OLD value as though the new one had been saved.
+    if (error || !data) {
+      console.error(error)
+      setSaveErr('Score kon niet worden opgeslagen. Probeer het opnieuw.')
+      return
     }
+    setSaveErr('')
+    setTestScoreMap(prev => ({
+      ...prev,
+      [studentId]: { ...(prev[studentId] ?? {}), [test.id]: { id: data.id, score: Number(data.score) } },
+    }))
     setEditingTestCell(null)
   }
 
   async function deleteTestScore(studentId: string, testId: string) {
     const existing = testScoreMap[studentId]?.[testId]
     if (!existing) return
-    await getSupabase().from('test_scores').delete().eq('id', existing.id)
+    const { error } = await getSupabase().from('test_scores').delete().eq('id', existing.id)
+    if (error) {
+      console.error(error)
+      setSaveErr('Score verwijderen mislukt.')
+      return
+    }
+    setSaveErr('')
     setTestScoreMap(prev => {
       const mine = { ...(prev[studentId] ?? {}) }
       delete mine[testId]
@@ -266,7 +299,10 @@ function StaffScoresPage() {
   async function saveExamScore(studentId: string, semester: 1 | 2) {
     const score    = parseFloat(editScore)
     const maxScore = parseFloat(editMaxScore)
-    if (isNaN(score) || isNaN(maxScore) || maxScore <= 0 || score < 0 || score > maxScore) return
+    if (isNaN(score) || isNaN(maxScore) || maxScore <= 0 || score < 0 || score > maxScore) {
+      setSaveErr('Geef een geldige score (0 t/m het maximum).')
+      return
+    }
     setSavingCell(true)
     const { data, error } = await getSupabase()
       .from('exam_scores')
@@ -276,23 +312,36 @@ function StaffScoresPage() {
       )
       .select()
       .single()
-    if (!error && data) {
-      setExamScores(prev => [
-        ...prev.filter(e => !(e.student_id === studentId && e.semester === semester)),
-        data,
-      ])
-    }
     setSavingCell(false)
+    // Same pattern as saveTestScore: the cell used to close unconditionally, so
+    // a refused write was indistinguishable from a successful one.
+    if (error || !data) {
+      console.error(error)
+      setSaveErr('Punt kon niet worden opgeslagen. Probeer het opnieuw.')
+      return
+    }
+    setSaveErr('')
+    setExamScores(prev => [
+      ...prev.filter(e => !(e.student_id === studentId && e.semester === semester)),
+      data,
+    ])
     setEditingCell(null)
   }
 
   async function deleteExamScore(studentId: string, semester: 1 | 2) {
-    await getSupabase()
+    if (!confirm('Dit punt verwijderen?')) return
+    const { error } = await getSupabase()
       .from('exam_scores')
       .delete()
       .eq('class_id', klasId as string)
       .eq('student_id', studentId)
       .eq('semester', semester)
+    if (error) {
+      console.error(error)
+      setSaveErr('Punt verwijderen mislukt.')
+      return
+    }
+    setSaveErr('')
     setExamScores(prev => prev.filter(e => !(e.student_id === studentId && e.semester === semester)))
   }
 
@@ -316,6 +365,15 @@ function StaffScoresPage() {
           </div>
         </div>
       </div>
+
+      {saveErr && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 flex items-start justify-between gap-3">
+          <span>{saveErr}</span>
+          <button onClick={() => setSaveErr('')} aria-label="Melding sluiten" className="text-red-400 hover:text-red-600 flex-shrink-0">
+            <X size={15} />
+          </button>
+        </div>
+      )}
 
       {/* ── Add manual test column (in-class test / offline homework) ── */}
       {students.length > 0 && (
@@ -469,12 +527,12 @@ function StaffScoresPage() {
                                 </span>
                                 <button
                                   onClick={() => { setEditingTestCell({ studentId: s.id, testId: t.id }); setEditTestScore(String(ts.score)) }}
-                                  className="text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                                  className="text-gray-300 hover:text-gray-500 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
                                   title="Bewerken">
                                   <Pencil size={11} />
                                 </button>
                                 <button onClick={() => deleteTestScore(s.id, t.id)}
-                                  className="text-gray-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                                  className="text-gray-300 hover:text-red-400 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
                                   title="Verwijderen">
                                   <X size={11} />
                                 </button>
@@ -628,14 +686,14 @@ function StaffScoresPage() {
                               </span>
                               <button
                                 onClick={() => openEdit(s.id, sem, exam)}
-                                className="text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                                className="text-gray-300 hover:text-gray-500 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
                                 title="Bewerken"
                               >
                                 <Pencil size={11}/>
                               </button>
                               <button
                                 onClick={() => deleteExamScore(s.id, sem)}
-                                className="text-gray-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                                className="text-gray-300 hover:text-red-400 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
                                 title="Verwijderen"
                               >
                                 <X size={11}/>

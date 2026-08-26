@@ -20,6 +20,7 @@ export function FeedbackButton() {
   const [message,    setMessage]    = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [done,       setDone]       = useState(false)
+  const [error,      setError]      = useState('')
 
   if (!profile) return null
 
@@ -33,6 +34,7 @@ export function FeedbackButton() {
   async function handleSubmit() {
     if (!message.trim() || submitting) return
     setSubmitting(true)
+    setError('')
 
     const { data: sessionData } = await supabase.auth.getSession()
     const token = sessionData?.session?.access_token
@@ -50,7 +52,19 @@ export function FeedbackButton() {
       if (res.ok) {
         setDone(true)
         setTimeout(() => setOpen(false), 2200)
+        return
       }
+
+      // There was no `else` here at all. /api/feedback is rate-limited to 10/h,
+      // so a 429 is a realistic outcome: the spinner stopped and nothing
+      // whatsoever happened — on a button that sits on every dashboard page.
+      if (res.status === 429) {
+        setError('Te veel verzoeken. Probeer het later opnieuw.')
+      } else {
+        setError('Versturen mislukt. Probeer het opnieuw.')
+      }
+    } catch {
+      setError('Geen verbinding. Controleer je internet en probeer opnieuw.')
     } finally {
       setSubmitting(false)
     }
@@ -144,6 +158,12 @@ export function FeedbackButton() {
                   className="input resize-none h-24 text-sm"
                 />
 
+                {error && (
+                  <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">
+                    {error}
+                  </div>
+                )}
+
                 <button
                   onClick={handleSubmit}
                   disabled={submitting || !message.trim()}
@@ -155,7 +175,10 @@ export function FeedbackButton() {
                   }
                 </button>
 
-                <p className="text-center text-xs text-gray-400">Ctrl+Enter om te versturen</p>
+                {/* Desktop-only hint; on touch there is no Ctrl key to press. */}
+                <p className="hidden [@media(hover:hover)]:block text-center text-xs text-gray-400">
+                  Ctrl+Enter om te versturen
+                </p>
               </div>
             )}
           </div>

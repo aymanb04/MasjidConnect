@@ -38,12 +38,13 @@ export default function ModuleDocumentUpload({ moduleId, onUploaded }: Props) {
       const path = `modules/${moduleId}/${Date.now()}_${safeName}`
       const { error: upErr } = await supabase.storage.from('module-documents').upload(path, file)
       if (upErr) {
-        setError(upErr.message ?? 'Upload mislukt.')
+        console.error(upErr)
+        setError('Upload mislukt. Probeer het opnieuw.')
         setLoading(false)
         return
       }
 
-      await supabase.from('module_documents').insert({
+      const { error: rowErr } = await supabase.from('module_documents').insert({
         module_id: moduleId,
         title: title.trim(),
         file_name: file.name,
@@ -51,13 +52,23 @@ export default function ModuleDocumentUpload({ moduleId, onUploaded }: Props) {
         file_size: file.size,
         file_type: file.type,
       })
+      // Was ignored: the file uploaded, the row failed, and the modal reported
+      // success — leaving an orphaned object nothing references. Roll it back.
+      if (rowErr) {
+        console.error(rowErr)
+        await supabase.storage.from('module-documents').remove([path])
+        setError('Document kon niet worden opgeslagen. Probeer het opnieuw.')
+        setLoading(false)
+        return
+      }
 
       setOpen(false)
       setFile(null)
       setTitle('')
       onUploaded?.(); router.refresh()
     } catch (e: any) {
-      setError(e.message ?? 'Upload mislukt. Probeer opnieuw.')
+      console.error(e)
+      setError('Upload mislukt. Probeer het opnieuw.')
     } finally {
       setLoading(false)
     }

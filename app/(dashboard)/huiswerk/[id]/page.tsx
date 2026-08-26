@@ -119,7 +119,7 @@ export default function HuiswerkDetailPage() {
         <SubmitAssignmentForm assignmentId={id as string} assignment={assignment} existingSubmission={mySubmission} userId={profile.id} />
       )}
       {isTeacher && (
-        <TeacherSubmissionsView submissions={allSubmissions} studentCount={studentCount} assignmentId={id as string} maxScore={assignment.max_score} />
+        <TeacherSubmissionsView submissions={allSubmissions} studentCount={studentCount} assignmentId={id as string} maxScore={assignment.max_score} onGraded={loadData} />
       )}
     </div>
   )

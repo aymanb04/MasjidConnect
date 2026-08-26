@@ -91,7 +91,7 @@ export function DeleteUserButton({ userId, name, onDeleted }: { userId: string; 
 
   return (
     <button onClick={() => setMode('confirm-archive')}
-      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-gray-500 p-1 flex-shrink-0"
+      className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-gray-500 p-1 flex-shrink-0"
       title="Archiveren">
       <Archive size={14} />
     </button>
