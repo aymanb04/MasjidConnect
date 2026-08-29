@@ -550,6 +550,8 @@ export function LandingPage() {
                             <div>
                                 <p className="font-medium text-gray-900">Contact</p>
                                 <ul className="mt-3 space-y-2 text-gray-500">
+                                    <li><a href="tel:+32485670822" className="hover:text-primary-600">+32 485 67 08 22</a></li>
+                                    <li><a href="https://wa.me/32485670822" className="hover:text-primary-600" rel="noopener">WhatsApp</a></li>
                                     <li><a href="mailto:ayman@masjidconnect.be" className="hover:text-primary-600">ayman@masjidconnect.be</a></li>
                                     <li><a href="mailto:privacy@masjidconnect.be" className="hover:text-primary-600">privacy@masjidconnect.be</a></li>
                                 </ul>

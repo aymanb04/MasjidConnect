@@ -73,6 +73,7 @@ const JSON_LD = {
         vatID: 'BE1034397409',
         url: SITE_URL,
         email: 'ayman@masjidconnect.be',
+        telephone: '+32485670822',
         address: {
             '@type': 'PostalAddress',
             addressLocality: 'Antwerpen',

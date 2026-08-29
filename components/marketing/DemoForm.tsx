@@ -123,7 +123,13 @@ export function DemoForm() {
             </button>
 
             <p className="mt-3 text-center text-xs leading-relaxed text-gray-500">
-                We gebruiken uw gegevens enkel om op deze aanvraag te antwoorden. Liever zelf mailen?{' '}
+                We gebruiken uw gegevens enkel om op deze aanvraag te antwoorden.
+                <br />
+                Liever bellen?{' '}
+                <a href="tel:+32485670822" className="font-medium text-primary-600 hover:underline">
+                    +32 485 67 08 22
+                </a>
+                {' '}· of mail{' '}
                 <a href="mailto:ayman@masjidconnect.be" className="font-medium text-primary-600 hover:underline">
                     ayman@masjidconnect.be
                 </a>
