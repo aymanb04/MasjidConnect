@@ -18,7 +18,6 @@ import {
     GraduationCap,
     Layers,
     Lock,
-    Mail,
     Megaphone,
     Server,
     ShieldCheck,
@@ -26,8 +25,7 @@ import {
     Wallet,
 } from 'lucide-react'
 import { MeemMark } from '@/components/ui/MeemMark'
-
-const MAILTO = 'mailto:ayman@masjidconnect.be?subject=Demo%20aanvraag%20MasjidConnect'
+import { DemoForm } from '@/components/marketing/DemoForm'
 
 const REPLACES = [
     { from: 'Papieren puntenboekjes', to: 'Eén digitale puntenlijst per klas' },
@@ -134,7 +132,7 @@ function Shot({
 }) {
     return (
         <figure>
-            <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-modal">
+            <div className="relative overflow-hidden rounded-2xl border border-border bg-white shadow-modal">
                 {/* Suggestion of a browser window: enough to read the image as a
                     real screen rather than an illustration, without pretending
                     to be a specific browser. */}
@@ -156,6 +154,14 @@ function Shot({
                     decoding="async"
                     className="block h-auto w-full"
                 />
+                {/* The capture ends wherever the viewport did, which slices the
+                    last table row in half. A short fade makes that read as
+                    "scrolls further" rather than "broken image" — the same trick
+                    PhoneShot already uses. Only for app screens: the rapport is a
+                    whole document and is meant to end where it ends. */}
+                {chrome && (
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white to-transparent" />
+                )}
             </div>
             {caption && (
                 <figcaption className="mt-3 text-sm leading-relaxed text-gray-500">{caption}</figcaption>
@@ -171,8 +177,8 @@ function PhoneShot({ src, alt, caption }: { src: string; alt: string; caption?: 
                 {/* eslint-disable-next-line @next/next/no-img-element -- see Shot */}
                 <img
                     src={src}
-                    width={1170}
-                    height={2532}
+                    width={780}
+                    height={1688}
                     alt={alt}
                     loading="lazy"
                     decoding="async"
@@ -213,13 +219,28 @@ export function LandingPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <Link href="/login" className="btn-ghost hidden sm:inline-flex">Inloggen</Link>
-                        <a href={MAILTO} className="btn-primary">Demo aanvragen</a>
+                        {/* Never hidden: a signed-out teacher opening a phone
+                            bookmark of / had no door at all here — the only login
+                            link sat ~10 000px down in the footer. The CTA label
+                            drops its second word instead, so both still fit 390px. */}
+                        <Link href="/login" className="btn-ghost">Inloggen</Link>
+                        <a href="#demo" className="btn-primary">
+                            {/* One flex child, not two: .btn is inline-flex gap-2, so a
+                                bare <span> sibling would space the label by 8px instead of
+                                a word space. */}
+                            <span>Demo<span className="hidden sm:inline"> aanvragen</span></span>
+                        </a>
                     </div>
                 </nav>
             </header>
 
-            <main>
+            {/* overflow-x-clip, not -hidden: the hero screenshot bleeds past the
+                container on a negative margin, which made the document 16-32px
+                wider than the viewport between 1024 and ~1300px (a sideways
+                scrollbar on a 1280 MacBook and on iPad landscape). Clip trims it
+                without creating a scroll container, so the sticky header and the
+                scroll-mt-20 anchors keep working. */}
+            <main className="overflow-x-clip">
                 {/* ------------------------------------------------------------ hero */}
                 <section className="mx-auto max-w-6xl px-5 pb-16 pt-14 sm:px-8 sm:pb-24 sm:pt-20">
                     <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
@@ -239,10 +260,14 @@ export function LandingPage() {
                             </p>
 
                             <div className="mt-8 flex flex-wrap items-center gap-3">
-                                <a href={MAILTO} className="btn-primary h-11 px-5 text-base">
+                                <a href="#demo" className="btn-primary h-11 px-5 text-base">
                                     Demo aanvragen <ArrowRight size={17} />
                                 </a>
-                                <a href="#beeld" className="btn-secondary h-11 px-5 text-base">
+                                {/* Outlined green rather than .btn-secondary: white
+                                    on the warm ground gave this control a 1.07:1 fill
+                                    and a 1.20:1 border — no visible boundary at all,
+                                    which fails WCAG 1.4.11. */}
+                                <a href="#beeld" className="btn h-11 border border-primary-500 px-5 text-base font-medium text-primary-700 hover:bg-primary-50 active:scale-[0.98]">
                                     Bekijk de app
                                 </a>
                             </div>
@@ -264,33 +289,25 @@ export function LandingPage() {
                         <div className="animate-slide-up lg:-mr-16 xl:-mr-28">
                             <Shot
                                 src="/screens/puntenlijst.png"
-                                width={2880}
-                                height={1800}
+                                width={1600}
+                                height={1000}
                                 priority
                                 alt="De digitale puntenlijst van een klas: per leerling de score op elke opdracht, met het klasgemiddelde onderaan."
                             />
                         </div>
-                    </div>
-
-                    <div className="mt-8 flex flex-wrap gap-2 lg:mt-12">
-                        {['Huiswerk', 'Puntenlijst', 'Aanwezigheden', 'Rapporten', 'Lesmodules', 'Dossiers', 'Betalingen', 'Rooster'].map(pill => (
-                            <span key={pill} className="rounded-full border border-border bg-white px-3 py-1.5 text-sm text-gray-600">
-                                {pill}
-                            </span>
-                        ))}
                     </div>
                 </section>
 
                 {/* -------------------------------------------------------- vervangt */}
                 <section className="border-y border-border bg-white">
                     <div className="mx-auto max-w-6xl px-5 py-14 sm:px-8 sm:py-16">
-                        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">
+                        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
                             Wat het vervangt
                         </h2>
                         <div className="mt-7 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
                             {REPLACES.map(({ from, to }) => (
                                 <div key={from}>
-                                    <p className="text-sm text-gray-400 line-through decoration-gray-300">{from}</p>
+                                    <p className="text-sm text-gray-500 line-through decoration-gray-400">{from}</p>
                                     <p className="mt-1.5 font-medium leading-snug text-gray-900">{to}</p>
                                 </div>
                             ))}
@@ -349,8 +366,8 @@ export function LandingPage() {
                             no browser chrome — it is a page, not a screen. */}
                         <Shot
                             src="/screens/rapport.png"
-                            width={2208}
-                            height={1532}
+                            width={1600}
+                            height={1235}
                             chrome={false}
                             alt="Een rapport met per vak het resultaat en de commentaar van de vakleerkracht, in het Arabisch en het Nederlands naast elkaar."
                             caption="Het rapport: tweetalig Arabisch/Nederlands, met de punten al ingevuld en klaar om af te drukken."
@@ -365,15 +382,15 @@ export function LandingPage() {
                     <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:gap-12">
                         <Shot
                             src="/screens/aanwezigheid.png"
-                            width={2880}
-                            height={1800}
+                            width={1568}
+                            height={1280}
                             alt="Het aanwezigheidsscherm van een klas, met per leerling de keuze aanwezig, afwezig, te laat of verontschuldigd."
                             caption="Aanwezigheden nemen: één klas afvinken in minder dan een minuut."
                         />
                         <Shot
                             src="/screens/huiswerk.png"
-                            width={2880}
-                            height={1800}
+                            width={1568}
+                            height={1280}
                             alt="Het huiswerkoverzicht van een leerkracht, met de opdrachten per klas en hun deadline."
                             caption="Huiswerk per klas, met deadline — leerlingen dienen in via de app."
                         />
@@ -459,34 +476,38 @@ export function LandingPage() {
                 </section>
 
                 {/* -------------------------------------------------------------- cta */}
-                <section className="relative overflow-hidden bg-primary-500">
+                <section id="demo" className="relative scroll-mt-20 overflow-hidden bg-primary-500">
                     <div className="pattern-bg absolute inset-0" />
                     <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-white/5" />
                     <div className="relative z-10 mx-auto max-w-3xl px-5 py-20 text-center sm:px-8 sm:py-24">
                         <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
                             Benieuwd hoe het er voor uw school uitziet?
                         </h2>
-                        <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-white/75">
-                            De schermen hierboven zijn een voorproefje. Stuur een bericht en we lopen
-                            samen door het platform, met uw eigen klasstructuur erin.
+                        <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-white/80">
+                            De schermen hierboven zijn een voorproefje. Laat uw gegevens achter en we
+                            lopen samen door het platform, met uw eigen klasstructuur erin.
                         </p>
-                        <div className="mt-9 flex flex-wrap justify-center gap-3">
-                            <a href={MAILTO} className="btn h-11 bg-white px-6 text-base font-semibold text-primary-700 shadow-sm hover:bg-white/90 active:scale-[0.98]">
-                                <Mail size={17} /> Demo aanvragen
-                            </a>
-                            <a href="mailto:ayman@masjidconnect.be" className="btn h-11 border border-white/25 px-6 text-base font-medium text-white hover:bg-white/10 active:scale-[0.98]">
-                                ayman@masjidconnect.be
-                            </a>
+                        {/* The page's single conversion point. Every "Demo aanvragen"
+                            in the nav and the hero is an anchor to this section, so
+                            there is one destination and one thing to measure. The
+                            address stays inside the form, as a fallback line rather
+                            than a rival control. */}
+                        <div className="mx-auto mt-9 max-w-xl">
+                            <DemoForm />
                         </div>
 
                         {/* Rehomed from the old hero brand panel, which the product
                             screenshot replaced. Same green ground, so it keeps the
                             setting it was designed for. */}
                         <div className="mt-14 border-t border-white/15 pt-8">
-                            <p className="font-arabic text-base text-white/50">
+                            {/* lang/dir are not decoration: without them a screen
+                                reader pronounces the Arabic with the page's Dutch
+                                voice (WCAG 3.1.2, Language of Parts). The old
+                                white/50 and white/35 were 2.86:1 and 2.20:1. */}
+                            <p lang="ar" dir="rtl" className="font-arabic text-xl text-white/80">
                                 طَلَبُ الْعِلْمِ فَرِيضَةٌ عَلَى كُلِّ مُسْلِمٍ
                             </p>
-                            <p className="mt-1.5 text-xs text-white/35">
+                            <p className="mt-2 text-sm text-white/80">
                                 &ldquo;Het zoeken naar kennis is een plicht voor elke moslim.&rdquo;
                             </p>
                         </div>
@@ -536,7 +557,7 @@ export function LandingPage() {
                         </div>
                     </div>
 
-                    <div className="mt-10 border-t border-border pt-6 text-xs leading-relaxed text-gray-400">
+                    <div className="mt-10 border-t border-border pt-6 text-xs leading-relaxed text-gray-500">
                         MasjidConnect is een dienst van Ayman Boulayoune (eenmanszaak) · KBO BE 1034.397.409
                         <span className="mx-1.5">·</span>
                         © {new Date().getFullYear()} — Alle rechten voorbehouden

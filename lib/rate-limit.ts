@@ -9,6 +9,9 @@ const LIMITS: Record<string, number> = {
   '/api/user/reactivate': 30,
   '/api/invite':          30,
   '/api/feedback':        10,
+  // Public route, so the key is an IP rather than a user id: low enough to make
+  // a spam run pointless, high enough that a school behind one NAT can retry.
+  '/api/contact':          5,
   '/api/tenant/logo-icon': 60,
 }
 
