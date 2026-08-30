@@ -73,19 +73,43 @@ const FEATURES = [
     // "Wie in een groep zit, zit in alle vakken" read as a standing invariant.
     // The cascade runs when the student is invited/geïmporteerd into the group;
     // a vak added to that group later does not backfill existing leerlingen.
-    { icon: Layers, title: 'Groepen & vakken', body: 'Een groep per niveau, een vak per leerkracht. Wie u in een groep plaatst, komt meteen in alle vakken van die groep terecht.' },
-    { icon: FileText, title: 'Huiswerk', body: 'Opdrachten met deadline en maximumscore. Leerlingen dienen tekst of bestanden in, u verbetert met score en commentaar.' },
-    { icon: ClipboardCheck, title: 'Puntenlijst', body: 'Toetsen op papier, online opdrachten en examens in één raster, met een gewogen gemiddelde per leerling.' },
-    { icon: CheckCircle2, title: 'Aanwezigheden', body: 'Per les afvinken in minder dan een minuut, met jaaroverzicht per leerling en een signaal bij herhaalde afwezigheid.' },
-    { icon: GraduationCap, title: 'Rapporten', body: 'Twee per jaar, tweetalig Arabisch/Nederlands, afdrukbaar als PDF. De vakleerkracht vult enkel zijn eigen vak in.' },
-    { icon: BookOpen, title: 'Lesmodules', body: 'Lesmateriaal geordend per thema. Klaarzetten wanneer het u past, zichtbaar maken wanneer de klas eraan toe is.' },
-    { icon: FolderOpen, title: 'Leerlingendossiers', body: 'Contactgegevens, gezinsverband, notities en documenten — met leerlingbegeleiding als aparte rol.' },
-    { icon: Wallet, title: 'Betalingen & lonen', body: 'Lidgeld per leerling, chart per gezin, en de maandelijkse lonen van het team. Enkel zichtbaar voor het bestuur.' },
-    { icon: CalendarDays, title: 'Rooster & agenda', body: 'Het weekrooster per klas, en een agenda die voor iedereen enkel zijn eigen lessen en deadlines toont.' },
-    { icon: Megaphone, title: 'Mededelingen', body: 'Eén bericht naar de hele school, één groep, één klas of enkel het lerarenteam. Geen groepschats meer.' },
-    { icon: Users, title: 'Oudercontact', body: 'Leerkrachten zetten tijdsloten open, de inschrijvingen lopen via het platform. Ouders hebben geen account nodig.' },
-    { icon: ArrowRight, title: 'Jaarovergang', body: 'Eén wizard aan het einde van het jaar: nieuw schooljaar, nieuwe structuur, leerlingen een groep hoger. Geen 200 namen hertypen.' },
+    { id: 'groepen', icon: Layers, title: 'Groepen & vakken', body: 'Een groep per niveau, een vak per leerkracht. Wie u in een groep plaatst, komt meteen in alle vakken van die groep terecht.' },
+    { id: 'huiswerk', icon: FileText, title: 'Huiswerk', body: 'Opdrachten met deadline en maximumscore. Leerlingen dienen tekst of bestanden in, u verbetert met score en commentaar.' },
+    { id: 'puntenlijst', icon: ClipboardCheck, title: 'Puntenlijst', body: 'Toetsen op papier, online opdrachten en examens in één raster, met een gewogen gemiddelde per leerling.' },
+    { id: 'aanwezigheden', icon: CheckCircle2, title: 'Aanwezigheden', body: 'Per les afvinken in minder dan een minuut, met jaaroverzicht per leerling en een signaal bij herhaalde afwezigheid.' },
+    { id: 'rapporten', icon: GraduationCap, title: 'Rapporten', body: 'Twee per jaar, tweetalig Arabisch/Nederlands, afdrukbaar als PDF. De vakleerkracht vult enkel zijn eigen vak in.' },
+    { id: 'lesmodules', icon: BookOpen, title: 'Lesmodules', body: 'Lesmateriaal geordend per thema. Klaarzetten wanneer het u past, zichtbaar maken wanneer de klas eraan toe is.' },
+    { id: 'dossiers', icon: FolderOpen, title: 'Leerlingendossiers', body: 'Contactgegevens, gezinsverband, notities en documenten — met leerlingbegeleiding als aparte rol.' },
+    { id: 'betalingen', icon: Wallet, title: 'Betalingen & lonen', body: 'Lidgeld per leerling, chart per gezin, en de maandelijkse lonen van het team. Enkel zichtbaar voor het bestuur.' },
+    { id: 'rooster', icon: CalendarDays, title: 'Rooster & agenda', body: 'Het weekrooster per klas, en een agenda die voor iedereen enkel zijn eigen lessen en deadlines toont.' },
+    { id: 'mededelingen', icon: Megaphone, title: 'Mededelingen', body: 'Eén bericht naar de hele school, één groep, één klas of enkel het lerarenteam. Geen groepschats meer.' },
+    { id: 'oudercontact', icon: Users, title: 'Oudercontact', body: 'Leerkrachten zetten tijdsloten open, de inschrijvingen lopen via het platform. Ouders hebben geen account nodig.' },
+    { id: 'jaarovergang', icon: ArrowRight, title: 'Jaarovergang', body: 'Eén wizard aan het einde van het jaar: nieuw schooljaar, nieuwe structuur, leerlingen een groep hoger. Geen 200 namen hertypen.' },
 ]
+
+// The hero chips. They used to be <span>s that looked exactly like buttons and
+// did nothing when tapped — a false affordance in the highest-value strip of
+// the page. Each one is now an anchor to its own card in the feature grid, so
+// the thing they always looked like they would do is the thing they do.
+// Every target is a FEATURES id above; the assertion below keeps it that way.
+const PILLS = [
+    { label: 'Huiswerk', id: 'huiswerk' },
+    { label: 'Puntenlijst', id: 'puntenlijst' },
+    { label: 'Aanwezigheden', id: 'aanwezigheden' },
+    { label: 'Rapporten', id: 'rapporten' },
+    { label: 'Lesmodules', id: 'lesmodules' },
+    { label: 'Dossiers', id: 'dossiers' },
+    { label: 'Betalingen', id: 'betalingen' },
+    { label: 'Rooster', id: 'rooster' },
+]
+
+// A pill pointing at a fragment nobody renders scrolls nowhere and looks broken
+// in exactly the way this change is meant to fix. Cheap to catch at module load
+// if someone renames a feature later.
+if (process.env.NODE_ENV !== 'production') {
+    const missing = PILLS.filter(p => !FEATURES.some(f => f.id === p.id)).map(p => p.id)
+    if (missing.length) console.error('[LandingPage] pills point at unknown feature ids:', missing)
+}
 
 const TRUST = [
     {
@@ -296,6 +320,22 @@ export function LandingPage() {
                             />
                         </div>
                     </div>
+
+                    {/* Full width under the grid rather than inside the copy
+                        column: in the column the row made the left side taller
+                        than the screenshot beside it, which left a band of dead
+                        space under the image. */}
+                    <div className="mt-10 flex flex-wrap gap-2 lg:mt-14">
+                        {PILLS.map(({ label, id }) => (
+                            <a
+                                key={id}
+                                href={`#${id}`}
+                                className="rounded-full border border-border bg-white px-3 py-1.5 text-sm text-gray-600 transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700"
+                            >
+                                {label}
+                            </a>
+                        ))}
+                    </div>
                 </section>
 
                 {/* -------------------------------------------------------- vervangt */}
@@ -412,8 +452,11 @@ export function LandingPage() {
                         </div>
 
                         <div className="mt-11 grid gap-x-8 gap-y-9 sm:grid-cols-2 lg:grid-cols-3">
-                            {FEATURES.map(({ icon: Icon, title, body }) => (
-                                <div key={title}>
+                            {FEATURES.map(({ id, icon: Icon, title, body }) => (
+                                // scroll-mt clears the 64px sticky header plus a
+                                // little air, so a pill lands on the card and not
+                                // under the nav.
+                                <div key={id} id={id} className="scroll-mt-28">
                                     <div className="flex items-center gap-2.5">
                                         <Icon size={18} className="flex-shrink-0 text-primary-500" />
                                         <h3 className="font-semibold text-gray-900">{title}</h3>
