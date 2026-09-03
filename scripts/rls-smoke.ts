@@ -40,7 +40,12 @@ if (!existsSync(accountsPath)) {
     process.exit(2)
 }
 type Cred = { email: string; password: string }
-const accounts: Record<'super_admin' | 'admin' | 'teacher' | 'student', Cred> =
+// leerlingenbegeleiding is optional so an older accounts file still runs — but
+// its checks then SKIP loudly rather than passing silently. That role was the
+// one this file never covered, and it is exactly where the /api/terms/accept
+// lockout hid (fixed 2026-08-26).
+const accounts: Record<'super_admin' | 'admin' | 'teacher' | 'student', Cred>
+    & Partial<Record<'leerlingenbegeleiding', Cred>> =
     JSON.parse(readFileSync(accountsPath, 'utf8'))
 
 let passed = 0
@@ -76,6 +81,15 @@ async function main() {
     const anon = anonClient()
     await assertHidden(anon, 'profiles', 'profiles hidden from anon')
     await assertHidden(anon, 'tenants', 'tenants hidden from anon')
+
+    // Migration 26 / M-1: the SECURITY DEFINER helpers every RLS policy pivots on
+    // were still EXECUTE-granted to PUBLIC, so anon could call them over
+    // PostgREST with nothing but the publishable anon key.
+    for (const fn of ['is_super_admin', 'get_my_role', 'get_my_tenant_id']) {
+        const { error } = await anon.rpc(fn)
+        check(`rpc ${fn}() not callable by anon`, !!error,
+            'anon EXECUTE was not revoked — see migration 26 §8')
+    }
 
     console.log('\nstudent:')
     const student = await signIn(accounts.student)
@@ -159,6 +173,43 @@ async function main() {
         await assertHidden(admin.client, 'audit_logs', 'audit_logs hidden from admin')
     }
 
+    console.log('\nleerlingenbegeleiding (counselor):')
+    if (!accounts.leerlingenbegeleiding) {
+        skipped += 4
+        console.log('  SKIP  counselor checks — no "leerlingenbegeleiding" entry in rls-smoke.accounts.json')
+        console.log('        (add one: this role was uncovered until 2026-08-26)')
+    } else {
+        const couns = await signIn(accounts.leerlingenbegeleiding)
+        const { data: cme } = await couns.client.from('profiles').select('tenant_id').eq('id', couns.uid).single()
+        const cTenant = cme?.tenant_id
+
+        // The counselor's whole purpose: read dossiers across its own tenant.
+        const { data: notes, error: notesErr } = await couns.client
+            .from('student_notes').select('tenant_id').limit(200)
+        check('counselor reads student_notes in own tenant',
+            !notesErr && (notes ?? []).every(n => n.tenant_id === cTenant),
+            notesErr?.message ?? `${(notes ?? []).filter(n => n.tenant_id !== cTenant).length} foreign rows`)
+
+        // Explicitly NO access to money (migration 13 §"no payment tables").
+        for (const t of ['fee_payments', 'fee_config', 'staff_pay', 'payroll_entries']) {
+            await assertHidden(couns.client, t, `${t} hidden from counselor`)
+        }
+
+        // Migration 26 / M-3: teacher_manage_own_slots had no role check, so any
+        // non-teacher could publish parent-teacher slots to the whole mosque.
+        const { data: slot, error: slotErr } = await couns.client.from('oudercontact_slots')
+            .insert({ tenant_id: cTenant, teacher_id: couns.uid, slot_date: '2099-01-01',
+                      start_time: '10:00', end_time: '10:15' })
+            .select('id').maybeSingle()
+        check('counselor cannot create oudercontact slots', !!slotErr,
+            slotErr ? '' : 'INSERT SUCCEEDED — migration 26 §5 has regressed')
+        if (slot && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+            const svc = createClient(URL_!, process.env.SUPABASE_SERVICE_ROLE_KEY,
+                { auth: { persistSession: false, autoRefreshToken: false } })
+            await svc.from('oudercontact_slots').delete().eq('id', slot.id)
+        }
+    }
+
     console.log('\nsuper_admin:')
     // The super_admin password is rotated by hand from time to time, which used
     // to crash the whole run on the last two assertions and throw away the 31
@@ -195,7 +246,8 @@ async function main() {
         const svc = createClient(URL_!, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } })
         const { data: me } = await svc.from('profiles').select('tenant_id').eq('id', student.uid).single()
         const { data: foreign } = await svc.from('classes')
-            .select('id').neq('tenant_id', me!.tenant_id).limit(1).maybeSingle()
+            .select('id, tenant_id').neq('tenant_id', me!.tenant_id).limit(1).maybeSingle()
+        const foreignTenant = foreign?.tenant_id
 
         if (!foreign) {
             skipped += 2
@@ -211,6 +263,74 @@ async function main() {
                 wErr ? '' : 'INSERT SUCCEEDED — migration 24 has regressed')
             // Only reachable if the check above failed; leave nothing behind either way.
             if (wrote) await svc.from('attendance_sessions').delete().eq('id', wrote.id)
+
+            // ── migration 26 assertions ──────────────────────────────────────
+            // H-1: announcements_delete's admin branch had NO tenant predicate,
+            // so an admin of A could wipe every other mosque's announcements.
+            // Probe on a row we create ourselves: if the hole is still open we
+            // destroy only the probe, never real content.
+            // announcements.created_by is NOT NULL with an FK to profiles, so the
+            // original `created_by: null` made this insert fail every single time
+            // and the check had never once run — it reported SKIP and looked
+            // harmless. Borrow any profile from the foreign tenant instead.
+            // (Fixed 2026-09-03, right after migration 26 was applied.)
+            const { data: foreignAuthor } = await svc.from('profiles')
+                .select('id').eq('tenant_id', foreignTenant).limit(1).maybeSingle()
+            const { data: probe, error: probeErr } = foreignAuthor
+                ? await svc.from('announcements')
+                    .insert({ tenant_id: foreignTenant, title: 'rls-smoke probe',
+                              content: 'delete me', created_by: foreignAuthor.id })
+                    .select('id').maybeSingle()
+                : { data: null, error: { message: 'no profile in the foreign tenant' } as any }
+            if (!probe) {
+                skipped += 1
+                console.log(`  SKIP  foreign announcement delete — could not create probe row` +
+                            `${probeErr ? ` (${probeErr.message})` : ''}`)
+            } else {
+                await admin.client.from('announcements').delete().eq('id', probe.id)
+                const { data: still } = await svc.from('announcements').select('id').eq('id', probe.id)
+                check('foreign-tenant announcement delete denied', (still ?? []).length === 1,
+                    'DELETE SUCCEEDED — migration 26 §1 has regressed')
+                await svc.from('announcements').delete().eq('id', probe.id)
+            }
+
+            // H-2: teacher_manage_docs was FOR ALL with an unscoped admin branch,
+            // granting cross-tenant SELECT/UPDATE/DELETE on module_documents.
+            // The same USING governs read and delete, so a read check proves it
+            // without touching anyone's data.
+            const { data: adminDocs, error: docsErr } = await admin.client
+                .from('module_documents').select('module_id').limit(200)
+            if (docsErr) {
+                check('module_documents not readable cross-tenant', true)
+            } else if ((adminDocs ?? []).length === 0) {
+                skipped += 1
+                console.log('  SKIP  module_documents scope — no rows in the database yet')
+            } else {
+                const { data: ownModules } = await admin.client.from('lesson_modules').select('id')
+                const ownIds = new Set((ownModules ?? []).map(m => m.id))
+                check('module_documents scoped to own tenant',
+                    (adminDocs ?? []).every(d => ownIds.has(d.module_id)),
+                    `${(adminDocs ?? []).filter(d => !ownIds.has(d.module_id)).length} foreign rows`)
+            }
+
+            // M-4: submission_files.file_url was unconstrained, so a student could
+            // point a row on their OWN submission at another tenant's object and
+            // have their teacher unwittingly fetch it.
+            const { data: mySub } = await student.client
+                .from('submissions').select('id').eq('student_id', student.uid).limit(1).maybeSingle()
+            if (!mySub) {
+                skipped += 1
+                console.log('  SKIP  submission_files file_url pinning — student has no submission')
+            } else {
+                const { data: badRow, error: badErr } = await student.client.from('submission_files')
+                    .insert({ submission_id: mySub.id, file_name: 'probe.pdf',
+                              file_url: `${foreignTenant}/probe/stolen.pdf`,
+                              file_size: 1, file_type: 'application/pdf' })
+                    .select('id').maybeSingle()
+                check('submission_files file_url pinned to own folder', !!badErr,
+                    badErr ? '' : 'INSERT SUCCEEDED — migration 26 §3 has regressed')
+                if (badRow) await svc.from('submission_files').delete().eq('id', badRow.id)
+            }
         }
     }
 

@@ -67,3 +67,21 @@ Rapport_template.pdf
 Schermafbeelding*.png
 healthy_unhealthy.png
 SECURITY
+
+# ─── Business documents (personal data — the repo is PUBLIC) ──────────
+# Prospecten.xlsx is a prospect list: names and contact details of mosque
+# board members, i.e. personal data for which MasjidConnect is the
+# controller. One `git add -A` from a public repo would publish it.
+# Root-anchored so only the copies in the repo root are covered.
+/MasjidConnect-Prospecten.xlsx
+/MasjidConnect-Strategie.docx
+/MasjidConnect-Verkoopdeck.pptx
+/files.zip
+
+# ─── Claude Code worktrees ────────────────────────────────────────────
+# .claude/worktrees/ holds full checkouts of unmerged branches. One of them
+# (launch-readiness-fixes) contains migration 26, which DESCRIBES LIVE
+# UNPATCHED VULNERABILITIES and must be applied to prod before it is ever
+# committed (PROJECT.md §9). The repo is public: a stray `git add -A` here
+# would publish a working map of the holes.
+.claude/worktrees/

@@ -176,14 +176,14 @@ CREATE TABLE public.profiles (
   last_name      character varying NOT NULL,
   email          character varying,
   phone          character varying,
-  avatar_url     text,
   is_active      boolean          DEFAULT true,
   -- GDPR: true after anonymize. Prevents reactivation of erased users.
   is_anonymized  boolean          NOT NULL DEFAULT false,
   -- Voorwaarden acceptance (see migration 10 + /akkoord gate)
   terms_accepted_at timestamp with time zone,
   terms_version  integer          NOT NULL DEFAULT 0,
-  last_seen_at   timestamp with time zone,
+  -- avatar_url and last_seen_at were dropped by migration 27 (data
+  -- minimisation): no code path read or wrote either one.
   created_at     timestamp with time zone DEFAULT now(),
   updated_at     timestamp with time zone DEFAULT now(),
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
@@ -611,12 +611,14 @@ CREATE POLICY "view_same_tenant_profiles" ON public.profiles
 
 -- WITH CHECK prevents self-escalation of role or tenant_id
 CREATE POLICY "update_own_profile" ON public.profiles
-  FOR UPDATE
-  USING (id = auth.uid())
+  FOR UPDATE TO authenticated
+  USING (id = (SELECT auth.uid()))
   WITH CHECK (
-    id = auth.uid()
-    AND (role)::text = (SELECT p.role FROM profiles p WHERE p.id = auth.uid())::text
-    AND tenant_id = (SELECT p.tenant_id FROM profiles p WHERE p.id = auth.uid())
+    id = (SELECT auth.uid())
+    AND (role)::text  = (SELECT get_my_role())::text
+    AND tenant_id     IS NOT DISTINCT FROM (SELECT get_my_tenant_id())
+    AND is_active     = true
+    AND is_anonymized = false
   );
 
 -- WITH CHECK prevents admins from assigning super_admin role
@@ -883,10 +885,16 @@ CREATE POLICY "teacher_post_announcements" ON public.announcements
   );
 
 CREATE POLICY "announcements_delete" ON public.announcements
-  FOR DELETE USING (
-    created_by = auth.uid()
-    OR (SELECT p.role FROM profiles p WHERE p.id = auth.uid())::text
-      = ANY (ARRAY['admin', 'super_admin'])
+  FOR DELETE TO authenticated
+  USING (
+    (SELECT is_super_admin())
+    OR (
+      tenant_id = (SELECT get_my_tenant_id())
+      AND (
+        created_by = (SELECT auth.uid())
+        OR (SELECT get_my_role())::text = 'admin'
+      )
+    )
   );
 
 CREATE POLICY "teacher_delete_own_announcements" ON public.announcements
@@ -1092,12 +1100,21 @@ CREATE POLICY "teacher_manage_feedback" ON public.submission_feedback
 -- ============================================================
 
 CREATE POLICY "student_manage_own_files" ON public.submission_files
-  FOR ALL USING (
+  FOR ALL TO authenticated
+  USING (
     EXISTS (
-      SELECT 1 FROM submissions
+      SELECT 1 FROM public.submissions
       WHERE submissions.id = submission_files.submission_id
-        AND submissions.student_id = auth.uid()
+        AND submissions.student_id = (SELECT auth.uid())
     )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.submissions
+      WHERE submissions.id = submission_files.submission_id
+        AND submissions.student_id = (SELECT auth.uid())
+    )
+    AND (storage.foldername(file_url))[1] = (SELECT auth.uid())::text
   );
 
 -- Admin/super_admin branch removed (migration 12) — admins are covered by the
@@ -1197,14 +1214,22 @@ CREATE POLICY "student_view_docs" ON public.module_documents
   );
 
 CREATE POLICY "teacher_manage_docs" ON public.module_documents
-  FOR ALL USING (
+  FOR ALL TO authenticated
+  USING (
     EXISTS (
-      SELECT 1 FROM lesson_modules lm
-      JOIN class_teachers ct ON ct.class_id = lm.class_id
+      SELECT 1 FROM public.lesson_modules lm
+      JOIN public.class_teachers ct ON ct.class_id = lm.class_id
       WHERE lm.id = module_documents.module_id
-        AND ct.teacher_id = auth.uid()
+        AND ct.teacher_id = (SELECT auth.uid())
     )
-    OR (get_my_role())::text = ANY (ARRAY['admin', 'super_admin'])
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.lesson_modules lm
+      JOIN public.class_teachers ct ON ct.class_id = lm.class_id
+      WHERE lm.id = module_documents.module_id
+        AND ct.teacher_id = (SELECT auth.uid())
+    )
   );
 
 CREATE POLICY "admin_manage_docs" ON public.module_documents
@@ -1496,61 +1521,112 @@ CREATE POLICY "submission_files_delete" ON storage.objects
 -- ---- student-reports -------------------------------------------------------
 -- Staff CRUD tenant-scoped via folder[1]; super_admin global (migration 12).
 
-CREATE POLICY "reports_staff_select" ON storage.objects
-  FOR SELECT USING (
-    bucket_id = 'student-reports'
-    AND (
-      is_super_admin()
-      OR (
-        (storage.foldername(name))[1] = (get_my_tenant_id())::text
-        AND (get_my_role())::text = ANY (ARRAY['teacher', 'admin'])
-      )
-    )
-  );
-
-CREATE POLICY "reports_staff_insert" ON storage.objects
-  FOR INSERT WITH CHECK (
-    bucket_id = 'student-reports'
-    AND (
-      is_super_admin()
-      OR (
-        (storage.foldername(name))[1] = (get_my_tenant_id())::text
-        AND (get_my_role())::text = ANY (ARRAY['teacher', 'admin'])
-      )
-    )
-  );
-
-CREATE POLICY "reports_staff_update" ON storage.objects
-  FOR UPDATE
+CREATE POLICY reports_staff_select ON storage.objects
+  FOR SELECT TO authenticated
   USING (
     bucket_id = 'student-reports'
     AND (
-      is_super_admin()
+      (SELECT is_super_admin())
       OR (
-        (storage.foldername(name))[1] = (get_my_tenant_id())::text
-        AND (get_my_role())::text = ANY (ARRAY['teacher', 'admin'])
+        (storage.foldername(storage.objects.name))[1] = (SELECT get_my_tenant_id())::text
+        AND (
+          (SELECT get_my_role())::text = 'admin'
+          OR (
+            (SELECT get_my_role())::text = 'teacher'
+            AND (storage.foldername(storage.objects.name))[2] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            AND EXISTS (
+              SELECT 1 FROM public.class_students cs
+              JOIN public.class_teachers ct ON ct.class_id = cs.class_id
+              WHERE cs.student_id = ((storage.foldername(storage.objects.name))[2])::uuid
+                AND ct.teacher_id = (SELECT auth.uid())
+            )
+          )
+        )
+      )
+    )
+  );
+
+CREATE POLICY reports_staff_insert ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'student-reports'
+    AND (
+      (SELECT is_super_admin())
+      OR (
+        (storage.foldername(storage.objects.name))[1] = (SELECT get_my_tenant_id())::text
+        AND (
+          (SELECT get_my_role())::text = 'admin'
+          OR (
+            (SELECT get_my_role())::text = 'teacher'
+            AND (storage.foldername(storage.objects.name))[2] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            AND EXISTS (
+              SELECT 1 FROM public.class_students cs
+              JOIN public.class_teachers ct ON ct.class_id = cs.class_id
+              WHERE cs.student_id = ((storage.foldername(storage.objects.name))[2])::uuid
+                AND ct.teacher_id = (SELECT auth.uid())
+            )
+          )
+        )
+      )
+    )
+  );
+
+CREATE POLICY reports_staff_update ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'student-reports'
+    AND (
+      (SELECT is_super_admin())
+      OR (
+        (storage.foldername(storage.objects.name))[1] = (SELECT get_my_tenant_id())::text
+        AND (
+          (SELECT get_my_role())::text = 'admin'
+          OR (
+            (SELECT get_my_role())::text = 'teacher'
+            AND (storage.foldername(storage.objects.name))[2] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            AND EXISTS (
+              SELECT 1 FROM public.class_students cs
+              JOIN public.class_teachers ct ON ct.class_id = cs.class_id
+              WHERE cs.student_id = ((storage.foldername(storage.objects.name))[2])::uuid
+                AND ct.teacher_id = (SELECT auth.uid())
+            )
+          )
+        )
       )
     )
   )
   WITH CHECK (
     bucket_id = 'student-reports'
     AND (
-      is_super_admin()
+      (SELECT is_super_admin())
       OR (
-        (storage.foldername(name))[1] = (get_my_tenant_id())::text
-        AND (get_my_role())::text = ANY (ARRAY['teacher', 'admin'])
+        (storage.foldername(storage.objects.name))[1] = (SELECT get_my_tenant_id())::text
+        AND (
+          (SELECT get_my_role())::text = 'admin'
+          OR (
+            (SELECT get_my_role())::text = 'teacher'
+            AND (storage.foldername(storage.objects.name))[2] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            AND EXISTS (
+              SELECT 1 FROM public.class_students cs
+              JOIN public.class_teachers ct ON ct.class_id = cs.class_id
+              WHERE cs.student_id = ((storage.foldername(storage.objects.name))[2])::uuid
+                AND ct.teacher_id = (SELECT auth.uid())
+            )
+          )
+        )
       )
     )
   );
 
-CREATE POLICY "reports_staff_delete" ON storage.objects
-  FOR DELETE USING (
+CREATE POLICY reports_staff_delete ON storage.objects
+  FOR DELETE TO authenticated
+  USING (
     bucket_id = 'student-reports'
     AND (
-      is_super_admin()
+      (SELECT is_super_admin())
       OR (
-        (storage.foldername(name))[1] = (get_my_tenant_id())::text
-        AND (get_my_role())::text = ANY (ARRAY['teacher', 'admin'])
+        (storage.foldername(storage.objects.name))[1] = (SELECT get_my_tenant_id())::text
+        AND (SELECT get_my_role())::text = 'admin'
       )
     )
   );
@@ -1830,3 +1906,88 @@ CREATE TABLE public.oudercontact_bookings (
 );
 -- RLS: tenant reads slots; teacher/admin manage own/tenant slots; student books
 -- own (or admin on behalf); the slot's teacher + admin read bookings.
+
+-- ============================================================
+-- Policies present in PROD but absent from the snapshot above
+-- ============================================================
+-- Added 2026-09-03 while syncing this file to migration 26. These four were
+-- created by migrations 14-25 and never folded back into schema.sql — the
+-- same drift that once made a whole role uncreatable for months. Their
+-- definitions below are the post-migration-26 versions, as applied to prod
+-- on 2026-09-03. Treat information_schema / pg_policies as the truth, not
+-- this file.
+
+-- rapport_cards_insert
+CREATE POLICY rapport_cards_insert ON public.rapport_cards
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    tenant_id = (SELECT get_my_tenant_id())
+    AND (SELECT get_my_role())::text IN ('admin', 'teacher')
+    AND status = 'draft'
+    -- NEW: the card's subject must really live in my tenant.
+    AND EXISTS (
+      SELECT 1 FROM public.profiles p
+      WHERE p.id = rapport_cards.student_id
+        AND p.tenant_id = (SELECT get_my_tenant_id())
+    )
+  );
+
+-- staff_write_student_details
+CREATE POLICY staff_write_student_details ON public.student_details
+  FOR ALL TO authenticated
+  USING (
+    (SELECT is_super_admin())
+    OR (
+      tenant_id = (SELECT get_my_tenant_id())
+      AND (
+        (SELECT get_my_role())::text = 'admin'
+        OR EXISTS (
+          SELECT 1 FROM public.class_students cs
+          JOIN public.class_teachers ct ON ct.class_id = cs.class_id
+          WHERE cs.student_id = student_details.student_id
+            AND ct.teacher_id = (SELECT auth.uid())
+        )
+      )
+    )
+  )
+  WITH CHECK (
+    (SELECT is_super_admin())
+    OR (
+      tenant_id = (SELECT get_my_tenant_id())
+      -- NEW: the subject must really live in my tenant, not merely be claimed to.
+      AND EXISTS (
+        SELECT 1 FROM public.profiles p
+        WHERE p.id = student_details.student_id
+          AND p.tenant_id = (SELECT get_my_tenant_id())
+      )
+      AND (
+        (SELECT get_my_role())::text = 'admin'
+        OR EXISTS (
+          SELECT 1 FROM public.class_students cs
+          JOIN public.class_teachers ct ON ct.class_id = cs.class_id
+          WHERE cs.student_id = student_details.student_id
+            AND ct.teacher_id = (SELECT auth.uid())
+        )
+      )
+    )
+  );
+
+-- super_admin_all_module_documents
+CREATE POLICY "super_admin_all_module_documents" ON public.module_documents
+  FOR ALL TO authenticated
+  USING ((SELECT is_super_admin()))
+  WITH CHECK ((SELECT is_super_admin()));
+
+-- teacher_manage_own_slots
+CREATE POLICY teacher_manage_own_slots ON public.oudercontact_slots
+  FOR ALL TO authenticated
+  USING (
+    teacher_id = (SELECT auth.uid())
+    AND tenant_id = (SELECT get_my_tenant_id())
+    AND (SELECT get_my_role())::text = 'teacher'
+  )
+  WITH CHECK (
+    teacher_id = (SELECT auth.uid())
+    AND tenant_id = (SELECT get_my_tenant_id())
+    AND (SELECT get_my_role())::text = 'teacher'
+  );
