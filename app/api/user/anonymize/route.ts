@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/api-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { eraseUserData } from '@/lib/gdpr-erasure'
 
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,9 +26,11 @@ export async function POST(request: Request) {
         const { userId } = await request.json()
         if (!userId) return NextResponse.json({ error: 'userId verplicht' }, { status: 400 })
 
+        // The e-mail is captured here, before step 2 overwrites it: pending
+        // invitations key on the address rather than the user id.
         const { data: target } = await supabaseAdmin
             .from('profiles')
-            .select('id, tenant_id')
+            .select('id, tenant_id, email')
             .eq('id', userId)
             .single()
 
@@ -70,7 +73,6 @@ export async function POST(request: Request) {
                 first_name:    'Verwijderd',
                 last_name:     '',
                 email:         `anon-${userId}@deleted.invalid`,
-                avatar_url:    null,
                 phone:         null,
                 is_active:     false,
                 is_anonymized: true,
@@ -81,55 +83,29 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
         }
 
-        // ── Step 3: Scrub submission text content ──────────────────────────────
-        await supabaseAdmin
-            .from('submissions')
-            .update({ text_content: null })
-            .eq('student_id', userId)
+        // ── Step 3: Erase everything else this person left behind ──────────────
+        // Dossier (details, notes, documents incl. Art. 9 health data), rapport
+        // PDFs, submission files and text, free-text notes on attendance/exams/
+        // oudercontact, and pending invitations. Shared with /api/user/delete.
+        const report = await eraseUserData(supabaseAdmin, userId, {
+            tenantId: target.tenant_id,
+            email:    target.email,
+        })
 
-        // ── Step 4: Delete uploaded files from storage + remove DB records ─────
-        const { data: submissions } = await supabaseAdmin
-            .from('submissions')
-            .select('id')
-            .eq('student_id', userId)
-
-        const submissionIds = submissions?.map(s => s.id) ?? []
-
-        const { data: submissionFiles } = submissionIds.length
-            ? await supabaseAdmin
-                .from('submission_files')
-                .select('id, file_url')
-                .in('submission_id', submissionIds)
-            : { data: [] }
-
-        if (submissionFiles?.length) {
-            const paths = submissionFiles.map(f => {
-                // Handle both stored paths and legacy full public URLs
-                const marker = '/object/public/submission-files/'
-                const idx = f.file_url.indexOf(marker)
-                return idx !== -1 ? f.file_url.slice(idx + marker.length) : f.file_url
-            })
-
-            // Storage deletion is a GDPR requirement — return an error if it fails
-            // so the caller knows the erasure is incomplete.
-            const { error: storageErr } = await supabaseAdmin.storage
-                .from('submission-files')
-                .remove(paths)
-            if (storageErr) {
-                console.error('[/api/user/anonymize] storage removal:', storageErr.message)
-                return NextResponse.json(
-                    { error: 'Bestanden konden niet worden verwijderd. Neem contact op met de beheerder.' },
-                    { status: 500 }
-                )
-            }
-
-            await supabaseAdmin
-                .from('submission_files')
-                .delete()
-                .in('id', submissionFiles.map(f => f.id))
+        if (report.errors.length) {
+            // Scrubbing the profile already succeeded, so the account is unusable —
+            // but say plainly that data remains, rather than reporting success.
+            console.error('[/api/user/anonymize] erasure incomplete:', report.errors.join(' | '))
+            return NextResponse.json(
+                { error: 'Het account is afgesloten, maar niet alle gegevens konden worden gewist. Neem contact op met de beheerder.' },
+                { status: 500 }
+            )
         }
 
-        return NextResponse.json({ success: true })
+        // Logged so an erasure can be evidenced to a school or the GBA later.
+        console.info('[/api/user/anonymize] erased', userId, JSON.stringify(report))
+
+        return NextResponse.json({ success: true, erased: report })
     } catch (e: any) {
         console.error('[/api/user/anonymize]', e.message)
         return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
