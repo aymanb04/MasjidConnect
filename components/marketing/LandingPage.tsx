@@ -507,7 +507,7 @@ export function LandingPage() {
                         <div className="card border-dashed p-7 sm:p-8">
                             <h2 className="text-lg font-semibold text-gray-900">Waar we nu aan bouwen</h2>
                             <p className="mt-2.5 max-w-3xl text-sm leading-relaxed text-gray-600">
-                                MasjidConnect is in actief gebruik en groeit mee met de scholen die het gebruiken.
+                                MasjidConnect draait vandaag bij een eerste school en groeit mee met wat die school nodig heeft.
                                 Op de planning staan een <strong className="font-medium text-gray-900">apart ouderportaal</strong>,{' '}
                                 <strong className="font-medium text-gray-900">Hifz- en Koranopvolging</strong> per leerling, en een{' '}
                                 <strong className="font-medium text-gray-900">Franstalige versie</strong> van de app.

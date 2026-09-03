@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { LEGAL_LAST_UPDATED } from '@/lib/terms'
 import { VoorwaardenContent } from '@/components/legal/VoorwaardenContent'
 import { SITE_URL } from '@/lib/site'
 
@@ -19,7 +20,7 @@ export default function PublicVoorwaardenPage() {
             <VoorwaardenContent />
 
             <p className="mt-8 text-center text-xs text-gray-400">
-                Laatste update: juni 2026 · Samen met het privacybeleid vormen deze de Voorwaarden
+                {LEGAL_LAST_UPDATED} · Samen met het privacybeleid vormen deze de Voorwaarden
             </p>
         </div>
     )

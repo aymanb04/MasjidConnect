@@ -47,7 +47,8 @@ export async function POST(request: Request) {
 
         const { error: profileErr } = await supabaseAdmin
             .from('profiles')
-            .update({ is_active: true })
+            // Back in school: the retention clock stops.
+            .update({ is_active: true, archived_at: null })
             .eq('id', userId)
         if (profileErr) {
             console.error('[/api/user/reactivate] profile update:', profileErr.message)

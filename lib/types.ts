@@ -52,15 +52,16 @@ export interface Profile {
   role: Role
   first_name: string
   last_name: string
-  avatar_url?: string
   phone?: string
   is_active: boolean
   // GDPR erasure flag — set by /api/user/anonymize. Irreversible.
   is_anonymized: boolean
+  // Start of the retention clock published in the privacyverklaring.
+  // Set by /api/user/archive, cleared by /api/user/reactivate (migration 27).
+  archived_at?: string | null
   // Voorwaarden acceptance — see lib/terms.ts + /akkoord gate
   terms_accepted_at?: string
   terms_version?: number
-  last_seen_at?: string
   created_at: string
   updated_at: string
   // computed

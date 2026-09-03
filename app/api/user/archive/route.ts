@@ -40,7 +40,9 @@ export async function POST(request: Request) {
 
         const { error: profileErr } = await supabaseAdmin
             .from('profiles')
-            .update({ is_active: false })
+            // archived_at starts the retention clock published in the
+            // privacyverklaring (dossier ≤ 12 months, results ≤ 2 years).
+            .update({ is_active: false, archived_at: new Date().toISOString() })
             .eq('id', userId)
         if (profileErr) {
             console.error('[/api/user/archive] profile update:', profileErr.message)

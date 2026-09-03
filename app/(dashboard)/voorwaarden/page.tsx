@@ -1,6 +1,7 @@
 'use client'
 
 import { VoorwaardenContent } from '@/components/legal/VoorwaardenContent'
+import { LEGAL_LAST_UPDATED } from '@/lib/terms'
 
 export default function VoorwaardenPage() {
   return (
@@ -13,7 +14,7 @@ export default function VoorwaardenPage() {
       <VoorwaardenContent />
 
       <p className="text-xs text-gray-400 text-center mt-8">
-        Laatste update: juni 2026 · Samen met het privacybeleid vormen deze de Voorwaarden
+        {LEGAL_LAST_UPDATED} · Samen met het privacybeleid vormen deze de Voorwaarden
       </p>
     </div>
   )

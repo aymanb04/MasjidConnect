@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { LEGAL_LAST_UPDATED } from '@/lib/terms'
 import { PrivacyContent } from '@/components/legal/PrivacyContent'
 import { SITE_URL } from '@/lib/site'
 
@@ -19,7 +20,7 @@ export default function PublicPrivacyPage() {
             <PrivacyContent />
 
             <p className="mt-8 text-center text-xs text-gray-400">
-                Laatste update: juni 2026 · MasjidConnect voldoet aan de AVG/GDPR
+                {LEGAL_LAST_UPDATED} · MasjidConnect voldoet aan de AVG/GDPR
             </p>
         </div>
     )

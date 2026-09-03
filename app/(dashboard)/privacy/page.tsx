@@ -1,6 +1,7 @@
 'use client'
 
 import { PrivacyContent } from '@/components/legal/PrivacyContent'
+import { LEGAL_LAST_UPDATED } from '@/lib/terms'
 
 export default function PrivacyPage() {
   return (
@@ -13,7 +14,7 @@ export default function PrivacyPage() {
       <PrivacyContent />
 
       <p className="text-xs text-gray-400 text-center mt-8">
-        Laatste update: juni 2026 · MasjidConnect voldoet aan de AVG/GDPR
+        {LEGAL_LAST_UPDATED} · MasjidConnect voldoet aan de AVG/GDPR
       </p>
     </div>
   )

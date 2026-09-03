@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { MeemMark } from '@/components/ui/MeemMark'
 import { supabase } from '@/lib/supabase/singleton'
-import { needsTermsAcceptance } from '@/lib/terms'
+import { needsTermsAcceptance, isAcknowledgementOnly } from '@/lib/terms'
 import { PrivacyContent } from '@/components/legal/PrivacyContent'
 import { VoorwaardenContent } from '@/components/legal/VoorwaardenContent'
 import { Loader2 } from 'lucide-react'
@@ -16,6 +16,11 @@ export default function AkkoordPage() {
     const [checked, setChecked] = useState(false)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
+
+    // A pupil is a minor and cannot validly sign a contract; the school is the
+    // licensee and accepts on their behalf. They confirm they have read the
+    // rules instead. Staff still accept. See lib/terms.ts.
+    const ackOnly = isAcknowledgementOnly(profile?.role)
 
     useEffect(() => {
         if (loading) return
@@ -78,8 +83,9 @@ export default function AkkoordPage() {
 
                 <h1 className="text-2xl font-semibold text-gray-900">Voorwaarden en privacy</h1>
                 <p className="text-gray-500 mt-1.5 text-sm mb-6">
-                    Lees onderstaande voorwaarden en ons privacybeleid. Om MasjidConnect te
-                    gebruiken, vragen wij je deze te aanvaarden.
+                    {ackOnly
+                        ? 'Hieronder staan de regels van MasjidConnect en wat er met jouw gegevens gebeurt. Je school heeft de voorwaarden aanvaard; wij vragen je alleen te bevestigen dat je ze gelezen hebt.'
+                        : 'Lees onderstaande voorwaarden en ons privacybeleid. Om MasjidConnect te gebruiken, vragen wij je deze te aanvaarden.'}
                 </p>
 
                 {/* Privacy */}
@@ -103,8 +109,13 @@ export default function AkkoordPage() {
                         className="mt-0.5 h-4 w-4 flex-shrink-0 accent-primary-600"
                     />
                     <span className="text-sm text-gray-700">
-                        Ik heb het <strong>privacybeleid</strong> gelezen en ga akkoord met de{' '}
-                        <strong>gebruikersvoorwaarden</strong> van MasjidConnect.
+                        {ackOnly ? (
+                            <>Ik heb het <strong>privacybeleid</strong> en de{' '}
+                            <strong>regels</strong> van MasjidConnect gelezen.</>
+                        ) : (
+                            <>Ik heb het <strong>privacybeleid</strong> gelezen en ga akkoord met de{' '}
+                            <strong>gebruikersvoorwaarden</strong> van MasjidConnect.</>
+                        )}
                     </span>
                 </label>
 
@@ -126,7 +137,7 @@ export default function AkkoordPage() {
                     >
                         {saving
                             ? <><Loader2 size={16} className="animate-spin" /> Opslaan…</>
-                            : 'Akkoord en doorgaan'
+                            : ackOnly ? 'Gelezen en doorgaan' : 'Akkoord en doorgaan'
                         }
                     </button>
                 </div>

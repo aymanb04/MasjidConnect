@@ -122,8 +122,15 @@ export function DemoForm() {
                     : <><Mail size={17} /> Demo aanvragen</>}
             </button>
 
+            {/* Art. 13 AVG: for a demo request MasjidConnect is the controller, not
+                a school. Name who we are, why we ask, how long we keep it, and link
+                the full statement — the earlier one-liner did none of that. */}
             <p className="mt-3 text-center text-xs leading-relaxed text-gray-500">
-                We gebruiken uw gegevens enkel om op deze aanvraag te antwoorden.
+                MasjidConnect (Ayman Boulayoune, KBO BE 1034.397.409) gebruikt uw gegevens enkel om op
+                deze aanvraag te antwoorden en bewaart ze maximaal 12 maanden. Meer in de{' '}
+                <a href="/legal/privacy" className="font-medium text-primary-600 hover:underline">
+                    privacyverklaring
+                </a>.
                 <br />
                 Liever bellen?{' '}
                 <a href="tel:+32485670822" className="font-medium text-primary-600 hover:underline">
