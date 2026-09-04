@@ -85,3 +85,9 @@ SECURITY
 # committed (PROJECT.md §9). The repo is public: a stray `git add -A` here
 # would publish a working map of the holes.
 .claude/worktrees/
+
+# ─── Signed vendor DPAs ───────────────────────────────────────────────
+# Countersigned processor agreements. resend-dpa-signed.pdf carries a real
+# signature block (name + business address), and none of these are ours to
+# republish. The repo is PUBLIC.
+/DPAs/
