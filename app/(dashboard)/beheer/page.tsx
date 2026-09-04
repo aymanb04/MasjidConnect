@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { getRoleBadge, formatDate } from '@/lib/utils'
-import { Users, GraduationCap, Mail, Shield, Archive, ChevronDown, ChevronRight, X, Loader2, Search, CalendarDays, ArrowLeftRight } from 'lucide-react'
+import { Users, GraduationCap, Mail, Shield, Archive, ChevronDown, ChevronRight, X, Loader2, Search, CalendarDays, ArrowLeftRight, Pencil } from 'lucide-react'
 import Link from 'next/link'
 import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 import { CreateClassButton } from '@/components/features/admin/CreateClassButton'
@@ -14,6 +14,7 @@ import CsvImportButton from '@/components/features/admin/CsvImportButton'
 import { DeleteUserButton } from '@/components/features/admin/DeleteUserButton'
 import { ReactivateUserButton } from '@/components/features/admin/ReactivateUserButton'
 import { MoveStudentModal } from '@/components/features/admin/MoveStudentModal'
+import { EditUserModal } from '@/components/features/admin/EditUserModal'
 
 export default function BeheerPage() {
   const { profile, loading: profileLoading } = useProfile()
@@ -31,6 +32,7 @@ export default function BeheerPage() {
   const [roleFilter, setRoleFilter]           = useState('all')
 
   const [moveStudent, setMoveStudent]         = useState<{ id: string; first_name: string; last_name: string } | null>(null)
+  const [editUser, setEditUser]               = useState<any | null>(null)
   const [expandedClass, setExpandedClass]     = useState<string | null>(null)
   const [classStudents, setClassStudents]     = useState<Record<string, any[]>>({})
   const [studentsLoading, setStudentsLoading] = useState<Record<string, boolean>>({})
@@ -317,6 +319,13 @@ export default function BeheerPage() {
                     <div className="text-xs text-gray-400 truncate">{u.email}</div>
                   </div>
                   <span className={`badge flex-shrink-0 ${rb.color}`}>{rb.label}</span>
+                  <button
+                    onClick={() => setEditUser(u)}
+                    className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-300 hover:text-primary-600 hover:bg-primary-50 transition-all flex-shrink-0"
+                    title="Gegevens, rol en klassen bewerken"
+                  >
+                    <Pencil size={13} />
+                  </button>
                   {u.role === 'student' && (
                     <button
                       onClick={() => setMoveStudent({ id: u.id, first_name: u.first_name, last_name: u.last_name })}
@@ -375,6 +384,16 @@ export default function BeheerPage() {
             student={moveStudent}
             tenantId={profile.tenant_id!}
             onClose={() => setMoveStudent(null)}
+            onSaved={loadData}
+          />
+        )}
+
+        {/* Edit user modal — name, phone, role, and (for teachers) classes */}
+        {editUser && (
+          <EditUserModal
+            user={editUser}
+            tenantId={profile.tenant_id!}
+            onClose={() => setEditUser(null)}
             onSaved={loadData}
           />
         )}

@@ -56,7 +56,7 @@ export default function KlasDetailPage() {
       setStudents(s?.map((x: any) => x.profiles).filter(Boolean) ?? [])
     }
 
-    if (profile!.role === 'admin') {
+    if (['admin', 'super_admin'].includes(profile!.role)) {
       const { data: at } = await supabase.from('profiles').select('id, first_name, last_name').eq('tenant_id', profile!.tenant_id).eq('role', 'teacher').eq('is_active', true).order('last_name')
       setAllTeachers(at ?? [])
     }
@@ -121,7 +121,9 @@ export default function KlasDetailPage() {
   if (!klas) return null
 
   const isTeacher = ['teacher','admin','super_admin'].includes(profile?.role ?? '')
-  const isAdmin = profile?.role === 'admin'
+  // super_admin was excluded here and in the allTeachers query below, so the
+  // one account that can see every tenant could not assign a teacher anywhere.
+  const isAdmin = ['admin', 'super_admin'].includes(profile?.role ?? '')
   const unassignedTeachers = allTeachers.filter(t => !teachers.some(t2 => t2.id === t.id))
 
   return (
@@ -203,12 +205,29 @@ export default function KlasDetailPage() {
             <div className="flex items-center gap-2 mb-4">
               <GraduationCap size={18} className="text-primary-600" />
               <h2 className="font-semibold text-gray-900 flex-1">Leerkrachten</h2>
+              {/* Was a bare 16px "+" whose only label was a title tooltip, which
+                  does not exist on touch — an admin reported the feature as
+                  missing (2026-09-04) and went looking for it under Beheer. */}
               {isAdmin && !addingTeacher && unassignedTeachers.length > 0 && (
-                <button onClick={() => setAddingTeacher(true)} className="text-gray-400 hover:text-primary-600 transition-colors p-0.5" title="Leerkracht toevoegen">
-                  <Plus size={16}/>
+                <button onClick={() => setAddingTeacher(true)}
+                  className="btn-secondary flex items-center gap-1 text-xs py-1 px-2.5">
+                  <Plus size={13}/> Leerkracht toevoegen
                 </button>
               )}
             </div>
+            {/* Previously the button simply vanished with no explanation when
+                every teacher was already on this class, which reads as "the
+                feature does not exist" rather than "there is nobody left". */}
+            {isAdmin && !addingTeacher && unassignedTeachers.length === 0 && allTeachers.length > 0 && (
+              <p className="-mt-2 mb-3 text-xs text-gray-400">
+                Alle leerkrachten van de school staan al in deze klas.
+              </p>
+            )}
+            {isAdmin && allTeachers.length === 0 && (
+              <p className="-mt-2 mb-3 text-xs text-gray-400">
+                Er zijn nog geen leerkrachten. Nodig ze eerst uit via Beheer.
+              </p>
+            )}
             {teachers.length === 0 && !addingTeacher ? (
               <p className="text-sm text-gray-400 text-center py-2">Geen leerkracht toegewezen.</p>
             ) : (
