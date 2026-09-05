@@ -22,6 +22,12 @@
 //   · "Profielfoto" was disclosed but never collected (dropped in migration 27).
 //   · Nothing was addressed to a child, though children are the main data
 //     subjects — Art. 12(1) asks for plain language in exactly that case.
+//
+// v2 amended in place, 2026-09-05 — the pupil's home address was dropped from
+// the product (migration 28) after the school confirmed it was unused, so it is
+// gone from this list too, and the purposes for the two fields that stayed
+// (geboortedatum, geslacht) are now stated rather than assumed. Edited in place
+// rather than bumped to v3 because no profile had accepted v2 yet.
 
 import { Shield, Users, Clock, FileCheck, Mail, Building2, Scale, Server, Globe, Database } from 'lucide-react'
 import { EntityFooter } from './EntityFooter'
@@ -56,7 +62,7 @@ const sections: { icon: typeof Shield; title: string; items: React.ReactNode[] }
       'Klas- en groepsinschrijvingen',
       'Ingediende taken, scores, feedback en examenresultaten',
       'Aanwezigheidsregistraties en rapporten',
-      'Leerlingendossier: geboortedatum, geslacht, adres, contactgegevens van de ouder(s) en noodcontact, familieverband, notities en documenten die de school toevoegt.',
+      'Leerlingendossier: geboortedatum, geslacht, contactgegevens van de ouder(s) en noodcontact, familieverband, notities en documenten die de school toevoegt.',
       'Zorg- of gezondheidsinformatie (bijzondere categorieën, art. 9 AVG) verwerken wij enkel wanneer de school die toevoegt met de uitdrukkelijke toestemming van de ouder(s).',
       'Betalingen van lidgeld of bijdragen, wanneer de school die in MasjidConnect opvolgt.',
       'Beperkte technische logs (bv. IP-adres) voor de beveiliging van het platform.',
@@ -82,6 +88,8 @@ const sections: { icon: typeof Shield; title: string; items: React.ReactNode[] }
       'Voor zorg- en gezondheidsgegevens geldt een strengere regel: die verwerken wij alleen op grond van de uitdrukkelijke toestemming van de ouder(s) (art. 9 AVG). Die toestemming kunt u op elk moment intrekken bij de school; wat daarvóór gebeurde blijft rechtmatig, maar wij stoppen dan met verdere verwerking en verwijderen de betrokken documenten.',
       'Technische logs verwerken wij op grond van ons gerechtvaardigd belang bij een veilig platform.',
       'Sommige gegevens zijn noodzakelijk: zonder naam, klas en een contactgegeven kan de school een leerling niet inschrijven of opvolgen. Het dossier is grotendeels optioneel — de school bepaalt wat zij nodig heeft.',
+      'Twee dossiergegevens verdienen uitleg, omdat wij ze bewust bijhouden: de geboortedatum bepaalt in welke leeftijdsgroep een leerling hoort en is nodig voor activiteiten met een leeftijdsgrens, en het geslacht gebruikt de school om activiteiten voor jongens en meisjes apart te organiseren.',
+      'Het adres van de leerling bewaren wij niet langer. Het werd niet gebruikt en is in september 2026 uit het systeem verwijderd.',
     ],
   },
   {

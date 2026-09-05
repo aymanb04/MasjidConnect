@@ -1728,7 +1728,7 @@ CREATE TABLE public.student_details (
   tenant_id               uuid NOT NULL,
   date_of_birth           date,
   gender                  text CHECK (gender IN ('m', 'f')),
-  address                 text,
+  -- address dropped by migration 28: the school confirmed it is unused.
   parent_email            text,
   parent_phone            text,
   emergency_contact_name  text,

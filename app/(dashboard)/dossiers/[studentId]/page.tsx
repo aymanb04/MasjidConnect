@@ -22,7 +22,6 @@ const MAX_DOC_SIZE = 10 * 1024 * 1024 // 10 MB
 interface DetailsForm {
   date_of_birth: string
   gender: string
-  address: string
   parent_email: string
   parent_phone: string
   emergency_contact_name: string
@@ -31,7 +30,7 @@ interface DetailsForm {
 }
 
 const EMPTY_FORM: DetailsForm = {
-  date_of_birth: '', gender: '', address: '', parent_email: '',
+  date_of_birth: '', gender: '', parent_email: '',
   parent_phone: '', emergency_contact_name: '', emergency_contact_phone: '',
   family_id: '',
 }
@@ -104,7 +103,6 @@ export default function DossierDetailPage() {
       const loaded: DetailsForm = {
         date_of_birth: det.date_of_birth ?? '',
         gender: det.gender ?? '',
-        address: det.address ?? '',
         parent_email: det.parent_email ?? '',
         parent_phone: det.parent_phone ?? '',
         emergency_contact_name: det.emergency_contact_name ?? '',
@@ -146,7 +144,6 @@ export default function DossierDetailPage() {
       tenant_id: student.tenant_id,
       date_of_birth: form.date_of_birth || null,
       gender: form.gender || null,
-      address: form.address.trim() || null,
       parent_email: form.parent_email.trim() || null,
       parent_phone: form.parent_phone.trim() || null,
       emergency_contact_name: form.emergency_contact_name.trim() || null,
@@ -352,11 +349,6 @@ export default function DossierDetailPage() {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="label">Adres</label>
-                <input type="text" value={form.address}
-                  onChange={e => setForm(p => ({ ...p, address: e.target.value }))} className="input" placeholder="Straat 1, 2100 Deurne" />
-              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">E-mail ouder</label>
@@ -421,7 +413,6 @@ export default function DossierDetailPage() {
               {[
                 ['Geboortedatum', form.date_of_birth ? format(new Date(form.date_of_birth), 'd MMMM yyyy', { locale: nl }) : null],
                 ['Geslacht', form.gender === 'm' ? 'Jongen' : form.gender === 'f' ? 'Meisje' : null],
-                ['Adres', form.address || null],
                 ['E-mail ouder', form.parent_email || null],
                 ['Telefoon ouder', form.parent_phone || null],
                 ['Noodcontact', form.emergency_contact_name
