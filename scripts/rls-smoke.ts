@@ -44,9 +44,27 @@ type Cred = { email: string; password: string }
 // its checks then SKIP loudly rather than passing silently. That role was the
 // one this file never covered, and it is exactly where the /api/terms/accept
 // lockout hid (fixed 2026-08-26).
-const accounts: Record<'super_admin' | 'admin' | 'teacher' | 'student', Cred>
-    & Partial<Record<'leerlingenbegeleiding', Cred>> =
+const accounts: Record<'admin' | 'teacher' | 'student', Cred>
+    & Partial<Record<'super_admin' | 'leerlingenbegeleiding', Cred>> =
     JSON.parse(readFileSync(accountsPath, 'utf8'))
+
+// The super_admin credential is deliberately NOT kept in the accounts file.
+// Every other login in there belongs to the demo tenant — fabricated people,
+// simple passwords on purpose. super_admin is a real production account that
+// can read every tenant, and a plaintext copy of its password sitting on disk
+// is worth more to an attacker than these checks are worth to us.
+//
+// Supply it per run instead, so it never touches the filesystem:
+//
+//   SUPER_ADMIN_EMAIL=you@example.com SUPER_ADMIN_PASSWORD='…' npx tsx scripts/rls-smoke.ts
+//
+// Without it the super_admin checks SKIP loudly, which is the intended default.
+if (process.env.SUPER_ADMIN_EMAIL && process.env.SUPER_ADMIN_PASSWORD) {
+    accounts.super_admin = {
+        email: process.env.SUPER_ADMIN_EMAIL,
+        password: process.env.SUPER_ADMIN_PASSWORD,
+    }
+}
 
 let passed = 0
 let failed = 0
@@ -216,12 +234,18 @@ async function main() {
     // that had already passed. A stale credential is a stale file, not an RLS
     // regression — skip and say so, and keep the exit code meaningful.
     let sa: Awaited<ReturnType<typeof signIn>> | null = null
-    try {
-        sa = await signIn(accounts.super_admin)
-    } catch (e) {
+    if (!accounts.super_admin) {
         skipped += 2
-        console.log(`  SKIP  super_admin checks — ${(e as Error).message}`)
-        console.log('        (update the password in scripts/rls-smoke.accounts.json)')
+        console.log('  SKIP  super_admin checks — no credential supplied (by design)')
+        console.log("        Run with: SUPER_ADMIN_EMAIL=… SUPER_ADMIN_PASSWORD='…' npx tsx scripts/rls-smoke.ts")
+    } else {
+        try {
+            sa = await signIn(accounts.super_admin)
+        } catch (e) {
+            skipped += 2
+            console.log(`  SKIP  super_admin checks — ${(e as Error).message}`)
+            console.log('        (the supplied SUPER_ADMIN_PASSWORD did not work)')
+        }
     }
     if (sa) {
         const { data: tenants, error } = await sa.client.from('tenants').select('id')
