@@ -7,8 +7,9 @@ import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
 // Editing an existing user was missing entirely: a typo in a name could not be
 // corrected, a teacher could not be made leerlingenbegeleider, and — the report
-// that surfaced it (Ilias, 2026-09-04) — there was no way to reach a teacher's
-// class assignments from the person. Assigning a teacher to a class DID already
+// that surfaced it (an admin at a client school, 2026-09-04) — there was no way
+// to reach a teacher's class assignments from the person. Assigning a teacher
+// to a class DID already
 // exist, but only from the other direction (Klassen → class → Leerkrachten →
 // "+"), which is why it read as missing. This modal covers the person-side view.
 //

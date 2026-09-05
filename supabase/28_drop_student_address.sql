@@ -4,8 +4,9 @@
 -- Written 2026-09-05, after the school answered the data-minimisation
 -- questions put to them on 2026-09-04.
 --
--- De Kroon (Youssef, coordinator): "Adres kunnen wij inderdaad weglaten, wordt
--- de laatste jaren zeker niet gebruikt."
+-- The school's coordinator confirmed the address field has not been used for
+-- years and can be removed. (Names of client staff stay out of this repo — it
+-- is public. The verbatim exchange is in legal/TODO.md, which is not.)
 --
 -- It was the highest-risk, lowest-value field in the schema: the home address
 -- of a minor, rendered on the dossier page and read by no logic anywhere in the
@@ -15,11 +16,11 @@
 --
 -- The other two fields in that question were KEPT, both with a purpose the
 -- school stated and which is now recorded rather than assumed:
---   · gender         — "wij organiseren activiteiten voor jongens en meisjes
---                       apart, vandaar dat die filter handig is"
---   · date_of_birth  — "voor sommige activiteiten hebben wij de exacte leeftijd
---                       nodig"; it also places a pupil in the right age band
---                       (the groups are literally 6-8 / 9-11 / 12-14 jaar)
+--   · gender         — the school runs activities for boys and girls separately
+--                       and filters on it
+--   · date_of_birth  — some activities have an age limit and need the exact
+--                       age; it also places a pupil in the right age band (the
+--                       groups are literally 6-8 / 9-11 / 12-14 jaar)
 --
 -- Also removed from the published privacyverklaring and from
 -- legal/privacyverklaring.md in the same change: continuing to disclose a
