@@ -6,6 +6,9 @@ const LIMITS: Record<string, number> = {
   '/api/user/anonymize':  3,
   '/api/user/delete':     3,
   '/api/user/archive':    30,
+  // Hands back a working credential, so it is worth more to an attacker than
+  // the other admin actions. A whole class can still be reset in one sitting.
+  '/api/user/set-password': 40,
   '/api/user/reactivate': 30,
   '/api/invite':          30,
   '/api/feedback':        10,

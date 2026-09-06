@@ -15,6 +15,7 @@ import { DeleteUserButton } from '@/components/features/admin/DeleteUserButton'
 import { ReactivateUserButton } from '@/components/features/admin/ReactivateUserButton'
 import { MoveStudentModal } from '@/components/features/admin/MoveStudentModal'
 import { EditUserModal } from '@/components/features/admin/EditUserModal'
+import { ResetPasswordButton } from '@/components/features/admin/ResetPasswordButton'
 
 export default function BeheerPage() {
   const { profile, loading: profileLoading } = useProfile()
@@ -319,6 +320,9 @@ export default function BeheerPage() {
                     <div className="text-xs text-gray-400 truncate">{u.email}</div>
                   </div>
                   <span className={`badge flex-shrink-0 ${rb.color}`}>{rb.label}</span>
+                  {u.id !== profile.id && (
+                    <ResetPasswordButton userId={u.id} name={`${u.first_name} ${u.last_name}`} />
+                  )}
                   <button
                     onClick={() => setEditUser(u)}
                     className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-300 hover:text-primary-600 hover:bg-primary-50 transition-all flex-shrink-0"
