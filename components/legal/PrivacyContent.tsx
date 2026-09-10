@@ -127,7 +127,7 @@ const sections: { icon: typeof Shield; title: string; items: React.ReactNode[] }
     title: 'Hoe lang bewaren wij uw gegevens?',
     items: [
       'Uw gegevens worden bewaard zolang u ingeschreven bent bij de school.',
-      'Na uitschrijving verwijderen wij het dossier — adres, contactgegevens, notities en documenten — binnen 12 maanden.',
+      'Na uitschrijving verwijderen wij het dossier — contactgegevens, notities en documenten — binnen 12 maanden.',
       'Onderwijsresultaten (scores, rapporten, aanwezigheden) bewaren wij tot 2 jaar na uitschrijving en anonimiseren wij daarna, zodat er enkel cijfers zonder namen overblijven.',
       'Betalingsgegevens moeten wij 7 jaar bijhouden: dat is een wettelijke boekhoudkundige verplichting, en die gegevens kunnen daarom niet eerder gewist worden.',
       'Technische logs bewaren wij maximaal 12 maanden.',
