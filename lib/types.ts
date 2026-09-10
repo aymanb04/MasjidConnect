@@ -302,7 +302,7 @@ export interface StudentDetails {
   tenant_id: string
   date_of_birth?: string
   gender?: 'm' | 'f'
-  address?: string
+  // address dropped by migration 28 — the school confirmed it was unused
   parent_email?: string
   parent_phone?: string
   emergency_contact_name?: string
@@ -329,7 +329,8 @@ export interface StudentDocument {
   id: string
   tenant_id: string
   student_id: string
-  doc_type: 'contract' | 'disability' | 'other'
+  // 'disability' removed by migration 29 — see supabase/29_drop_health_doctype.sql
+  doc_type: 'contract' | 'other'
   file_name: string
   file_url: string
   note?: string

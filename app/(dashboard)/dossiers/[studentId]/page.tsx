@@ -14,8 +14,12 @@ import {
 } from 'lucide-react'
 
 const STAFF_ROLES = ['admin', 'super_admin', 'teacher', 'leerlingenbegeleiding']
+// "Zorg/beperking" was removed in migration 29: it was the only reason the
+// platform processed Art. 9 health data, and it was never used once. A teacher
+// can still misuse "Overig" — that is a controller-side policy matter — but the
+// product no longer invites and structures health data.
 const DOC_TYPES: Record<string, string> = {
-  contract: 'Contract', disability: 'Zorg/beperking', other: 'Overig',
+  contract: 'Contract', other: 'Overig',
 }
 const MAX_DOC_SIZE = 10 * 1024 * 1024 // 10 MB
 
@@ -527,16 +531,6 @@ export default function DossierDetailPage() {
               </div>
             )}
           </div>
-          {/* Art. 9 AVG: the paperwork puts the burden of a valid legal basis for
-              health data on the school, but nothing in the product used to say so
-              at the moment it matters. This is that reminder. */}
-          {canWrite && docType === 'disability' && (
-            <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
-              Zorg- en gezondheidsgegevens zijn bijzondere persoonsgegevens (art. 9 AVG).
-              Voeg deze alleen toe met de <strong>uitdrukkelijke toestemming van de ouder(s)</strong>,
-              en beperk je tot wat de school echt nodig heeft om het kind te begeleiden.
-            </p>
-          )}
           {documents.length === 0 ? (
             <p className="text-sm text-gray-400">Nog geen documenten.</p>
           ) : (

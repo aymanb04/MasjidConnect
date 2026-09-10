@@ -23,6 +23,12 @@
 //   · Nothing was addressed to a child, though children are the main data
 //     subjects — Art. 12(1) asks for plain language in exactly that case.
 //
+// v2 amended 2026-09-10 — the "zorg/beperking" document type was removed from
+// the product (migration 29). It was the only Art. 9 processing this platform
+// did, and it had never been used once, so the health-data disclosure, the
+// explicit-consent basis and the consent-withdrawal right all came out with it.
+// Nothing left here runs on consent.
+//
 // v2 amended in place, 2026-09-05 — the pupil's home address was dropped from
 // the product (migration 28) after the school confirmed it was unused, so it is
 // gone from this list too, and the purposes for the two fields that stayed
@@ -63,7 +69,6 @@ const sections: { icon: typeof Shield; title: string; items: React.ReactNode[] }
       'Ingediende taken, scores, feedback en examenresultaten',
       'Aanwezigheidsregistraties en rapporten',
       'Leerlingendossier: geboortedatum, geslacht, contactgegevens van de ouder(s) en noodcontact, familieverband, notities en documenten die de school toevoegt.',
-      'Zorg- of gezondheidsinformatie (bijzondere categorieën, art. 9 AVG) verwerken wij enkel wanneer de school die toevoegt met de uitdrukkelijke toestemming van de ouder(s).',
       'Betalingen van lidgeld of bijdragen, wanneer de school die in MasjidConnect opvolgt.',
       'Beperkte technische logs (bv. IP-adres) voor de beveiliging van het platform.',
       'Wij doen niet aan reclame of profilering, nemen geen geautomatiseerde beslissingen over u, en gebruiken uw gegevens niet om AI-modellen te trainen.',
@@ -85,7 +90,6 @@ const sections: { icon: typeof Shield; title: string; items: React.ReactNode[] }
     items: [
       'Voor een goede schoolwerking: inschrijvingen, opvolging van taken en resultaten, aanwezigheden en communicatie.',
       'Juridische basis: de uitvoering van de overeenkomst tussen de school en de ouders, en het gerechtvaardigd belang van uw school bij haar onderwijsopdracht (art. 6 AVG).',
-      'Voor zorg- en gezondheidsgegevens geldt een strengere regel: die verwerken wij alleen op grond van de uitdrukkelijke toestemming van de ouder(s) (art. 9 AVG). Die toestemming kunt u op elk moment intrekken bij de school; wat daarvóór gebeurde blijft rechtmatig, maar wij stoppen dan met verdere verwerking en verwijderen de betrokken documenten.',
       'Technische logs verwerken wij op grond van ons gerechtvaardigd belang bij een veilig platform.',
       'Sommige gegevens zijn noodzakelijk: zonder naam, klas en een contactgegeven kan de school een leerling niet inschrijven of opvolgen. Het dossier is grotendeels optioneel — de school bepaalt wat zij nodig heeft.',
       'Twee dossiergegevens verdienen uitleg, omdat wij ze bewust bijhouden: de geboortedatum bepaalt in welke leeftijdsgroep een leerling hoort en is nodig voor activiteiten met een leeftijdsgrens, en het geslacht gebruikt de school om activiteiten voor jongens en meisjes apart te organiseren.',
@@ -138,7 +142,6 @@ const sections: { icon: typeof Shield; title: string; items: React.ReactNode[] }
       'Recht op inzage: u kunt opvragen welke gegevens wij over u bewaren, en daarvan gratis een kopie krijgen.',
       'Recht op verbetering: u kunt onjuiste of onvolledige gegevens laten aanpassen.',
       'Recht op wissen, beperking, overdraagbaarheid en bezwaar.',
-      'Recht om uw toestemming in te trekken, daar waar wij op toestemming steunen (zorg- en gezondheidsgegevens).',
       'Ouders of voogden oefenen deze rechten uit voor een minderjarig kind. Naarmate een leerling ouder wordt, kan hij of zij dat — in overleg met de school — ook zelf.',
       <>Neem contact op met uw schoolbeheerder om een recht uit te oefenen. U krijgt binnen een
         maand antwoord. Blijft dat uit, mail dan {PRIVACY_MAIL}.</>,

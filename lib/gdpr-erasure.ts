@@ -6,11 +6,13 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // Art. 17 erasure has to reach every place a person's data landed, not just the
 // profiles row. Until 2026-09-02 it did not: /api/user/delete removed the auth
 // user and leaned on FK cascade, which drops DB rows but leaves every uploaded
-// file sitting in its bucket — including student_documents of type 'disability'
-// (Art. 9 health data). Worse, the row pointing at the file cascaded away with
-// it, so the orphan was no longer discoverable. /api/user/anonymize cleaned
-// submission files only, and left the whole dossier — date of birth, address,
-// parent contacts, notes, documents — intact under the same UUID.
+// file sitting in its bucket. (At the time that included documents of type
+// 'disability' — Art. 9 health data; that document type was removed in migration
+// 29, but the erasure gap was real while it existed.) Worse, the row pointing at
+// the file cascaded away with it, so the orphan was no longer discoverable.
+// /api/user/anonymize cleaned submission files only, and left the whole dossier —
+// date of birth, address, parent contacts, notes, documents — intact under the
+// same UUID.
 //
 // This module is the single erasure path. Both routes call it, so they cannot
 // drift apart again.
@@ -73,7 +75,7 @@ export async function eraseUserData(
     if (n > 0) report.rows[table] = (report.rows[table] ?? 0) + n
   }
 
-  // ── Dossier documents (may be Art. 9 health data) ──────────────────────────
+  // ── Dossier documents ──────────────────────────────────────────────────────
   const { data: docs, error: docsErr } = await admin
     .from('student_documents')
     .select('id, file_url')
