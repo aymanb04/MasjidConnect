@@ -6,7 +6,7 @@ import { MeemMark } from '@/components/ui/MeemMark'
 import { supabase } from '@/lib/supabase/singleton'
 import { cn, getInitials } from '@/lib/utils'
 import type { Profile, Tenant } from '@/lib/types'
-import { LayoutDashboard, BookOpen, FileText, GraduationCap, Settings, LogOut, Shield, ChevronRight, ExternalLink, CalendarDays, Clock, Lock, ClipboardCheck, FolderOpen, Euro, CalendarClock, ScrollText } from 'lucide-react'
+import { LayoutDashboard, BookOpen, FileText, GraduationCap, Settings, LogOut, Shield, ChevronRight, ExternalLink, CalendarDays, Clock, Lock, ClipboardCheck, FolderOpen, Euro, CalendarClock, ScrollText, KeyRound } from 'lucide-react'
 
 interface Props {
   profile: Profile
@@ -121,7 +121,11 @@ export default function Sidebar({ profile, tenant, onClose }: Props) {
             <LogOut size={15} />
           </button>
         </div>
-        <div className="flex items-center gap-3 mt-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
+          <Link href="/wachtwoord" onClick={onClose}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            <KeyRound size={11}/> Wachtwoord
+          </Link>
           <Link href="/privacy" onClick={onClose}
             className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
             <Lock size={11}/> Privacy
