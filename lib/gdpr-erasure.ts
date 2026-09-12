@@ -160,6 +160,8 @@ export async function eraseUserData(
     ['student_notes', 'student_id'],
     ['student_details', 'student_id'],
     ['feedback', 'user_id'],
+    // Who confirmed reading which school document, and when (migration 30).
+    ['tenant_document_acks', 'user_id'],
   ] as const) {
     const { error, count } = await admin
       .from(table).delete({ count: 'exact' }).eq(column, userId)

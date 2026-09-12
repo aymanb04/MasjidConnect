@@ -21,6 +21,7 @@ const navItems = [
   { label: 'Lesmodules',  href: '/lesmodules',  icon: BookOpen,        roles: ['teacher','student'] },
   { label: 'Aanwezigheid', href: '/aanwezigheid', icon: ClipboardCheck,  roles: ['admin','teacher','student','leerlingenbegeleiding'] },
   { label: 'Rooster',     href: '/rooster',      icon: Clock,           roles: ['admin','teacher','student'] },
+  { label: 'Schooldocumenten', href: '/schooldocumenten', icon: ScrollText, roles: ['super_admin','admin','teacher','student','leerlingenbegeleiding'] },
   { label: 'Agenda',      href: '/agenda',       icon: CalendarDays,    roles: ['admin','teacher','student'] },
   { label: 'Oudercontact', href: '/oudercontact', icon: CalendarClock,  roles: ['admin','teacher','student'] },
   { label: 'Rapporten',   href: '/rapporten',    icon: ScrollText,      roles: ['admin','teacher','student','leerlingenbegeleiding'] },

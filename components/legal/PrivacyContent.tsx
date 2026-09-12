@@ -23,6 +23,12 @@
 //   · Nothing was addressed to a child, though children are the main data
 //     subjects — Art. 12(1) asks for plain language in exactly that case.
 //
+// v2 amended 2026-09-11 — schooldocumenten (migration 30) record who confirmed
+// reading which version of a school document and when. New personal data, so it
+// is disclosed here. The wording deliberately says it is the signed-in person's
+// own confirmation and not a parent's signature, because parents have no
+// accounts and a record implying otherwise would be worthless as evidence.
+//
 // v2 amended 2026-09-10 — the "zorg/beperking" document type was removed from
 // the product (migration 29). It was the only Art. 9 processing this platform
 // did, and it had never been used once, so the health-data disclosure, the
@@ -70,6 +76,7 @@ const sections: { icon: typeof Shield; title: string; items: React.ReactNode[] }
       'Aanwezigheidsregistraties en rapporten',
       'Leerlingendossier: geboortedatum, geslacht, contactgegevens van de ouder(s) en noodcontact, familieverband, notities en documenten die de school toevoegt.',
       'Betalingen van lidgeld of bijdragen, wanneer de school die in MasjidConnect opvolgt.',
+      'Documenten die de school in de app zet (zoals het schoolreglement), en de bevestiging dat u ze gelezen heeft: wie, welke versie en wanneer. Die bevestiging is een bevestiging door de aangemelde persoon zelf — geen handtekening van een ouder.',
       'Beperkte technische logs (bv. IP-adres) voor de beveiliging van het platform.',
       'Wij doen niet aan reclame of profilering, nemen geen geautomatiseerde beslissingen over u, en gebruiken uw gegevens niet om AI-modellen te trainen.',
     ],

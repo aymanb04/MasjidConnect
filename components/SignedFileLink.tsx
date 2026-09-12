@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/singleton'
 import { Loader2 } from 'lucide-react'
 
 interface Props {
-    bucket: 'submission-files' | 'module-documents' | 'student-documents'
+    bucket: 'submission-files' | 'module-documents' | 'student-documents' | 'tenant-documents'
     path: string
     className?: string
     children: React.ReactNode
