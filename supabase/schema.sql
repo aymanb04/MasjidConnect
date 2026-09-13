@@ -917,12 +917,20 @@ CREATE POLICY "super_admin_all_announcements" ON public.announcements
 -- ============================================================
 
 CREATE POLICY "student_view_assignments" ON public.assignments
-  FOR SELECT USING (
+  FOR SELECT TO authenticated
+  USING (
     is_published = true
     AND EXISTS (
       SELECT 1 FROM class_students
       WHERE class_students.class_id = assignments.class_id
-        AND class_students.student_id = auth.uid()
+        AND class_students.student_id = (SELECT auth.uid())
+    )
+    -- Per-pupil homework (migration 31). The helpers are SECURITY DEFINER on
+    -- purpose: reading assignment_students directly here recursed, because its
+    -- own policy reads assignments back (42P17, fixed by migration 32).
+    AND (
+      NOT public.assignment_is_targeted(assignments.id)
+      OR public.assignment_targets_me(assignments.id)
     )
   );
 
@@ -1991,3 +1999,84 @@ CREATE POLICY teacher_manage_own_slots ON public.oudercontact_slots
     AND tenant_id = (SELECT get_my_tenant_id())
     AND (SELECT get_my_role())::text = 'teacher'
   );
+
+-- ============================================================
+-- Migrations 30-32 (2026-09-11 … 09-13)
+-- ============================================================
+-- Appended rather than woven in: this snapshot has drifted from reality before
+-- (see feedback_schema_sql_drift). information_schema and pg_policies remain
+-- the truth; this file is a convenience.
+
+-- ---- Migration 30: schooldocumenten per tenant ---------------------------
+
+CREATE TABLE IF NOT EXISTS public.tenant_documents (
+  id           uuid NOT NULL DEFAULT uuid_generate_v4(),
+  tenant_id    uuid NOT NULL,
+  doc_type     text NOT NULL DEFAULT 'reglement'
+    CHECK (doc_type IN ('reglement', 'kalender', 'brief', 'other')),
+  title        text NOT NULL,
+  file_name    text NOT NULL,
+  file_url     text NOT NULL,          -- storage path, not a public URL
+  version      integer NOT NULL DEFAULT 1,
+  requires_ack boolean NOT NULL DEFAULT true,
+  is_published boolean NOT NULL DEFAULT true,
+  uploaded_by  uuid NOT NULL,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT tenant_documents_pkey PRIMARY KEY (id),
+  CONSTRAINT tenant_documents_tenant_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE,
+  CONSTRAINT tenant_documents_uploader_fkey FOREIGN KEY (uploaded_by) REFERENCES public.profiles(id)
+);
+
+-- An acknowledgement is the signed-in person's own confirmation that they read
+-- version N. It is NOT a parent's signature — see migration 30's header.
+CREATE TABLE IF NOT EXISTS public.tenant_document_acks (
+  id          uuid NOT NULL DEFAULT uuid_generate_v4(),
+  tenant_id   uuid NOT NULL,           -- denormalised: a join would hit RLS
+  document_id uuid NOT NULL,
+  user_id     uuid NOT NULL,
+  version     integer NOT NULL,
+  acked_at    timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT tenant_document_acks_pkey PRIMARY KEY (id),
+  CONSTRAINT tenant_document_acks_unique UNIQUE (document_id, user_id, version),
+  CONSTRAINT tenant_document_acks_doc_fkey FOREIGN KEY (document_id) REFERENCES public.tenant_documents(id) ON DELETE CASCADE,
+  CONSTRAINT tenant_document_acks_user_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
+  CONSTRAINT tenant_document_acks_tenant_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE
+);
+-- Policies: members_view_tenant_documents, admin_manage_tenant_documents,
+-- own_insert_document_ack (user_id = auth.uid() — nobody acknowledges for
+-- another person), view_document_acks. No update/delete on acks by design.
+-- Bucket: tenant-documents (private, 10 MB).
+
+-- ---- Migration 31 + 32: huiswerk per leerling ----------------------------
+
+CREATE TABLE IF NOT EXISTS public.assignment_students (
+  id            uuid NOT NULL DEFAULT uuid_generate_v4(),
+  assignment_id uuid NOT NULL,
+  student_id    uuid NOT NULL,
+  task_text     text,                  -- e.g. "soera 78, vers 1-20"
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT assignment_students_pkey PRIMARY KEY (id),
+  CONSTRAINT assignment_students_unique UNIQUE (assignment_id, student_id),
+  CONSTRAINT assignment_students_assignment_fkey FOREIGN KEY (assignment_id) REFERENCES public.assignments(id) ON DELETE CASCADE,
+  CONSTRAINT assignment_students_student_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id) ON DELETE CASCADE
+);
+-- No rows for an assignment = the whole class. Rows = only those pupils.
+-- Policies: student_view_own_assignment_row (own row only — the full list is a
+-- ranking of who has memorised most), staff_manage_assignment_students.
+
+-- These exist ONLY to break the RLS cycle that migration 31 created. Do not
+-- inline them back into the policy.
+CREATE OR REPLACE FUNCTION public.assignment_is_targeted(a_id uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (SELECT 1 FROM public.assignment_students WHERE assignment_id = a_id);
+$$;
+
+CREATE OR REPLACE FUNCTION public.assignment_targets_me(a_id uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.assignment_students
+    WHERE assignment_id = a_id AND student_id = auth.uid()
+  );
+$$;
