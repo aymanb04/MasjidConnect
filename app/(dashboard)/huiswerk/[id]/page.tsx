@@ -15,6 +15,10 @@ export default function HuiswerkDetailPage() {
   const { id } = useParams()
   const { profile, loading: profileLoading } = useProfile()
   const [assignment, setAssignment] = useState<any>(null)
+  // The pupil's own task when the teacher set homework per pupil (migration 31).
+  // RLS returns only this pupil's row, so a classmate's task never arrives here.
+  const [myTask, setMyTask] = useState<string | null>(null)
+  const [perStudentRows, setPerStudentRows] = useState<any[]>([])
   const [mySubmission, setMySubmission] = useState<any>(null)
   const [allSubmissions, setAllSubmissions] = useState<any[]>([])
   const [studentCount, setStudentCount] = useState(0)
@@ -35,6 +39,24 @@ export default function HuiswerkDetailPage() {
     const { data: a, error: aErr } = await supabase.from('assignments').select('*, classes(name, color), profiles!assignments_created_by_fkey(first_name, last_name)').eq('id', id).single()
     if (aErr) { console.error(aErr); setLoadErr(aErr); setLoading(false); return }
     setAssignment(a)
+
+    // Separate query, not a nested join: a join across RLS-protected tables
+    // silently returns nothing here.
+    if (profile!.role === 'student') {
+      const { data: mine } = await supabase
+        .from('assignment_students')
+        .select('task_text')
+        .eq('assignment_id', id)
+        .eq('student_id', profile!.id)
+        .maybeSingle()
+      setMyTask(mine?.task_text ?? null)
+    } else {
+      const { data: rows } = await supabase
+        .from('assignment_students')
+        .select('student_id, task_text')
+        .eq('assignment_id', id)
+      setPerStudentRows(rows ?? [])
+    }
 
     if (profile!.role === 'student') {
       const { data: sub } = await supabase
@@ -109,6 +131,23 @@ export default function HuiswerkDetailPage() {
           <div className="text-gray-400">{formatDateTime(assignment.created_at)}</div>
         </div>
         {assignment.description && <div className="mt-4 p-4 bg-gray-50 rounded-xl text-sm text-gray-700 leading-relaxed whitespace-pre-wrap border border-border">{assignment.description}</div>}
+
+        {/* The pupil's own task, shown above the shared description because it is
+            the part that is actually theirs. */}
+        {myTask && (
+          <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary-700">Jouw opdracht</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-gray-800">{myTask}</p>
+          </div>
+        )}
+
+        {/* Staff: make it obvious this is not a whole-class assignment. */}
+        {profile?.role !== 'student' && perStudentRows.length > 0 && (
+          <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900">
+            Dit huiswerk is per leerling toegewezen — {perStudentRows.length}{' '}
+            {perStudentRows.length === 1 ? 'leerling' : 'leerlingen'} zien het. De rest van de klas niet.
+          </p>
+        )}
         <div className="flex gap-2 mt-4">
           {assignment.allow_file_submission && <span className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg">📎 Bestand uploaden</span>}
           {assignment.allow_text_submission && <span className="text-xs bg-purple-50 text-purple-700 px-2.5 py-1 rounded-lg">✏️ Tekst invoeren</span>}
