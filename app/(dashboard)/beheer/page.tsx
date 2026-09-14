@@ -16,6 +16,7 @@ import { ReactivateUserButton } from '@/components/features/admin/ReactivateUser
 import { MoveStudentModal } from '@/components/features/admin/MoveStudentModal'
 import { EditUserModal } from '@/components/features/admin/EditUserModal'
 import { ResetPasswordButton } from '@/components/features/admin/ResetPasswordButton'
+import { ExportUserButton } from '@/components/features/admin/ExportUserButton'
 
 export default function BeheerPage() {
   const { profile, loading: profileLoading } = useProfile()
@@ -320,6 +321,7 @@ export default function BeheerPage() {
                     <div className="text-xs text-gray-400 truncate">{u.email}</div>
                   </div>
                   <span className={`badge flex-shrink-0 ${rb.color}`}>{rb.label}</span>
+                  <ExportUserButton userId={u.id} name={`${u.first_name} ${u.last_name}`} />
                   {u.id !== profile.id && (
                     <ResetPasswordButton userId={u.id} name={`${u.first_name} ${u.last_name}`} />
                   )}

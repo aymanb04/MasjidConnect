@@ -9,6 +9,10 @@ const LIMITS: Record<string, number> = {
   // Hands back a working credential, so it is worth more to an attacker than
   // the other admin actions. A whole class can still be reset in one sitting.
   '/api/user/set-password': 40,
+  // An export is a complete dossier in one response — the most concentrated
+  // personal data the API ever returns. Low enough to make bulk harvesting
+  // impractical, high enough for a school working through a batch of requests.
+  '/api/export':          10,
   '/api/user/reactivate': 30,
   '/api/invite':          30,
   '/api/feedback':        10,

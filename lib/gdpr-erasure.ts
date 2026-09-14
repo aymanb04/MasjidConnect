@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { OWNED_TABLES, SCRUBBED_TABLES } from './personal-data-map'
 
 // ============================================================
 // GDPR erasure — one implementation, both routes
@@ -156,26 +157,19 @@ export async function eraseUserData(
   }
 
   // ── Rows that are entirely about this person ───────────────────────────────
-  for (const [table, column] of [
-    ['student_notes', 'student_id'],
-    ['student_details', 'student_id'],
-    ['feedback', 'user_id'],
-    // Who confirmed reading which school document, and when (migration 30).
-    ['tenant_document_acks', 'user_id'],
-  ] as const) {
+  // The table list lives in personal-data-map.ts, shared with the export route:
+  // what we can erase must be exactly what we can export (Art. 15/17/20 read the
+  // same footprint).
+  for (const { table, key } of OWNED_TABLES) {
     const { error, count } = await admin
-      .from(table).delete({ count: 'exact' }).eq(column, userId)
+      .from(table).delete({ count: 'exact' }).eq(key, userId)
     if (error) report.errors.push(`${table} delete: ${error.message}`)
     else countRows(table, count ?? 0)
   }
 
   // ── Free text about this person, on rows kept for statistics ───────────────
-  for (const [table, column] of [
-    ['attendance_records', 'note'],
-    ['exam_scores', 'notes'],
-    ['oudercontact_bookings', 'note'],
-  ] as const) {
-    const { error } = await admin.from(table).update({ [column]: null }).eq('student_id', userId)
+  for (const { table, key, column } of SCRUBBED_TABLES) {
+    const { error } = await admin.from(table).update({ [column]: null }).eq(key, userId)
     if (error) report.errors.push(`${table} scrub: ${error.message}`)
   }
 
