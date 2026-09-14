@@ -10,7 +10,7 @@ import { Users, GraduationCap, Mail, Shield, Archive, ChevronDown, ChevronRight,
 import Link from 'next/link'
 import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 import { CreateClassButton } from '@/components/features/admin/CreateClassButton'
-import CsvImportButton from '@/components/features/admin/CsvImportButton'
+// CsvImportButton is intentionally not rendered — see the note at the toolbar.
 import { DeleteUserButton } from '@/components/features/admin/DeleteUserButton'
 import { ReactivateUserButton } from '@/components/features/admin/ReactivateUserButton'
 import { MoveStudentModal } from '@/components/features/admin/MoveStudentModal'
@@ -260,7 +260,10 @@ export default function BeheerPage() {
               <Users size={17} className="text-primary-600"/> Gebruikers
             </h2>
             <div className="flex gap-2">
-              <CsvImportButton tenantId={profile.tenant_id!} onImported={loadData}/>
+              {/* CSV-import verborgen 2026-09-14: whole-school onboarding loopt
+                  operator-side, en deze weg loopt vast op de 30/uur limiet van
+                  /api/invite. De component blijft bestaan voor kleine
+                  tussentijdse intakes — zet IMPORT_DISABLED terug op false. */}
               <InviteUserButton tenantId={profile.tenant_id!} onInvited={loadData}/>
             </div>
           </div>

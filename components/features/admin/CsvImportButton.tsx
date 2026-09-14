@@ -17,7 +17,16 @@ interface Props {
 }
 
 const MAX_IMPORT_ROWS = 500
-const IMPORT_DISABLED = false
+// Switched OFF 2026-09-14. Whole-school onboarding runs operator-side
+// (scripts/bulk-onboard.mjs: service role, no invite mails, no rate limit), so
+// this path is redundant for the one thing it would be used for — and it fails
+// badly at that size: /api/invite allows 30 per hour, so the tail of a 119-row
+// import 429s and the admin is left guessing which pupils exist.
+//
+// The flag was previously a LIE: it rendered "import is uitgeschakeld" while the
+// button below stayed live and imported anyway. Now it actually blocks, in the
+// handler as well as the button, so re-enabling is a deliberate act.
+const IMPORT_DISABLED = true
 // /api/invite is rate-limited to 30 requests/hour per caller (lib/rate-limit.ts).
 // Above this, the tail of a bulk import gets 429'd and must be retried in the
 // next hour — fine for a small mid-year intake, painful for onboarding a whole
@@ -159,6 +168,11 @@ export default function CsvImportButton({ tenantId, onImported }: Props) {
     }
 
     async function handleImport() {
+        // Hard stop, not just a banner — see IMPORT_DISABLED above.
+        if (IMPORT_DISABLED) {
+            setError('Import staat uit. Neem contact op met MasjidConnect voor het opzetten van een volledige school.')
+            return
+        }
         setLoading(true)
         const importResults: ImportResult[] = []
 
@@ -464,7 +478,7 @@ export default function CsvImportButton({ tenantId, onImported }: Props) {
                                             Import uitgeschakeld
                                         </button>
                                     ) : (
-                                        <button onClick={handleImport} disabled={loading} className="btn-primary flex-1 justify-center">
+                                        <button onClick={handleImport} disabled={loading || IMPORT_DISABLED} className="btn-primary flex-1 justify-center">
                                             {loading
                                                 ? <><Loader2 size={15} className="animate-spin"/> Importeren… ({mappedRows.length} accounts)</>
                                                 : `${mappedRows.length} gebruikers importeren`
