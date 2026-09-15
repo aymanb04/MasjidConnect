@@ -1,148 +1,115 @@
 # MasjidConnect
 
-Digital platform for educational centres — built with Next.js 14 + Supabase.
+School administration platform for mosque weekend schools. Coordinators manage classes and enrolment, teachers set homework, share course material and mark attendance, and students submit work and see their grades. It runs in production at [masjidconnect.be](https://www.masjidconnect.be) and is in daily use by a paying client.
 
-**Production:** [https://www.masjidconnect.be](https://www.masjidconnect.be)
-(the bare `masjidconnect.be` redirects here — `www` is the Vercel primary domain
-and the canonical host, pinned in `lib/site.ts`)
+Built and operated solo: product, schema, application code, deployment and support.
+
+## Screenshots
+
+> Replace these three with real images. Dashboard, attendance marking, class detail. Put the files in `docs/img/`.
+
+![Dashboard](docs/img/dashboard.png)
+![Attendance](docs/img/attendance.png)
+![Class detail](docs/img/class-detail.png)
+
+## Multi tenancy
+
+Every mosque is a tenant. Tenant isolation is enforced in Postgres through row level security rather than in application code, so a missing filter in a query cannot leak another school's data. Policies live in `supabase/schema.sql`.
+
+Four roles:
+
+| Role | Scope |
+| --- | --- |
+| `super_admin` | Platform operator. Sees all tenants, creates new ones. |
+| `admin` | Mosque coordinator. Manages classes and users inside one tenant. |
+| `teacher` | Sets homework, shares modules, marks attendance. |
+| `student` | Submits work, reads material, sees grades. |
+
+Storage follows the same rule. Submission files, module documents and student reports sit in private buckets behind signed access. Avatars and tenant logos are public.
+
+The school year is the other axis. A year transition rolls classes forward, archives the previous year's grades and attendance, and keeps historical records readable without leaving them editable.
+
+> Add two or three sentences on how the year transition actually works. It is one of the few operations that touches every table at once and it is worth explaining.
+
+## What broke against real data
+
+Most of the interesting work happened after the first school started using it. These are the problems that only appear once there are real rows, real files and real concurrent users.
+
+**Row level security cost.** Policies that read correctly turned out to be expensive, because a policy expression is evaluated per row and a subquery inside one runs per row as well.
+
+> Say what you changed. Hoisting the tenant lookup, an index that made the policy sargable, whatever it was, plus a before and after timing if you have one.
+
+**N plus one queries.** Listing a class with its students, assignments and submissions fanned out into one query per child record.
+
+> Name the pages this hit and how you fixed it, embedded selects, a view, batching.
+
+**Bulk CSV import timeouts.** Importing a full school's student list exceeded the serverless function limit on the first attempt.
+
+> Batch size, chunking, background processing, whichever it was, and what the ceiling is now.
+
+**Connection pooling.** Serverless functions open a connection per invocation, and Postgres runs out long before traffic looks heavy. Routed through Supavisor in transaction mode.
+
+> Add the failure symptom you actually saw, so the reader knows this was a real incident and not a precaution.
+
+**GDPR endpoints.** The platform holds minors' names, attendance and grades, so data subject access and erasure had to be real operations rather than a policy document.
+
+> One or two sentences on what these endpoints do and how erasure interacts with tenant data you are legally required to keep.
 
 ## Stack
 
-- **Frontend + Backend**: Next.js 14 (App Router)
-- **Database + Auth + Storage**: Supabase
-- **Styling**: Tailwind CSS
-- **Hosting**: Vercel
-- **Domain**: `masjidconnect.be` (Combell registrar, DNS via Combell, A-records → Vercel)
-
----
-
-## Local setup
-
-### 1. Clone the repository
-```bash
-git clone <your-repo>
-cd masjidconnect
-npm install
-```
-
-### 2. Create a Supabase project
-1. Go to [supabase.com](https://supabase.com) and create a free project
-2. Open the **SQL Editor** and run the full `supabase/schema.sql` file
-3. Go to **Storage** and create 5 buckets:
-   - `submission-files` — Private
-   - `module-documents` — Private
-   - `student-reports` — Private
-   - `avatars` — Public
-   - `tenant-logos` — Public
-
-### 3. Set environment variables
-```bash
-cp .env.example .env.local
-```
-Fill in your Supabase URL and keys (found in Supabase → Settings → API).
-
-| Variable | Description |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service-role key (server-only, never exposed to client) |
-| `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` for local dev |
-| `DISCORD_FEEDBACK_WEBHOOK_URL` | Optional — posts user feedback to a Discord channel |
-
-### 4. Start the dev server
-```bash
-npm run dev
-```
-Open [http://localhost:3000](http://localhost:3000)
-
----
-
-## Creating the first Super Admin
-
-1. Go to Supabase → **Authentication → Users** → **Add user**
-2. Create a user with your email
-3. Go to **Table Editor → profiles** and set the `role` column to `super_admin`
-4. Set `tenant_id` to NULL
-5. Log in at `/login` — you'll see the Super Admin dashboard
-
----
+Next.js 14 with the App Router, doing both frontend and API routes. Supabase for Postgres, auth and storage. Tailwind for styling. Hosted on Vercel.
 
 ## Project structure
 
 ```
 app/
-  login/                    — Login page
+  login/                  Login
   (dashboard)/
-    dashboard/              — Role-specific home dashboard
-    klassen/                — Class list + detail + grades + reports
-    huiswerk/               — Assignments + submissions
-    lesmodules/             — Course modules + documents
-    aanwezigheid/           — Attendance marking and history
-    rooster/                — Weekly schedule
-    agenda/                 — Calendar view
-    beheer/                 — Admin: user management, year transition
-    superadmin/             — Super admin: all mosques overview
+    dashboard/            Role specific home
+    klassen/              Classes, grades, reports
+    huiswerk/             Assignments and submissions
+    lesmodules/           Course modules and documents
+    aanwezigheid/         Attendance
+    rooster/              Weekly schedule
+    agenda/               Calendar
+    beheer/               Admin, user management, year transition
+    superadmin/           Cross tenant overview
 components/
-  layout/                   — Sidebar
-  features/
-    assignments/            — Homework components
-    modules/                — Course module components
-    admin/                  — Management components
-    announcements/          — Announcements card
-    feedback/               — Feedback button
+  layout/                 Sidebar
+  features/               Assignments, modules, admin, announcements, feedback
 lib/
-  supabase/                 — Supabase client helpers
-  hooks/                    — useProfile and other hooks
-  types.ts                  — TypeScript interfaces
-  utils.ts                  — Utility functions
+  supabase/               Client helpers
+  hooks/                  useProfile and others
+  types.ts                Shared interfaces
+  utils.ts
 supabase/
-  schema.sql                — Full database schema with RLS policies
+  schema.sql              Schema and RLS policies
 ```
 
----
+## Roadmap
 
-## Deploying to Vercel
+Schedule export to ICS and Google Calendar, a parent portal linked to a child account, and Quran memorisation tracking.
 
-Production runs on Vercel at `masjidconnect.be`.
+## Running locally
 
-### Environment variables (Vercel production)
-| Key | Value |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role key (server-only) |
-| `NEXT_PUBLIC_SITE_URL` | `https://masjidconnect.be` |
-| `DISCORD_FEEDBACK_WEBHOOK_URL` | Optional Discord webhook for feedback notifications |
+```bash
+git clone <repo>
+cd masjidconnect
+npm install
+cp .env.example .env.local
+npm run dev
+```
 
-### DNS (Combell)
-A-records for both apex and `www` pointing to Vercel's anycast IP (see Vercel
-Domains panel for the current address). **No AAAA records** — they point to
-Combell servers and break IPv6 clients. Mail records (MX, SPF, DKIM, CNAMEs
-for `autoconfig`/`autodiscover`/`mail`) remain on Mailprotect.
+Then create a Supabase project, run `supabase/schema.sql` in the SQL editor, and create the storage buckets listed above with the privacy settings shown.
 
-### Supabase Auth
-- Site URL: `https://masjidconnect.be`
-- Redirect URLs: `https://masjidconnect.be/**` and `http://localhost:3000/**` for local dev
+Environment variables:
 
----
+| Variable | Description |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key, server only, never sent to the client |
+| `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` in development |
+| `DISCORD_FEEDBACK_WEBHOOK_URL` | Optional, posts in app feedback to Discord |
 
-## Roles
-
-| Role | Description |
-|---|---|
-| `super_admin` | MasjidConnect operator — sees all mosques, creates tenants |
-| `admin` | Mosque coordinator — manages classes and users within their mosque |
-| `teacher` | Teacher — assigns homework, shares course materials, marks attendance |
-| `student` | Student — submits assignments, views course materials and grades |
-
----
-
-## Planned features
-- Schedule export (ICS / Google Calendar)
-- Parent portal (linked to child account)
-- In-app messaging (replace WhatsApp usage)
-- Email notifications (Resend)
-- Payment integration (Stripe — school fees)
-- Multilingual support (NL / FR / AR)
-- Quran memorisation tracker (hifz progress)
-- Native mobile app (after PWA proves value)
+Operator setup, production DNS and deployment notes are kept out of this repo.
