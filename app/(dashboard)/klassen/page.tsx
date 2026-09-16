@@ -197,6 +197,19 @@ export default function KlassenPage() {
     return acc
   }, {} as Record<string, any[]>)
 
+  // Headings follow the order the school created their groups, the same rule
+  // Aanwezigheid uses. Alphabetical put Jongens first and Tamhiedi last, so the
+  // two screens disagreed about the order of the same seven groups.
+  const groupAge = new Map<string, number>()
+  for (const klas of filteredClasses) {
+    const key = isSuperAdmin
+      ? `${klas.tenant_id}|||${klas.groups?.name ?? ''}`
+      : (klas.groups?.name ?? '')
+    const t = klas.group_created_at ? Date.parse(klas.group_created_at) : Number.MAX_SAFE_INTEGER
+    if (!groupAge.has(key) || t < groupAge.get(key)!) groupAge.set(key, t)
+  }
+  const age = (k: string) => groupAge.get(k) ?? Number.MAX_SAFE_INTEGER
+
   const groupKeys = Object.keys(grouped).sort((a, b) => {
     if (isSuperAdmin) {
       const tenantA = grouped[a][0]?.tenants?.name ?? ''
@@ -207,11 +220,13 @@ export default function KlassenPage() {
       const [, groupB] = b.split('|||')
       if (groupA === '') return 1
       if (groupB === '') return -1
-      return groupA.localeCompare(groupB, 'nl')
+      const byAge = age(a) - age(b)
+      return byAge !== 0 ? byAge : groupA.localeCompare(groupB, 'nl')
     }
     if (a === '') return 1
     if (b === '') return -1
-    return a.localeCompare(b, 'nl')
+    const byAge = age(a) - age(b)
+    return byAge !== 0 ? byAge : a.localeCompare(b, 'nl')
   })
 
   return (
