@@ -7,6 +7,7 @@ import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, EmptyState, LoadError } from '@/components/ui/PageShell'
 import { GraduationCap, Users, BookOpen, Building2 } from 'lucide-react'
 import Link from 'next/link'
+import { sortClasses } from '@/lib/class-order'
 
 export default function KlassenPage() {
   const { profile, loading: profileLoading } = useProfile()
@@ -48,7 +49,7 @@ export default function KlassenPage() {
 
       const { data: d, error: e } = await supabase
         .from('class_students')
-        .select('classes(*, school_years(name), groups(name))')
+        .select('classes(*, school_years(name), groups(name, created_at))')
         .eq('student_id', profile!.id)
       if (e) { console.error('[klassen] student query error:', e); setLoadErr(e); setLoading(false); return }
       const all = d?.map((x: any) => x.classes).filter(Boolean) ?? []
@@ -75,7 +76,7 @@ export default function KlassenPage() {
 
       const { data: d, error: e } = await supabase
         .from('class_teachers')
-        .select('classes(*, school_years(name), groups(name))')
+        .select('classes(*, school_years(name), groups(name, created_at))')
         .eq('teacher_id', profile!.id)
       if (e) { console.error('[klassen] teacher query error:', e); setLoadErr(e); setLoading(false); return }
       const all = d?.map((x: any) => x.classes).filter(Boolean) ?? []
@@ -110,9 +111,8 @@ export default function KlassenPage() {
 
       let query = supabase
         .from('classes')
-        .select('*, school_years(name), groups(name)')
+        .select('*, school_years(name), groups(name, created_at)')
         .eq('tenant_id', profile!.tenant_id)
-        .order('name')
 
       if (effectiveYearId) {
         query = query.eq('school_year_id', effectiveYearId)
@@ -129,7 +129,7 @@ export default function KlassenPage() {
     } else if (profile!.role === 'super_admin') {
       const { data: d, error: e } = await supabase
         .from('classes')
-        .select('*, school_years(name), groups(name), tenants!classes_tenant_id_fkey(id, name)')
+        .select('*, school_years(name), groups(name, created_at), tenants!classes_tenant_id_fkey(id, name)')
         .eq('is_archived', false)
         .order('name')
       if (e) { console.error('[klassen] super_admin query error:', e); setLoadErr(e); setLoading(false); return }
@@ -147,7 +147,11 @@ export default function KlassenPage() {
       setMosques(uniqueMosques.sort((a, b) => a.name.localeCompare(b.name, 'nl')))
     }
 
-    setClasses(data)
+    // Group order first, then the order the classes were created in. Plain
+    // alphabetical interleaved all seven groups (De Kroon, 2026-09-16).
+    setClasses(sortClasses(data.map((c: any) => ({
+      ...c, group_name: c.groups?.name, group_created_at: c.groups?.created_at,
+    }))))
 
     if (data.length > 0) {
       const { data: sc } = await supabase

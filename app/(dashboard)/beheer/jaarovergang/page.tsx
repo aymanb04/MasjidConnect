@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
+import { sortClasses } from '@/lib/class-order'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import {
@@ -155,10 +156,9 @@ export default function JaarovergangPage() {
     // 1. Fetch classes for active year
     const { data: classData, error: classError } = await supabase
       .from('classes')
-      .select('*, groups(name)')
+      .select('*, groups(name, created_at)')
       .eq('school_year_id', activeYear.id)
       .eq('is_archived', false)
-      .order('name')
 
     if (classError) {
       alert('Fout bij laden van klassen: ' + classError.message)
@@ -166,7 +166,9 @@ export default function JaarovergangPage() {
       return
     }
 
-    const classRows = classData ?? []
+    const classRows = sortClasses((classData ?? []).map((c: any) => ({
+      ...c, group_name: c.groups?.name, group_created_at: c.groups?.created_at,
+    })))
     if (classRows.length === 0) {
       setCurrentClasses([])
       setLoadingClasses(false)

@@ -8,6 +8,7 @@ import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { CheckCircle2, XCircle, Clock, FileCheck, ArrowLeft, Loader2, Users, ChevronRight, AlertTriangle, X } from 'lucide-react'
 import type { AttendanceStatus } from '@/lib/types'
+import { sortClasses } from '@/lib/class-order'
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -99,30 +100,32 @@ export default function AanwezigheidPage() {
     } else if (role === 'teacher') {
       const { data, error } = await supabase
         .from('class_teachers')
-        .select('classes(id, name, color, groups(name), school_years(name))')
+        .select('classes(id, name, color, created_at, groups(name, created_at), school_years(name))')
         .eq('teacher_id', profile!.id)
       if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
-      setClasses(
+      setClasses(sortClasses(
         (data ?? []).map((r: any) => ({
           id: r.classes.id, name: r.classes.name, color: r.classes.color,
-          group_name: r.classes.groups?.name, school_year_name: r.classes.school_years?.name,
+          created_at: r.classes.created_at,
+          group_name: r.classes.groups?.name, group_created_at: r.classes.groups?.created_at,
+          school_year_name: r.classes.school_years?.name,
         }))
-      )
+      ))
     } else {
       // admin / super_admin
       const { data, error } = await supabase
         .from('classes')
-        .select('id, name, color, groups(name), school_years(name)')
+        .select('id, name, color, created_at, groups(name, created_at), school_years(name)')
         .eq('tenant_id', profile!.tenant_id)
         .eq('is_archived', false)
-        .order('name')
       if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
-      setClasses(
+      setClasses(sortClasses(
         (data ?? []).map((c: any) => ({
-          id: c.id, name: c.name, color: c.color,
-          group_name: c.groups?.name, school_year_name: c.school_years?.name,
+          id: c.id, name: c.name, color: c.color, created_at: c.created_at,
+          group_name: c.groups?.name, group_created_at: c.groups?.created_at,
+          school_year_name: c.school_years?.name,
         }))
-      )
+      ))
     }
     setLoading(false)
   }

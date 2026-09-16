@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
+import { sortClasses } from '@/lib/class-order'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { getRoleBadge, formatDate } from '@/lib/utils'
@@ -56,15 +57,17 @@ export default function BeheerPage() {
     const [{ data: u, error: uErr }, { data: c, error: cErr }, { data: inv }] = await Promise.all([
       supabase.from('profiles').select('*').eq('tenant_id', tid).eq('is_active', true).order('last_name'),
       supabase.from('classes')
-        .select('*, school_years(name), groups(name), class_students(id), class_teachers(profiles(first_name, last_name))')
-        .eq('tenant_id', tid).eq('is_archived', false).order('name'),
+        .select('*, school_years(name), groups(name, created_at), class_students(id), class_teachers(profiles(first_name, last_name))')
+        .eq('tenant_id', tid).eq('is_archived', false),
       supabase.from('invitations').select('*').eq('tenant_id', tid).is('accepted_at', null)
         .order('created_at', { ascending: false }),
     ])
 
     if (uErr || cErr) { console.error(uErr || cErr); setLoadErr(uErr || cErr); setLoading(false); return }
     setUsers(u ?? [])
-    setClasses(c ?? [])
+    setClasses(sortClasses((c ?? []).map((x: any) => ({
+      ...x, group_name: x.groups?.name, group_created_at: x.groups?.created_at,
+    }))))
     setInvitations(inv ?? [])
     setLoading(false)
   }
