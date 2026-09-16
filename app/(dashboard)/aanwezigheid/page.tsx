@@ -8,7 +8,7 @@ import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { CheckCircle2, XCircle, Clock, FileCheck, ArrowLeft, Loader2, Users, ChevronRight, AlertTriangle, X } from 'lucide-react'
 import type { AttendanceStatus } from '@/lib/types'
-import { sortClasses } from '@/lib/class-order'
+import { sortClasses, groupClasses } from '@/lib/class-order'
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -236,6 +236,11 @@ function ClassListView({
       })
   }, [classes])
 
+  // With the group in a heading, the school year was the only thing left on
+  // every row -- and it is the same year on all of them. Show it only when the
+  // list actually spans more than one year (archived classes of a past year).
+  const showYear = new Set(classes.map(c => c.school_year_name).filter(Boolean)).size > 1
+
   if (classes.length === 0) {
     return (
       <div className="card p-8 text-center">
@@ -264,9 +269,17 @@ function ClassListView({
         </button>
       )}
 
-      {/* Class cards */}
-      <div className="card divide-y divide-border overflow-hidden">
-        {classes.map(cls => {
+      {/* Class cards, one block per group. The group is a heading rather than a
+          subtitle: the card title is the subject, so without headings the list
+          reads as "Arabisch, Islam, Qur'an" nineteen times over. */}
+      <div className="space-y-5">
+        {groupClasses(classes).map(grp => (
+        <div key={grp.name}>
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">
+            {grp.name}
+          </h2>
+          <div className="card divide-y divide-border overflow-hidden">
+        {grp.items.map(cls => {
           const doneToday = doneTodayIds.has(cls.id)
           return (
             <div key={cls.id} className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors">
@@ -278,9 +291,9 @@ function ClassListView({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm text-gray-900 truncate">{cls.name}</p>
-                <p className="text-xs text-gray-400">
-                  {[cls.group_name, cls.school_year_name].filter(Boolean).join(' · ')}
-                </p>
+                {showYear && cls.school_year_name && (
+                  <p className="text-xs text-gray-400">{cls.school_year_name}</p>
+                )}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {canMark && (
@@ -307,6 +320,9 @@ function ClassListView({
             </div>
           )
         })}
+          </div>
+        </div>
+        ))}
       </div>
     </div>
   )

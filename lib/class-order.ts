@@ -51,3 +51,28 @@ export function compareClasses(a: ClassForOrdering, b: ClassForOrdering): number
 export function sortClasses<T extends ClassForOrdering>(rows: T[]): T[] {
   return [...rows].sort(compareClasses)
 }
+
+/**
+ * Split an already-sorted list into one block per group, preserving order.
+ *
+ * Sorting alone did not answer what De Kroon asked for. Their class cards lead
+ * with the SUBJECT (Arabisch / Islam / Qur'an) and carry the group as small grey
+ * text, so nineteen correctly-ordered rows still read as the same three words
+ * repeating. The school thinks in groups -- the list they sent was
+ * "Tamhidie, Niveau 1, Niveau 2, ..." -- so the group belongs in a heading, not
+ * a subtitle.
+ *
+ * Relies on the caller having sorted first, which keeps each group contiguous.
+ */
+export function groupClasses<T extends ClassForOrdering>(
+  rows: T[],
+): { name: string; items: T[] }[] {
+  const out: { name: string; items: T[] }[] = []
+  for (const row of rows) {
+    const name = row.group_name ?? 'Overige'
+    const last = out[out.length - 1]
+    if (last && last.name === name) last.items.push(row)
+    else out.push({ name, items: [row] })
+  }
+  return out
+}
