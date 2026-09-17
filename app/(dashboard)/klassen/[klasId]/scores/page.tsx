@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
-import { ArrowLeft, GraduationCap, Plus, X, Check, Pencil, Loader2 } from 'lucide-react'
+import { ArrowLeft, GraduationCap, Plus, X, Check, Pencil, Loader2, SlidersHorizontal } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import StudentScores from '@/components/features/scores/StudentScores'
@@ -40,6 +40,12 @@ function StaffScoresPage() {
   const [creatingTest, setCreatingTest] = useState(false)
   const [editingTestCell, setEditingTestCell] = useState<{ studentId: string; testId: string } | null>(null)
   const [editTestScore, setEditTestScore]     = useState('')
+
+  // Handmatige beoordelingen (migration 34): the categories a class grades by
+  // judgement rather than by points -- progressie, tajweed, inzet.
+  const [manualCats, setManualCats]     = useState<any[]>([])
+  const [catScoreMap, setCatScoreMap]   = useState<Record<string, Record<string, { score: number; max_score: number }>>>({})
+  const [savingCat, setSavingCat]       = useState<string | null>(null)
 
   // Inline edit state for exam card
   const [editingCell, setEditingCell] = useState<{ studentId: string; semester: 1 | 2 } | null>(null)
@@ -97,6 +103,25 @@ function StaffScoresPage() {
     setStudents(studentList)
     setAssignments(assignmentList)
     setExamScores(exams ?? [])
+
+    const { data: catRows } = await supabase
+      .from('grade_categories').select('id, name, source, weight, sort_order')
+      .eq('class_id', klasId).eq('source', 'handmatig').order('sort_order')
+    const manual = catRows ?? []
+    setManualCats(manual)
+    if (manual.length) {
+      const { data: cs } = await supabase
+        .from('category_scores').select('category_id, student_id, score, max_score')
+        .in('category_id', manual.map((c: any) => c.id))
+      const cm: Record<string, Record<string, { score: number; max_score: number }>> = {}
+      cs?.forEach((r: any) => {
+        if (!cm[r.student_id]) cm[r.student_id] = {}
+        cm[r.student_id][r.category_id] = { score: Number(r.score), max_score: Number(r.max_score) }
+      })
+      setCatScoreMap(cm)
+    } else {
+      setCatScoreMap({})
+    }
 
     const { data: testRows } = await supabase
       .from('class_tests').select('*')
@@ -284,6 +309,44 @@ function StaffScoresPage() {
     if (pct >= 0.7) return 'bg-green-100 text-green-700'
     if (pct >= 0.5) return 'bg-amber-100 text-amber-700'
     return 'bg-red-100 text-red-700'
+  }
+
+  // One mark per pupil per category. Blank clears it, which matters: a category
+  // with no mark is skipped and its weight redistributed, so "leeg" is a real
+  // state and not the same as a zero.
+  async function saveCategoryScore(studentId: string, cat: any, raw: string) {
+    const key = `${studentId}:${cat.id}`
+    const max = catScoreMap[studentId]?.[cat.id]?.max_score ?? 10
+    setSavingCat(key); setSaveErr(null)
+
+    if (raw.trim() === '') {
+      const { error } = await getSupabase().from('category_scores')
+        .delete().eq('category_id', cat.id).eq('student_id', studentId)
+      setSavingCat(null)
+      if (error) { setSaveErr('Beoordeling verwijderen mislukt.'); return }
+      setCatScoreMap(prev => {
+        const next = { ...prev, [studentId]: { ...(prev[studentId] ?? {}) } }
+        delete next[studentId][cat.id]
+        return next
+      })
+      return
+    }
+
+    const score = Number(raw.replace(',', '.'))
+    if (!Number.isFinite(score) || score < 0 || score > max) {
+      setSavingCat(null)
+      setSaveErr(`Geef een cijfer tussen 0 en ${max}.`)
+      return
+    }
+    const { error } = await getSupabase().from('category_scores').upsert(
+      { category_id: cat.id, student_id: studentId, score, max_score: max },
+      { onConflict: 'category_id,student_id' },
+    )
+    setSavingCat(null)
+    if (error) { setSaveErr('Beoordeling opslaan mislukt.'); return }
+    setCatScoreMap(prev => ({
+      ...prev, [studentId]: { ...(prev[studentId] ?? {}), [cat.id]: { score, max_score: max } },
+    }))
   }
 
   function getExam(studentId: string, semester: 1 | 2) {
@@ -597,6 +660,65 @@ function StaffScoresPage() {
                   <td className="px-4 py-3 border-l border-border"/>
                 </tr>
               </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Beoordelingen card (handmatige categorieën uit de puntenverdeling) ── */}
+      {students.length > 0 && manualCats.length > 0 && (
+        <div className="card overflow-hidden mt-6">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-primary-50/60">
+            <SlidersHorizontal size={16} className="text-primary-600"/>
+            <h2 className="font-semibold text-sm text-gray-800">Beoordelingen</h2>
+            <span className="text-xs text-gray-400 ml-1">
+              Uit de puntenverdeling van deze klas. Leeg laten = telt nog niet mee.
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-gray-50/40">
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[160px]">Leerling</th>
+                  {manualCats.map((c: any) => (
+                    <th key={c.id} className="px-4 py-3 font-medium text-gray-600 text-center min-w-[120px]">
+                      {c.name}
+                      <span className="block text-[11px] font-normal text-gray-400">
+                        op 10 · {Number(c.weight)}%
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {students.map((s: any) => (
+                  <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-4 py-3 text-gray-800">{s.first_name} {s.last_name}</td>
+                    {manualCats.map((c: any) => {
+                      const cur = catScoreMap[s.id]?.[c.id]
+                      const busy = savingCat === `${s.id}:${c.id}`
+                      return (
+                        <td key={c.id} className="px-4 py-2 text-center">
+                          <div className="inline-flex items-center gap-1">
+                            <input
+                              type="text" inputMode="decimal"
+                              defaultValue={cur ? String(cur.score) : ''}
+                              onBlur={e => {
+                                const v = e.target.value
+                                const same = cur ? String(cur.score) === v.trim() : v.trim() === ''
+                                if (!same) saveCategoryScore(s.id, c, v)
+                              }}
+                              placeholder="—"
+                              className="input text-sm w-16 text-center py-1"
+                            />
+                            {busy && <Loader2 size={12} className="animate-spin text-gray-400"/>}
+                          </div>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
         </div>

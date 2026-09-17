@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase/singleton'
+import { computeResult } from '@/lib/grading'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { FileText, Loader2, Sparkles, ChevronRight, CheckCircle2, PencilLine } from 'lucide-react'
@@ -136,22 +137,49 @@ export default function RapportenPage() {
       : { data: [] as any[] }
     const tsList = tscores ?? []
 
+    // Weighting, if this class has one. A class without categories keeps the
+    // old pooled average -- see lib/grading.ts.
+    const { data: cats } = await supabase.from('grade_categories')
+      .select('id, class_id, name, source, weight, sort_order').in('class_id', classIds).order('sort_order')
+    const catList = cats ?? []
+    const { data: catScores } = catList.length
+      ? await supabase.from('category_scores').select('category_id, score, max_score')
+          .eq('student_id', studentId).in('category_id', catList.map((c: any) => c.id))
+      : { data: [] as any[] }
+    const csList = catScores ?? []
+    // Exams were never part of the old average; a weighted class can now count them.
+    const { data: exams } = await supabase.from('exam_scores')
+      .select('class_id, score, max_score')
+      .eq('student_id', studentId).eq('semester', semester).in('class_id', classIds)
+    const examList = exams ?? []
+
     function avgForClass(cid: string): number | null {
-      let earned = 0, total = 0
+      let hwEarned = 0, hwMax = 0
       for (const a of assignList.filter((x: any) => x.class_id === cid)) {
         const sub = subList.find((s: any) => s.assignment_id === a.id)
         if (!sub || !a.max_score) continue
         const fb = fbList.find((f: any) => f.submission_id === sub.id)
         if (!fb || fb.score === null || fb.score === undefined) continue
-        earned += Number(fb.score); total += Number(a.max_score)
+        hwEarned += Number(fb.score); hwMax += Number(a.max_score)
       }
+      let tEarned = 0, tMax = 0
       for (const t of testList.filter((x: any) => x.class_id === cid)) {
         const ts = tsList.find((x: any) => x.test_id === t.id)
         if (!ts || !t.max_score) continue
-        earned += Number(ts.score); total += Number(t.max_score)
+        tEarned += Number(ts.score); tMax += Number(t.max_score)
       }
-      if (!total) return null
-      return Math.round((earned / total) * 1000) / 10
+      const ex = examList.find((e: any) => e.class_id === cid)
+      const mine = catList.filter((c: any) => c.class_id === cid)
+
+      return computeResult(mine, {
+        huiswerk: hwMax > 0 ? { earned: hwEarned, max: hwMax } : null,
+        toetsen:  tMax  > 0 ? { earned: tEarned,  max: tMax  } : null,
+        examen:   ex ? { earned: Number(ex.score), max: Number(ex.max_score) } : null,
+        handmatig: Object.fromEntries(mine.map((c: any) => {
+          const cs = csList.find((x: any) => x.category_id === c.id)
+          return [c.id, cs ? { earned: Number(cs.score), max: Number(cs.max_score) } : null]
+        })),
+      }).result
     }
 
     const { data: card, error } = await supabase.from('rapport_cards').insert({

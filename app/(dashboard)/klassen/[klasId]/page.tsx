@@ -6,7 +6,7 @@ import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { getDeadlineLabel, getSubmissionStatusBadge } from '@/lib/utils'
-import { ArrowLeft, FileText, BookOpen, Users, Plus, Clock, GraduationCap, Mail, BarChart2, X, Loader2 } from 'lucide-react'
+import { ArrowLeft, FileText, BookOpen, Users, Plus, Clock, GraduationCap, Mail, BarChart2, X, Loader2, SlidersHorizontal } from 'lucide-react'
 import Link from 'next/link'
 
 export default function KlasDetailPage() {
@@ -146,6 +146,11 @@ export default function KlasDetailPage() {
             {isTeacher && (
               <Link href={`/klassen/${klasId}/scores`} className="btn-secondary text-xs py-1.5 px-3">
                 <BarChart2 size={13}/> Puntenlijst
+              </Link>
+            )}
+            {isTeacher && (
+              <Link href={`/klassen/${klasId}/puntenverdeling`} className="btn-secondary text-xs py-1.5 px-3">
+                <SlidersHorizontal size={13}/> Puntenverdeling
               </Link>
             )}
             {profile?.role === 'student' && (
