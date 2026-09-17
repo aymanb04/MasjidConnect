@@ -1,9 +1,11 @@
 'use client'
 
 // Read-only "Mijn punten" — a student's own scores for one class. Mirrors the
-// staff Puntenlijst (same weighted average: Σscore/Σmax over graded homework +
-// tests; exams shown separately, not in the average) but scoped to the caller via
-// RLS-safe self-queries.
+// staff Puntenlijst: both run the same lib/grading computation, so a pupil is
+// never shown a different mark than their teacher sees. When the class has a
+// puntenverdeling the average is weighted (and exams count); when it has none it
+// stays the old pool over graded homework + tests, with exams listed separately.
+// Every query here is self-scoped so RLS returns only this pupil's own rows.
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
@@ -12,6 +14,7 @@ import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { ArrowLeft, GraduationCap, FileText, ClipboardList } from 'lucide-react'
+import { computeResult, type GradeCategory, type GradePart } from '@/lib/grading'
 
 type Item = {
   key: string
@@ -38,6 +41,8 @@ export default function StudentScores() {
   const [items, setItems] = useState<Item[]>([])
   const [exams, setExams] = useState<any[]>([])
   const [avg, setAvg]     = useState<number | null>(null)
+  const [parts, setParts] = useState<GradePart[]>([])
+  const [partial, setPartial] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadErr, setLoadErr] = useState<unknown>(null)
 
@@ -106,17 +111,44 @@ export default function StudentScores() {
     const all = [...hwItems, ...testItems]
     setItems(all)
 
-    // Weighted average — identical to staff studentAvg (homework + tests only)
-    let earned = 0, total = 0
-    for (const it of all) {
-      if (it.score === null || !it.max) continue
-      earned += it.score; total += it.max
-    }
-    setAvg(total ? (earned / total) * 100 : null)
-
     const { data: ex } = await supabase.from('exam_scores').select('*')
       .eq('class_id', klasId).eq('student_id', sid)
     setExams(ex ?? [])
+
+    // The class weighting, if it has one. A pupil may read the categories of a
+    // class they are in (grade_categories_read), and only their own marks.
+    const { data: catRows } = await supabase
+      .from('grade_categories').select('id, name, source, weight, sort_order')
+      .eq('class_id', klasId).order('sort_order')
+    const cats: GradeCategory[] = (catRows ?? []).map((c: any) => ({ ...c, weight: Number(c.weight) }))
+
+    const handmatig: Record<string, { earned: number; max: number }> = {}
+    const manualIds = cats.filter(c => c.source === 'handmatig').map(c => c.id)
+    if (manualIds.length) {
+      const { data: cs } = await supabase
+        .from('category_scores').select('category_id, score, max_score')
+        .eq('student_id', sid).in('category_id', manualIds)
+      ;(cs ?? []).forEach((r: any) => {
+        handmatig[r.category_id] = { earned: Number(r.score), max: Number(r.max_score) }
+      })
+    }
+
+    const sum = (xs: Item[]) => xs.reduce((acc, it) =>
+      it.score === null || !it.max ? acc : { earned: acc.earned + it.score, max: acc.max + it.max },
+      { earned: 0, max: 0 })
+    const examPts = (ex ?? []).reduce((acc: { earned: number; max: number }, e: any) =>
+      e.max_score ? { earned: acc.earned + Number(e.score), max: acc.max + Number(e.max_score) } : acc,
+      { earned: 0, max: 0 })
+
+    const res = computeResult(cats, {
+      huiswerk: sum(hwItems),
+      toetsen:  sum(testItems),
+      examen:   examPts,
+      handmatig,
+    })
+    setAvg(res.result)
+    setParts(res.parts)
+    setPartial(res.partial)
 
     setLoading(false)
   }
@@ -160,11 +192,50 @@ export default function StudentScores() {
       ) : (
         <div className="space-y-6">
           {/* Homework & tests + running average */}
+          {/* Weighted classes explain the mark instead of just showing it: a pupil
+              who sees "76,7%" deserves to see which parts it came from. */}
+          {parts.length > 0 && (
+            <div className="card overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-gray-50/60">
+                <h2 className="font-semibold text-sm text-gray-800">Mijn cijfer</h2>
+                {avg !== null ? (
+                  <span className={`inline-block px-2.5 py-0.5 rounded-lg text-sm font-bold ${scoreColor(avg, 100)}`}>
+                    {round1(avg)}%
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400">Nog geen punten</span>
+                )}
+              </div>
+              <div className="divide-y divide-border">
+                {parts.map(p => (
+                  <div key={p.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="text-sm text-gray-800 flex-1 min-w-0 truncate">{p.name}</span>
+                    <span className="text-xs text-gray-400 tabular-nums">{round1(p.weight)}%</span>
+                    {p.pct !== null ? (
+                      <span className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-semibold tabular-nums ${scoreColor(p.pct, 100)}`}>
+                        {round1(p.pct)}%
+                      </span>
+                    ) : (
+                      <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs bg-gray-100 text-gray-400">
+                        Nog niet
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {partial && (
+                <div className="px-4 py-2 text-xs text-gray-400 border-t border-border">
+                  Voorlopig cijfer: onderdelen zonder punten tellen nog niet mee.
+                </div>
+              )}
+            </div>
+          )}
+
           {items.length > 0 && (
             <div className="card overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-gray-50/60">
                 <h2 className="font-semibold text-sm text-gray-800">Huiswerk &amp; toetsen</h2>
-                {avg !== null && (
+                {avg !== null && parts.length === 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500">Gemiddelde</span>
                     <span className={`inline-block px-2.5 py-0.5 rounded-lg text-sm font-bold ${scoreColor(avg, 100)}`}>
@@ -193,7 +264,9 @@ export default function StudentScores() {
                 ))}
               </div>
               <div className="px-4 py-2 text-xs text-gray-400 border-t border-border">
-                Gemiddelde over gequoteerde punten (huiswerk &amp; toetsen). Examens tellen apart.
+                {parts.length > 0
+                  ? 'Deze punten tellen mee in je cijfer hierboven.'
+                  : 'Gemiddelde over gequoteerde punten (huiswerk & toetsen). Examens tellen apart.'}
               </div>
             </div>
           )}

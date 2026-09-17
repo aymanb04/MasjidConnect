@@ -120,7 +120,7 @@ async function main() {
             await assertHidden(student.client, t, `${t} hidden from student`)
         }
 
-        for (const t of ['test_scores', 'exam_scores', 'attendance_records']) {
+        for (const t of ['test_scores', 'exam_scores', 'attendance_records', 'category_scores']) {
             const { data, error } = await student.client.from(t).select('student_id').limit(200)
             check(`${t} rows are all the student's own`,
                 !error && (data ?? []).every(r => r.student_id === student.uid),
@@ -144,6 +144,34 @@ async function main() {
             check('student INSERT into exam_scores denied', false, 'no class enrollment found to attempt with')
         }
 
+        // Migration 34: a pupil may READ the weighting of a class they are in,
+        // so they can see how their mark is built up -- and nothing more.
+        if (myClasses?.length) {
+            const { error: catErr } = await student.client.from('grade_categories').insert({
+                tenant_id: null, class_id: myClasses[0].class_id,
+                name: 'rls-smoke', source: 'handmatig', weight: 100,
+            })
+            check('student INSERT into grade_categories denied', !!catErr)
+        } else {
+            check('student INSERT into grade_categories denied', false, 'no class enrollment found to attempt with')
+        }
+
+        const { data: ownCat } = await student.client
+            .from('category_scores').select('id, score').eq('student_id', student.uid).limit(1)
+        if (ownCat?.length) {
+            const before = ownCat[0].score
+            await student.client.from('category_scores')
+                .update({ score: 10, max_score: 10 }).eq('id', ownCat[0].id)
+            const { data: re } = await student.client
+                .from('category_scores').select('score').eq('id', ownCat[0].id).single()
+            // "no error" is not "denied": a 0-row UPDATE looks identical. Read back.
+            check('student cannot raise own beoordeling', re?.score === before,
+                `${before} -> ${re?.score}`)
+        } else {
+            skipped++
+            console.log('  SKIP  student cannot raise own beoordeling — no category_scores row for this pupil')
+        }
+
         await student.client.from('profiles').update({ role: 'admin' }).eq('id', student.uid)
         const { data: after } = await student.client.from('profiles').select('role').eq('id', student.uid).single()
         check('student cannot escalate own role', after?.role === 'student', `role is now ${after?.role}`)
@@ -161,12 +189,23 @@ async function main() {
         const own = new Set((taught ?? []).filter(r => r.teacher_id === teacher.uid).map(r => r.class_id))
         check('teacher sees own class_teachers rows', !taughtErr && own.size > 0, taughtErr?.message ?? '0 classes')
 
-        for (const t of ['exam_scores', 'class_tests']) {
+        for (const t of ['exam_scores', 'class_tests', 'grade_categories']) {
             const { data, error } = await teacher.client.from(t).select('class_id').limit(200)
             check(`${t} scoped to classes the teacher teaches`,
                 !error && (data ?? []).every(r => own.has(r.class_id)),
                 error?.message ?? (data ?? []).filter(r => !own.has(r.class_id)).length + ' foreign rows')
         }
+
+        // category_scores carries no class_id -- the policy reaches the class
+        // through category_owner_class(). Check the rows land where they should.
+        const { data: allCats } = await teacher.client
+            .from('grade_categories').select('id, class_id')
+        const catClass = new Map((allCats ?? []).map(c => [c.id, c.class_id]))
+        const { data: cs, error: csErr } = await teacher.client
+            .from('category_scores').select('category_id').limit(500)
+        check('category_scores scoped to classes the teacher teaches',
+            !csErr && (cs ?? []).every(r => own.has(catClass.get(r.category_id) as string)),
+            csErr?.message ?? (cs ?? []).filter(r => !own.has(catClass.get(r.category_id) as string)).length + ' foreign rows')
     }
 
     console.log('\nadmin:')

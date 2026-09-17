@@ -9,6 +9,7 @@ import { ArrowLeft, GraduationCap, Plus, X, Check, Pencil, Loader2, SlidersHoriz
 import { format } from 'date-fns'
 import Link from 'next/link'
 import StudentScores from '@/components/features/scores/StudentScores'
+import { computeResult, type GradeCategory } from '@/lib/grading'
 
 // Route entry: students get the read-only self-scoped view; staff get the full
 // editable gradebook below.
@@ -43,6 +44,7 @@ function StaffScoresPage() {
 
   // Handmatige beoordelingen (migration 34): the categories a class grades by
   // judgement rather than by points -- progressie, tajweed, inzet.
+  const [allCats, setAllCats]           = useState<GradeCategory[]>([])
   const [manualCats, setManualCats]     = useState<any[]>([])
   const [catScoreMap, setCatScoreMap]   = useState<Record<string, Record<string, { score: number; max_score: number }>>>({})
   const [savingCat, setSavingCat]       = useState<string | null>(null)
@@ -106,8 +108,10 @@ function StaffScoresPage() {
 
     const { data: catRows } = await supabase
       .from('grade_categories').select('id, name, source, weight, sort_order')
-      .eq('class_id', klasId).eq('source', 'handmatig').order('sort_order')
-    const manual = catRows ?? []
+      .eq('class_id', klasId).order('sort_order')
+    const cats = (catRows ?? []).map((c: any) => ({ ...c, weight: Number(c.weight) }))
+    setAllCats(cats)
+    const manual = cats.filter((c: any) => c.source === 'handmatig')
     setManualCats(manual)
     if (manual.length) {
       const { data: cs } = await supabase
@@ -183,23 +187,43 @@ function StaffScoresPage() {
 
   // ── helpers ──────────────────────────────────────────────────────────
 
+  // The Gem. column, the pupil's own "Mijn punten" and the rapport all run
+  // through lib/grading, so a class with a weighting can never show a teacher
+  // one number here and a different one on the report card.
   function studentAvg(studentId: string): number | null {
-    let earned = 0, total = 0
+    let hwEarned = 0, hwMax = 0
     for (const a of assignments) {
       const score = scoreMap[studentId]?.[a.id]?.score
       if (score === null || score === undefined || !a.max_score) continue
-      earned += score
-      total  += a.max_score
+      hwEarned += score
+      hwMax    += a.max_score
     }
-    // Manual test columns count toward the same weighted average
+    let tEarned = 0, tMax = 0
     for (const t of tests) {
       const ts = testScoreMap[studentId]?.[t.id]
       if (!ts || !t.max_score) continue
-      earned += ts.score
-      total  += Number(t.max_score)
+      tEarned += ts.score
+      tMax    += Number(t.max_score)
     }
-    if (!total) return null
-    return (earned / total) * 100
+    // Both semesters pooled: this column is the year so far, where a rapport
+    // line is one semester.
+    let eEarned = 0, eMax = 0
+    for (const ex of examScores) {
+      if (ex.student_id !== studentId || !ex.max_score) continue
+      eEarned += Number(ex.score)
+      eMax    += Number(ex.max_score)
+    }
+    const handmatig: Record<string, { earned: number; max: number }> = {}
+    for (const c of manualCats) {
+      const cs = catScoreMap[studentId]?.[c.id]
+      if (cs) handmatig[c.id] = { earned: cs.score, max: cs.max_score }
+    }
+    return computeResult(allCats, {
+      huiswerk: { earned: hwEarned, max: hwMax },
+      toetsen:  { earned: tEarned,  max: tMax },
+      examen:   { earned: eEarned,  max: eMax },
+      handmatig,
+    }).result
   }
 
   function testAvg(testId: string) {
@@ -512,8 +536,14 @@ function StaffScoresPage() {
                       </button>
                     </th>
                   ))}
-                  <th className="px-4 py-3 font-medium text-gray-600 text-center min-w-[80px] border-l border-border">
+                  <th className="px-4 py-3 font-medium text-gray-600 text-center min-w-[80px] border-l border-border"
+                      title={allCats.length
+                        ? 'Gewogen volgens de puntenverdeling van deze klas'
+                        : 'Gemiddelde over huiswerk en toetsen'}>
                     Gem.
+                    {allCats.length > 0 && (
+                      <span className="block text-[10px] font-normal text-gray-400">gewogen</span>
+                    )}
                   </th>
                 </tr>
               </thead>
