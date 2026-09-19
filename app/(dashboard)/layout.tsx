@@ -22,6 +22,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             router.push('/login')
         } else if (needsTermsAcceptance(profile)) {
             router.push('/akkoord')
+        } else if (profile.must_change_password) {
+            // Still on a password the school handed out on paper (migration 37).
+            router.push('/wachtwoord-instellen')
         }
     }, [loading, profile])
 
@@ -43,8 +46,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )
     }
 
-    // Don't flash the dashboard while redirecting to /login or /akkoord.
-    if (!profile || needsTermsAcceptance(profile)) return null
+    // Don't flash the dashboard while redirecting to /login, /akkoord or
+    // /wachtwoord-instellen.
+    if (!profile || needsTermsAcceptance(profile) || profile.must_change_password) return null
 
     return (
         <div className="flex h-dvh overflow-hidden" style={{ backgroundColor: '#F8F7F4' }}>

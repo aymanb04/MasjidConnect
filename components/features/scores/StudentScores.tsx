@@ -13,7 +13,7 @@ import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
-import { ArrowLeft, GraduationCap, FileText, ClipboardList } from 'lucide-react'
+import { ArrowLeft, GraduationCap, FileText, ClipboardList, Target } from 'lucide-react'
 import { computeResult, type GradeCategory, type GradePart } from '@/lib/grading'
 
 type Item = {
@@ -42,6 +42,7 @@ export default function StudentScores() {
   const [exams, setExams] = useState<any[]>([])
   const [avg, setAvg]     = useState<number | null>(null)
   const [parts, setParts] = useState<GradePart[]>([])
+  const [goal, setGoal]   = useState<any>(null)
   const [partial, setPartial] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadErr, setLoadErr] = useState<unknown>(null)
@@ -114,6 +115,14 @@ export default function StudentScores() {
     const { data: ex } = await supabase.from('exam_scores').select('*')
       .eq('class_id', klasId).eq('student_id', sid)
     setExams(ex ?? [])
+
+    // Mijn doel voor dit vak (migratie 38). RLS geeft alleen het eigen doel terug.
+    const { data: g } = await supabase
+      .from('student_goals')
+      .select('start_point, target_point, current_point, progress, status')
+      .eq('class_id', klasId).eq('student_id', sid).eq('status', 'actief')
+      .maybeSingle()
+    setGoal(g ?? null)
 
     // The class weighting, if it has one. A pupil may read the categories of a
     // class they are in (grade_categories_read), and only their own marks.
@@ -192,6 +201,46 @@ export default function StudentScores() {
       ) : (
         <div className="space-y-6">
           {/* Homework & tests + running average */}
+          {/* Het doel staat bovenaan: een leerling wil eerst weten waar hij naartoe
+              werkt, daarna pas wat zijn cijfer is. */}
+          {goal && (goal.start_point || goal.target_point || goal.current_point) && (
+            <div className="card overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-blue-50/60">
+                <Target size={15} className="text-blue-600"/>
+                <h2 className="font-semibold text-sm text-gray-800">Mijn doel</h2>
+              </div>
+              <div className="px-4 py-3.5">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                  {goal.start_point && (
+                    <><span className="text-gray-500">Begonnen bij</span>
+                      <span className="font-medium text-gray-800">{goal.start_point}</span></>
+                  )}
+                  {goal.current_point && (
+                    <><span className="text-gray-400">·</span>
+                      <span className="text-gray-500">nu</span>
+                      <span className="font-semibold text-primary-700">{goal.current_point}</span></>
+                  )}
+                  {goal.target_point && (
+                    <><span className="text-gray-400">·</span>
+                      <span className="text-gray-500">doel</span>
+                      <span className="font-medium text-gray-800">{goal.target_point}</span></>
+                  )}
+                </div>
+                {goal.progress !== null && goal.progress !== undefined && (
+                  <div className="mt-3">
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>Voortgang</span><span>{goal.progress}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="bg-primary-500 h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, Math.max(0, goal.progress))}%` }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Weighted classes explain the mark instead of just showing it: a pupil
               who sees "76,7%" deserves to see which parts it came from. */}
           {parts.length > 0 && (

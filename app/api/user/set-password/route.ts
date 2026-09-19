@@ -118,6 +118,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Instellen van het wachtwoord is mislukt.' }, { status: 500 })
         }
 
+        // This password was issued by somebody else, so the user must replace
+        // it at their next sign-in (migration 37). Not fatal if it fails: they
+        // can still log in with what the admin just handed them.
+        const { error: flagErr } = await supabaseAdmin
+            .from('profiles').update({ must_change_password: true }).eq('id', userId)
+        if (flagErr) console.error('[/api/user/set-password] flag:', flagErr.message)
+
         // Anyone already signed in with the old password is signed out — if the
         // reset is because someone else knew it, leaving their session alive
         // would defeat the point.

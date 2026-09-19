@@ -62,6 +62,9 @@ export interface Profile {
   // Voorwaarden acceptance — see lib/terms.ts + /akkoord gate
   terms_accepted_at?: string
   terms_version?: number
+  // true = still on a password somebody else issued. The dashboard layout sends
+  // them to /wachtwoord-instellen until they choose their own (migration 37).
+  must_change_password?: boolean
   created_at: string
   updated_at: string
   // computed

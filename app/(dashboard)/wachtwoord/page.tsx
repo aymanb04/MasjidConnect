@@ -23,17 +23,7 @@ import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader } from '@/components/ui/PageShell'
 import { KeyRound, Loader2, CheckCircle2, Eye, EyeOff } from 'lucide-react'
-
-// Supabase rejects a password without a lowercase letter, an uppercase letter
-// and a digit. Checking here rather than letting it come back as an English
-// server error the user cannot act on.
-function policyProblem(pw: string): string | null {
-  if (pw.length < 8) return 'Gebruik minstens 8 tekens.'
-  if (!/[a-z]/.test(pw)) return 'Gebruik minstens één kleine letter.'
-  if (!/[A-Z]/.test(pw)) return 'Gebruik minstens één hoofdletter.'
-  if (!/[0-9]/.test(pw)) return 'Gebruik minstens één cijfer.'
-  return null
-}
+import { policyProblem, clearMustChangePassword } from '@/lib/password'
 
 export default function WachtwoordPage() {
   const { profile, loading } = useProfile()
@@ -81,6 +71,9 @@ export default function WachtwoordPage() {
       setSaving(false)
       return
     }
+
+    // Chose their own password, so the first-login gate should let them past.
+    await clearMustChangePassword(supabase)
 
     setSaving(false)
     setDone(true)

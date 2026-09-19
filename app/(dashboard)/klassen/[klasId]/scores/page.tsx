@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
-import { ArrowLeft, GraduationCap, Plus, X, Check, Pencil, Loader2, SlidersHorizontal } from 'lucide-react'
+import { ArrowLeft, GraduationCap, Plus, X, Check, Pencil, Loader2, SlidersHorizontal, Target } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import StudentScores from '@/components/features/scores/StudentScores'
@@ -44,6 +44,10 @@ function StaffScoresPage() {
 
   // Handmatige beoordelingen (migration 34): the categories a class grades by
   // judgement rather than by points -- progressie, tajweed, inzet.
+  // Doelen per leerling (migratie 38): waar begon hij, waar moet hij naartoe,
+  // waar staat hij nu. Alleen het actieve doel wordt getoond.
+  const [goals, setGoals]               = useState<Record<string, any>>({})
+  const [savingGoal, setSavingGoal]     = useState<string | null>(null)
   const [allCats, setAllCats]           = useState<GradeCategory[]>([])
   const [manualCats, setManualCats]     = useState<any[]>([])
   const [catScoreMap, setCatScoreMap]   = useState<Record<string, Record<string, { score: number; max_score: number }>>>({})
@@ -126,6 +130,14 @@ function StaffScoresPage() {
     } else {
       setCatScoreMap({})
     }
+
+    const { data: goalRows } = await supabase
+      .from('student_goals')
+      .select('id, student_id, start_point, target_point, current_point, progress, status')
+      .eq('class_id', klasId).eq('status', 'actief')
+    const gm: Record<string, any> = {}
+    goalRows?.forEach((g: any) => { gm[g.student_id] = g })
+    setGoals(gm)
 
     const { data: testRows } = await supabase
       .from('class_tests').select('*')
@@ -224,6 +236,39 @@ function StaffScoresPage() {
       examen:   { earned: eEarned,  max: eMax },
       handmatig,
     }).result
+  }
+
+  // One active goal per pupil per class. No unique constraint in the database
+  // (a finished goal stays as history), so insert the first time and update
+  // after that, keyed by what we loaded.
+  async function saveGoal(studentId: string, field: string, raw: string) {
+    const existing = goals[studentId]
+    const value = raw.trim()
+    let patch: any = { [field]: value === '' ? null : value }
+    if (field === 'progress') {
+      const n = value === '' ? null : parseInt(value, 10)
+      if (n !== null && (isNaN(n) || n < 0 || n > 100)) {
+        setSaveErr('Voortgang moet een getal tussen 0 en 100 zijn.')
+        return
+      }
+      patch = { progress: n }
+    }
+    setSaveErr('')
+    setSavingGoal(`${studentId}:${field}`)
+    const supabase = getSupabase()
+    if (existing) {
+      const { error } = await supabase.from('student_goals').update(patch).eq('id', existing.id)
+      if (error) { console.error(error); setSaveErr('Opslaan van het doel is mislukt.') }
+      else setGoals(prev => ({ ...prev, [studentId]: { ...prev[studentId], ...patch } }))
+    } else {
+      const { data, error } = await supabase.from('student_goals').insert({
+        tenant_id: profile!.tenant_id, class_id: klasId as string, student_id: studentId,
+        created_by: profile!.id, status: 'actief', ...patch,
+      }).select().single()
+      if (error) { console.error(error); setSaveErr('Opslaan van het doel is mislukt.') }
+      else setGoals(prev => ({ ...prev, [studentId]: data }))
+    }
+    setSavingGoal(null)
   }
 
   function testAvg(testId: string) {
@@ -748,6 +793,80 @@ function StaffScoresPage() {
                     })}
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Doelen card (migratie 38) ────────────────────────────────── */}
+      {students.length > 0 && (
+        <div className="card overflow-hidden mt-6">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-blue-50/60">
+            <Target size={16} className="text-blue-600"/>
+            <h2 className="font-semibold text-sm text-gray-800">Doelen</h2>
+            <span className="text-xs text-gray-400 ml-1">
+              Waar begon de leerling, waar moet hij naartoe, waar staat hij nu. De leerling en zijn ouders zien dit.
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-gray-50/40">
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[160px]">Leerling</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[140px]">Begonnen bij</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[140px]">Doel</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[140px]">Nu</th>
+                  <th className="px-4 py-3 font-medium text-gray-600 text-center min-w-[110px]">
+                    Voortgang
+                    <span className="block text-[11px] font-normal text-gray-400">% · optioneel</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {students.map((s: any) => {
+                  const g = goals[s.id]
+                  const cell = (field: string, placeholder: string) => (
+                    <td className="px-4 py-2">
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          defaultValue={g?.[field] ?? ''}
+                          onBlur={e => {
+                            const v = e.target.value
+                            if ((g?.[field] ?? '') !== v.trim()) saveGoal(s.id, field, v)
+                          }}
+                          placeholder={placeholder}
+                          className="input text-sm w-full py-1"
+                        />
+                        {savingGoal === `${s.id}:${field}` && <Loader2 size={12} className="animate-spin text-gray-400"/>}
+                      </div>
+                    </td>
+                  )
+                  return (
+                    <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-4 py-3 text-gray-800">{s.first_name} {s.last_name}</td>
+                      {cell('start_point', 'bv. soera 1')}
+                      {cell('target_point', 'bv. soera 10')}
+                      {cell('current_point', 'bv. soera 4')}
+                      <td className="px-4 py-2 text-center">
+                        <div className="inline-flex items-center gap-1">
+                          <input
+                            type="text" inputMode="numeric"
+                            defaultValue={g?.progress ?? ''}
+                            onBlur={e => {
+                              const v = e.target.value
+                              if (String(g?.progress ?? '') !== v.trim()) saveGoal(s.id, 'progress', v)
+                            }}
+                            placeholder="—"
+                            className="input text-sm w-16 text-center py-1"
+                          />
+                          {savingGoal === `${s.id}:progress` && <Loader2 size={12} className="animate-spin text-gray-400"/>}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
