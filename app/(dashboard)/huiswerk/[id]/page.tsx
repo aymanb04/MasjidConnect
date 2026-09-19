@@ -19,6 +19,7 @@ export default function HuiswerkDetailPage() {
   // RLS returns only this pupil's row, so a classmate's task never arrives here.
   const [myTask, setMyTask] = useState<string | null>(null)
   const [perStudentRows, setPerStudentRows] = useState<any[]>([])
+  const [roster, setRoster] = useState<any[]>([])
   const [mySubmission, setMySubmission] = useState<any>(null)
   const [allSubmissions, setAllSubmissions] = useState<any[]>([])
   const [studentCount, setStudentCount] = useState(0)
@@ -30,10 +31,15 @@ export default function HuiswerkDetailPage() {
     loadData()
   }, [profile, id])
 
-  async function loadData() {
+  // `quiet` refreshes the data WITHOUT flipping `loading`. Marking a pupil used
+  // to re-run this loader, which swapped the page for the full-page spinner and
+  // unmounted the grading view -- so the row collapsed, the "Opgeslagen!"
+  // confirmation never appeared, and a teacher working down a class of twenty
+  // lost their place after every single pupil.
+  async function loadData(quiet = false) {
     const supabase = getSupabase()
     const isTeacher = ['teacher','admin','super_admin'].includes(profile!.role)
-    setLoading(true)
+    if (!quiet) setLoading(true)
     setLoadErr(null)
 
     const { data: a, error: aErr } = await supabase.from('assignments').select('*, classes(name, color), profiles!assignments_created_by_fkey(first_name, last_name)').eq('id', id).single()
@@ -42,6 +48,7 @@ export default function HuiswerkDetailPage() {
 
     // Separate query, not a nested join: a join across RLS-protected tables
     // silently returns nothing here.
+    let staffPerRows: any[] = []
     if (profile!.role === 'student') {
       const { data: mine } = await supabase
         .from('assignment_students')
@@ -55,7 +62,8 @@ export default function HuiswerkDetailPage() {
         .from('assignment_students')
         .select('student_id, task_text')
         .eq('assignment_id', id)
-      setPerStudentRows(rows ?? [])
+      staffPerRows = rows ?? []
+      setPerStudentRows(staffPerRows)
     }
 
     if (profile!.role === 'student') {
@@ -82,6 +90,7 @@ export default function HuiswerkDetailPage() {
         .from('submissions')
         .select('*, profiles!submissions_student_id_fkey(first_name, last_name), submission_files(*)')
         .eq('assignment_id', id)
+      let withFb: any[] = []
       if (subs?.length) {
         const { data: feedbacks } = await supabase
           .from('submission_feedback')
@@ -89,12 +98,38 @@ export default function HuiswerkDetailPage() {
           .in('submission_id', subs.map((s: any) => s.id))
         const fbMap: Record<string, any> = {}
         feedbacks?.forEach((f: any) => { fbMap[f.submission_id] = f })
-        setAllSubmissions(subs.map((s: any) => ({ ...s, submission_feedback: fbMap[s.id] ? [fbMap[s.id]] : [] })))
-      } else {
-        setAllSubmissions([])
+        withFb = subs.map((s: any) => ({ ...s, submission_feedback: fbMap[s.id] ? [fbMap[s.id]] : [] }))
       }
-      const { count } = await supabase.from('class_students').select('*', { count: 'estimated', head: true }).eq('class_id', a.class_id)
-      setStudentCount(count ?? 0)
+      setAllSubmissions(withFb)
+
+      // The teacher grades the CLASS, not the inbox. Building the list from the
+      // roster instead of from the submissions is what makes it possible to
+      // mark a pupil who hands in nothing -- reciting a surah out loud leaves no
+      // upload -- and it is the only place the per-pupil task can be shown next
+      // to the pupil it belongs to.
+      const assignedIds = staffPerRows.map((r: any) => r.student_id)
+      let rosterIds = assignedIds
+      if (rosterIds.length === 0) {
+        const { data: cs } = await supabase
+          .from('class_students').select('student_id').eq('class_id', a.class_id)
+        rosterIds = (cs ?? []).map((r: any) => r.student_id)
+      }
+      const { data: profs } = rosterIds.length
+        ? await supabase.from('profiles').select('id, first_name, last_name').in('id', rosterIds)
+        : { data: [] as any[] }
+      const taskOf = Object.fromEntries(staffPerRows.map((r: any) => [r.student_id, r.task_text]))
+      const subOf  = Object.fromEntries(withFb.map((s: any) => [s.student_id, s]))
+      const coll = new Intl.Collator('nl', { sensitivity: 'base' })
+      setRoster((profs ?? [])
+        .map((p: any) => ({
+          student_id: p.id,
+          first_name: p.first_name,
+          last_name:  p.last_name,
+          task_text:  taskOf[p.id] ?? null,
+          submission: subOf[p.id] ?? null,
+        }))
+        .sort((x: any, y: any) => coll.compare(x.last_name, y.last_name) || coll.compare(x.first_name, y.first_name)))
+      setStudentCount(rosterIds.length)
     }
     setLoading(false)
   }
@@ -158,7 +193,7 @@ export default function HuiswerkDetailPage() {
         <SubmitAssignmentForm assignmentId={id as string} assignment={assignment} existingSubmission={mySubmission} userId={profile.id} />
       )}
       {isTeacher && (
-        <TeacherSubmissionsView submissions={allSubmissions} studentCount={studentCount} assignmentId={id as string} maxScore={assignment.max_score} onGraded={loadData} />
+        <TeacherSubmissionsView roster={roster} studentCount={studentCount} assignmentId={id as string} maxScore={assignment.max_score} onGraded={() => loadData(true)} />
       )}
     </div>
   )
