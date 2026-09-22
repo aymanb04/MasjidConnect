@@ -10,7 +10,7 @@ import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import {
   ArrowLeft, Loader2, Mail, Pencil, Save, X, Plus, Trash2,
-  FileText, Upload, GraduationCap, MessageSquare, Users,
+  FileText, Upload, GraduationCap, MessageSquare, Users, Eye, EyeOff,
 } from 'lucide-react'
 
 const STAFF_ROLES = ['admin', 'super_admin', 'teacher', 'leerlingenbegeleiding']
@@ -64,6 +64,9 @@ export default function DossierDetailPage() {
   const [saving,    setSaving]    = useState(false)
   const [error,     setError]     = useState('')
   const [newNote,   setNewNote]   = useState('')
+  // Standaard UIT. Een nota is intern tot iemand bewust beslist dat het gezin
+  // ze mag lezen -- nooit omgekeerd (migratie 39).
+  const [newNoteVisible, setNewNoteVisible] = useState(false)
   const [addingNote, setAddingNote] = useState(false)
   const [newFamily,  setNewFamily]  = useState('')
   const [uploading,  setUploading]  = useState(false)
@@ -187,9 +190,11 @@ export default function DossierDetailPage() {
       student_id: studentId,
       author_id: profile!.id,
       body: newNote.trim(),
+      visible_to_student: newNoteVisible,
     })
     if (!err) {
       setNewNote('')
+      setNewNoteVisible(false)
       const { data: noteRows } = await supabase
         .from('student_notes').select('*').eq('student_id', studentId)
         .order('created_at', { ascending: false })
@@ -216,6 +221,30 @@ export default function DossierDetailPage() {
       return
     }
     setNotes(prev => prev.filter(n => n.id !== id))
+  }
+
+  // Zichtbaar zetten is de ene richting, intern terugzetten de andere. Beide
+  // moeten kunnen: een leerkracht die per ongeluk het vinkje aanzette moet dat
+  // kunnen terugdraaien. Net als bij deleteNote wordt het resultaat gecheckt --
+  // een RLS-weigering geeft geen fout maar 0 rijen, en dat mag er in de UI niet
+  // uitzien als een geslaagde wijziging.
+  async function toggleNoteVisibility(note: any) {
+    const next = !note.visible_to_student
+    if (next && !confirm(
+      'Deze nota zichtbaar maken voor de leerling? Wie op de login van de ' +
+      'leerling zit -- bij jongere kinderen de ouder -- kan ze dan lezen.'
+    )) return
+    const { data, error: err } = await supabase
+      .from('student_notes')
+      .update({ visible_to_student: next })
+      .eq('id', note.id)
+      .select('id')
+    if (err || !data?.length) {
+      console.error(err)
+      setError('Zichtbaarheid aanpassen mislukt.')
+      return
+    }
+    setNotes(prev => prev.map(n => n.id === note.id ? { ...n, visible_to_student: next } : n))
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -470,21 +499,38 @@ export default function DossierDetailPage() {
         <div className="card p-5">
           <h2 className="font-semibold text-gray-900 flex items-center gap-2 mb-4">
             <MessageSquare size={16} className="text-primary-600" /> Notities
-            <span className="text-xs font-normal text-gray-400">(niet zichtbaar voor de leerling)</span>
+            <span className="text-xs font-normal text-gray-400">(intern, tenzij je ze deelt)</span>
           </h2>
           {canWrite && (
-            <div className="flex gap-2 mb-4">
-              <textarea
-                value={newNote}
-                onChange={e => setNewNote(e.target.value)}
-                placeholder="Notitie over gedrag, afspraken, opvolging…"
-                rows={2}
-                className="input flex-1 resize-none text-sm"
-              />
-              <button onClick={addNote} disabled={addingNote || !newNote.trim()}
-                className="btn-primary text-xs px-3 self-end flex items-center gap-1">
-                {addingNote ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Toevoegen
-              </button>
+            <div className="mb-4">
+              <div className="flex gap-2">
+                <textarea
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                  placeholder="Notitie over gedrag, afspraken, opvolging…"
+                  rows={2}
+                  className="input flex-1 resize-none text-sm"
+                />
+                <button onClick={addNote} disabled={addingNote || !newNote.trim()}
+                  className="btn-primary text-xs px-3 self-end flex items-center gap-1">
+                  {addingNote ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Toevoegen
+                </button>
+              </div>
+              <label className="flex items-start gap-2 mt-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={newNoteVisible}
+                  onChange={e => setNewNoteVisible(e.target.checked)}
+                  className="mt-0.5 accent-primary-600"
+                />
+                <span className="text-xs text-gray-500 leading-relaxed">
+                  Delen met de leerling en de ouders
+                  <span className="block text-gray-400">
+                    De nota verschijnt op het startscherm van de leerling. Er zijn nog geen
+                    aparte ouderlogins — wie met de login van de leerling meekijkt, leest ze mee.
+                  </span>
+                </span>
+              </label>
             </div>
           )}
           {notes.length === 0 ? (
@@ -498,12 +544,28 @@ export default function DossierDetailPage() {
                     <span className="text-xs text-gray-300">
                       {format(new Date(n.created_at), 'd MMM yyyy HH:mm', { locale: nl })}
                     </span>
+                    {n.visible_to_student ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary-700 bg-primary-50 border border-primary-100 rounded-full px-2 py-0.5">
+                        <Eye size={11} /> Gedeeld met het gezin
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-gray-400">
+                        <EyeOff size={11} /> Intern
+                      </span>
+                    )}
                     {(n.author_id === profile.id || isAdmin) && (
-                      <button onClick={() => deleteNote(n.id)}
-                        className="ml-auto opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"
-                        title="Verwijderen">
-                        <Trash2 size={13} />
-                      </button>
+                      <div className="ml-auto flex items-center gap-2 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-all">
+                        <button onClick={() => toggleNoteVisibility(n)}
+                          className="text-gray-300 hover:text-primary-600 transition-colors"
+                          title={n.visible_to_student ? 'Terug op intern zetten' : 'Delen met de leerling en de ouders'}>
+                          {n.visible_to_student ? <EyeOff size={13} /> : <Eye size={13} />}
+                        </button>
+                        <button onClick={() => deleteNote(n.id)}
+                          className="text-gray-300 hover:text-red-500 transition-colors"
+                          title="Verwijderen">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     )}
                   </div>
                   <p className="text-sm text-gray-800 whitespace-pre-wrap">{n.body}</p>

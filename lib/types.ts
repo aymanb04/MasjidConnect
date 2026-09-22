@@ -323,6 +323,10 @@ export interface StudentNote {
   student_id: string
   author_id: string
   body: string
+  // Per nota gekozen door de auteur (migratie 39). false = intern, en dat is
+  // de standaard. true = de leerling ziet ze op zijn dashboard, en dus ook de
+  // ouder die op die login meekijkt.
+  visible_to_student: boolean
   created_at: string
   // joined
   author?: Pick<Profile, 'id' | 'first_name' | 'last_name' | 'role'>

@@ -5,10 +5,12 @@ import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { getDeadlineLabel } from '@/lib/utils'
-import { BookOpen, FileText, GraduationCap, Users, Clock, CheckCircle2, AlertCircle } from 'lucide-react'
+import { BookOpen, FileText, GraduationCap, Users, Clock, CheckCircle2, AlertCircle, MessageSquare } from 'lucide-react'
 import Link from 'next/link'
 import { AnnouncementsCard } from '@/components/features/announcements/AnnouncementsCard'
 import { AttendanceAlertsCard } from '@/components/features/attendance/AttendanceAlertsCard'
+import { StudentNotesCard } from '@/components/features/notes/StudentNotesCard'
+import { RecentNotesCard } from '@/components/features/notes/RecentNotesCard'
 
 export default function DashboardPage() {
   const { profile, loading: profileLoading } = useProfile()
@@ -42,6 +44,9 @@ export default function DashboardPage() {
         assignments: (d.open_assignments ?? []).map((a: any) => ({ ...a, classes: { name: a.class_name } })),
         openCount: d.open_count,
         submittedCount: d.submitted_count,
+        // Leeg zolang migratie 40 niet gedraaid is -- de kaart toont dan niets
+        // in plaats van te breken.
+        notes: d.notes ?? [],
       })
     } else if (role === 'teacher') {
       setData({
@@ -52,7 +57,10 @@ export default function DashboardPage() {
     } else if (role === 'super_admin') {
       setData({ classCount: d.class_count, teacherCount: d.teacher_count, studentCount: d.student_count, tenantCount: d.tenant_count })
     } else {
-      setData({ classCount: d.class_count, teacherCount: d.teacher_count, studentCount: d.student_count })
+      setData({
+        classCount: d.class_count, teacherCount: d.teacher_count, studentCount: d.student_count,
+        recentNotes: d.recent_notes ?? [], notesLast7d: d.notes_last_7d ?? 0,
+      })
     }
     setLoading(false)
   }
@@ -70,7 +78,7 @@ export default function DashboardPage() {
   const role = profile?.role
 
   if (role === 'student') {
-    const { enrollments, assignments, openCount, submittedCount } = data
+    const { enrollments, assignments, openCount, submittedCount, notes } = data
     return (
       <div className="animate-slide-up">
         <div className="page-header">
@@ -78,6 +86,7 @@ export default function DashboardPage() {
           <p className="page-subtitle">Overzicht van jouw leeractiviteiten</p>
         </div>
         <AnnouncementsCard profile={profile!} />
+        <StudentNotesCard notes={notes} />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <Link href="/klassen" className="stat-card hover:border-primary-200 transition-colors"><div className="stat-icon bg-primary-50"><GraduationCap className="text-primary-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{enrollments?.length ?? 0}</div><div className="text-sm text-gray-500">Klassen</div></div></Link>
           <Link href="/huiswerk" className="stat-card hover:border-primary-200 transition-colors"><div className="stat-icon bg-amber-50"><Clock className="text-amber-600" size={22}/></div><div><div className="text-2xl font-semibold text-gray-900">{openCount ?? assignments?.length ?? 0}</div><div className="text-sm text-gray-500">Openstaand huiswerk</div></div></Link>
@@ -195,13 +204,19 @@ export default function DashboardPage() {
     )
   }
 
-  const { classCount, teacherCount, studentCount } = data
+  const { classCount, teacherCount, studentCount, recentNotes, notesLast7d } = data
   return (
     <div className="animate-slide-up">
       <div className="page-header">
         <h1 className="page-title">Salam {profile?.first_name} 👋</h1>
         <p className="page-subtitle">Overzicht van uw school</p>
       </div>
+      {/* Als eerste, boven de mededelingen. Dit is de "melding" waar de school
+          om vroeg, en ze moet zonder scrollen te zien zijn. Onder de
+          mededelingen begon ze op y=813 van een scherm van 900 -- gemeten, niet
+          geschat. Een beheerder schrijft de mededelingen zelf; hij hoeft ze
+          niet te lezen, en een nota over een kind wel. */}
+      <RecentNotesCard notes={recentNotes} countLast7d={notesLast7d} />
       <AnnouncementsCard profile={profile!} />
       <AttendanceAlertsCard profile={profile!} />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
