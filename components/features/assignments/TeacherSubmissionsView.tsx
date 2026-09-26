@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
-import { CheckCircle2, Download, MessageSquare, Star, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
+import { CheckCircle2, Download, MessageSquare, Star, ChevronDown, ChevronUp, Loader2, ListChecks, Pencil } from 'lucide-react'
 import { formatFileSize, getFileIcon, formatDateTime, cn } from '@/lib/utils'
 import { SignedFileLink } from '@/components/SignedFileLink'
 
@@ -21,6 +21,10 @@ interface Props {
   studentCount: number
   assignmentId: string
   maxScore?: number
+  /** True when assignment_students has rows for this task. Migration 31: no
+   *  rows means the whole class, so this is NOT the same as "somebody has a
+   *  task text" -- a row may exist with an empty task. */
+  perStudent?: boolean
   /** Re-runs the parent's client-side loader. router.refresh() cannot: the
    *  detail page fetches in a useEffect, not in a server component. */
   onGraded?: () => void
@@ -31,12 +35,64 @@ interface Props {
 // inbox of submissions showed him an empty page and no way to award a mark.
 // Every pupil therefore appears, with their own task beside their name, whether
 // or not they handed anything in.
-export default function TeacherSubmissionsView({ roster, studentCount, assignmentId, maxScore, onGraded }: Props) {
+export default function TeacherSubmissionsView({ roster, studentCount, assignmentId, maxScore, perStudent, onGraded }: Props) {
   const [expanded, setExpanded]   = useState<string | null>(null)
   const [feedbacks, setFeedbacks] = useState<Record<string, { score: string; comment: string }>>({})
   const [saving, setSaving]       = useState<string | null>(null)
   const [saved, setSaved]         = useState<Set<string>>(new Set())
   const [error, setError]         = useState('')
+  // Opdracht per leerling, los van de punten: een leerkracht past een opdracht
+  // aan zonder daarom een cijfer te willen zetten.
+  const [tasks, setTasks]         = useState<Record<string, string>>({})
+  const [savingTask, setSavingTask] = useState<string | null>(null)
+  const [savedTask, setSavedTask]   = useState<Set<string>>(new Set())
+  const [converting, setConverting] = useState(false)
+
+  const taskValue = (e: RosterEntry) => tasks[e.student_id] !== undefined ? tasks[e.student_id] : (e.task_text ?? '')
+
+  async function saveTask(entry: RosterEntry) {
+    setSavingTask(entry.student_id)
+    setError('')
+    const { data, error: err } = await supabase
+      .from('assignment_students')
+      .update({ task_text: taskValue(entry).trim() || null, updated_at: new Date().toISOString() })
+      .eq('assignment_id', assignmentId)
+      .eq('student_id', entry.student_id)
+      .select('id')
+    // Nul rijen zonder fout is hoe RLS hier weigert.
+    if (err || !data?.length) {
+      console.error(err)
+      setError('De opdracht kon niet worden opgeslagen.')
+      setSavingTask(null)
+      return
+    }
+    setSavedTask(prev => new Set(prev).add(entry.student_id))
+    setSavingTask(null)
+    onGraded?.()
+  }
+
+  // Een taak voor de hele klas omzetten naar een taak per leerling.
+  //
+  // Voor ELKE leerling een rij, niet alleen voor degene die je wil aanpassen.
+  // Migratie 31: zodra er ook maar een rij bestaat, zien enkel die leerlingen
+  // de taak nog. Een rij voor een enkeling zou de taak dus stilzwijgend voor de
+  // rest van de klas laten verdwijnen.
+  async function convertToPerStudent() {
+    setConverting(true)
+    setError('')
+    const rows = roster.map(r => ({ assignment_id: assignmentId, student_id: r.student_id, task_text: null }))
+    const { error: err } = await supabase
+      .from('assignment_students')
+      .upsert(rows, { onConflict: 'assignment_id,student_id', ignoreDuplicates: true })
+    if (err) {
+      console.error(err)
+      setError('Omzetten naar een opdracht per leerling is niet gelukt.')
+      setConverting(false)
+      return
+    }
+    setConverting(false)
+    onGraded?.()
+  }
 
   const handedIn = roster.filter(r => r.submission && r.submission.status !== 'draft')
   const graded   = roster.filter(r => r.submission?.submission_feedback?.[0]?.score != null)
@@ -125,10 +181,35 @@ export default function TeacherSubmissionsView({ roster, studentCount, assignmen
 
       <h2 className="font-semibold text-gray-900 mb-1">Leerlingen ({roster.length})</h2>
       <p className="text-xs text-gray-500 mb-4">
-        {anyTasks
-          ? 'Klik op een leerling om zijn opdracht te zien en punten te geven.'
-          : 'Klik op een leerling om punten te geven. Dat kan ook als hij niets heeft ingediend.'}
+        {perStudent
+          ? 'Klik op een leerling om zijn opdracht aan te passen en punten te geven.'
+          : anyTasks
+            ? 'Klik op een leerling om zijn opdracht te zien en punten te geven.'
+            : 'Klik op een leerling om punten te geven. Dat kan ook als hij niets heeft ingediend.'}
       </p>
+
+      {/* Deze taak geldt voor de hele klas. Wie hier een opdracht per leerling
+          wil, krijgt eerst voor IEDEREEN een rij -- anders verdwijnt de taak
+          voor de rest van de klas (migratie 31). */}
+      {!perStudent && roster.length > 0 && (
+        <div className="mb-4 rounded-xl border border-border bg-gray-50 px-3.5 py-3">
+          <div className="flex items-start gap-2.5 flex-wrap">
+            <ListChecks size={15} className="text-gray-400 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-[12rem]">
+              <p className="text-sm text-gray-700">Deze taak geldt voor de hele klas.</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Wil je elke leerling een eigen opdracht geven — bv. een andere soera per leerling —
+                zet ze dan om. Iedereen blijft de taak zien; je kan daarna per leerling invullen.
+              </p>
+            </div>
+            <button onClick={convertToPerStudent} disabled={converting}
+              className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5 shrink-0">
+              {converting ? <Loader2 size={12} className="animate-spin" /> : <ListChecks size={12} />}
+              Opdracht per leerling
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>
@@ -179,7 +260,38 @@ export default function TeacherSubmissionsView({ roster, studentCount, assignmen
 
                 {isOpen && (
                   <div className="px-4 pb-4 border-t border-border bg-gray-50/50">
-                    {entry.task_text && (
+                    {perStudent ? (
+                      <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 p-3.5">
+                        <label htmlFor={`taak-${entry.student_id}`}
+                          className="text-xs font-semibold uppercase tracking-wide text-primary-700">
+                          Opdracht van deze leerling
+                        </label>
+                        <textarea
+                          id={`taak-${entry.student_id}`}
+                          rows={2}
+                          value={taskValue(entry)}
+                          onChange={e => {
+                            const v = e.target.value
+                            setTasks(prev => ({ ...prev, [entry.student_id]: v }))
+                            setSavedTask(prev => { const n = new Set(prev); n.delete(entry.student_id); return n })
+                          }}
+                          placeholder="Bv. soera 78, vers 1-20"
+                          className="input w-full resize-none mt-1.5 bg-white text-sm"
+                        />
+                        <button
+                          onClick={() => saveTask(entry)}
+                          disabled={savingTask === entry.student_id}
+                          className={cn('btn-primary text-xs py-1.5 px-3 mt-2',
+                            savedTask.has(entry.student_id) && 'bg-green-600 hover:bg-green-700')}
+                        >
+                          {savingTask === entry.student_id
+                            ? <><Loader2 size={12} className="animate-spin" /> Opslaan…</>
+                            : savedTask.has(entry.student_id)
+                              ? <><CheckCircle2 size={12} /> Opgeslagen!</>
+                              : <><Pencil size={12} /> Opdracht opslaan</>}
+                        </button>
+                      </div>
+                    ) : entry.task_text ? (
                       <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 p-3.5">
                         <p className="text-xs font-semibold uppercase tracking-wide text-primary-700">
                           Opdracht van deze leerling
@@ -188,7 +300,7 @@ export default function TeacherSubmissionsView({ roster, studentCount, assignmen
                           {entry.task_text}
                         </p>
                       </div>
-                    )}
+                    ) : null}
 
                     {sub?.text_content && (
                       <div className="mt-4">

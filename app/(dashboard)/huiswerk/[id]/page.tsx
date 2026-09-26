@@ -24,6 +24,9 @@ export default function HuiswerkDetailPage() {
   const [mySubmission, setMySubmission] = useState<any>(null)
   const [allSubmissions, setAllSubmissions] = useState<any[]>([])
   const [studentCount, setStudentCount] = useState(0)
+  // Hoeveel leerlingen zitten er in de klas? Nodig om te weten of "per leerling
+  // toegewezen" ook echt betekent dat er iemand buiten valt.
+  const [classSize, setClassSize] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadErr, setLoadErr] = useState<unknown>(null)
 
@@ -109,12 +112,11 @@ export default function HuiswerkDetailPage() {
       // upload -- and it is the only place the per-pupil task can be shown next
       // to the pupil it belongs to.
       const assignedIds = staffPerRows.map((r: any) => r.student_id)
-      let rosterIds = assignedIds
-      if (rosterIds.length === 0) {
-        const { data: cs } = await supabase
-          .from('class_students').select('student_id').eq('class_id', a.class_id)
-        rosterIds = (cs ?? []).map((r: any) => r.student_id)
-      }
+      const { data: cs } = await supabase
+        .from('class_students').select('student_id').eq('class_id', a.class_id)
+      const classIds = (cs ?? []).map((r: any) => r.student_id)
+      setClassSize(classIds.length)
+      const rosterIds = assignedIds.length ? assignedIds : classIds
       const { data: profs } = rosterIds.length
         ? await supabase.from('profiles').select('id, first_name, last_name').in('id', rosterIds)
         : { data: [] as any[] }
@@ -178,7 +180,7 @@ export default function HuiswerkDetailPage() {
         )}
 
         {/* Staff: make it obvious this is not a whole-class assignment. */}
-        {profile?.role !== 'student' && perStudentRows.length > 0 && (
+        {profile?.role !== 'student' && perStudentRows.length > 0 && perStudentRows.length < classSize && (
           <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900">
             Dit huiswerk is per leerling toegewezen — {perStudentRows.length}{' '}
             {perStudentRows.length === 1 ? 'leerling' : 'leerlingen'} zien het. De rest van de klas niet.
@@ -201,7 +203,7 @@ export default function HuiswerkDetailPage() {
         <SubmitAssignmentForm assignmentId={id as string} assignment={assignment} existingSubmission={mySubmission} userId={profile.id} />
       )}
       {isTeacher && (
-        <TeacherSubmissionsView roster={roster} studentCount={studentCount} assignmentId={id as string} maxScore={assignment.max_score} onGraded={() => loadData(true)} />
+        <TeacherSubmissionsView roster={roster} studentCount={studentCount} assignmentId={id as string} maxScore={assignment.max_score} perStudent={perStudentRows.length > 0} onGraded={() => loadData(true)} />
       )}
     </div>
   )
