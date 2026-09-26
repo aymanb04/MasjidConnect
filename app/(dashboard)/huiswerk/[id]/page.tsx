@@ -10,6 +10,7 @@ import { ArrowLeft, Clock } from 'lucide-react'
 import Link from 'next/link'
 import SubmitAssignmentForm from '@/components/features/assignments/SubmitAssignmentForm'
 import TeacherSubmissionsView from '@/components/features/assignments/TeacherSubmissionsView'
+import AssignmentAdminBar from '@/components/features/assignments/AssignmentAdminBar'
 
 export default function HuiswerkDetailPage() {
   const { id } = useParams()
@@ -187,6 +188,13 @@ export default function HuiswerkDetailPage() {
           {assignment.allow_file_submission && <span className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg">📎 Bestand uploaden</span>}
           {assignment.allow_text_submission && <span className="text-xs bg-purple-50 text-purple-700 px-2.5 py-1 rounded-lg">✏️ Tekst invoeren</span>}
         </div>
+        {isTeacher && (
+          <AssignmentAdminBar
+            assignment={assignment}
+            submissions={allSubmissions}
+            onSaved={() => loadData(true)}
+          />
+        )}
       </div>
 
       {profile?.role === 'student' && (

@@ -20,6 +20,10 @@ const LIMITS: Record<string, number> = {
   // a spam run pointless, high enough that a school behind one NAT can retry.
   '/api/contact':          5,
   '/api/tenant/logo-icon': 60,
+  // Destructief en onomkeerbaar: het wist ook de indieningen, de punten en de
+  // geuploade bestanden. Ruim genoeg om een lesjaar op te kuisen, laag genoeg
+  // dat een gekaapte leerkrachtensessie niet een hele klas leegmaakt.
+  '/api/assignment/delete': 20,
 }
 
 let redis: Redis | null = null
