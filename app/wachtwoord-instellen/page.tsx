@@ -14,7 +14,7 @@
 // Tone: this is the second screen a child ever sees. Short sentences, say why,
 // and no jargon.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
@@ -33,16 +33,25 @@ export default function WachtwoordInstellenPage() {
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState('')
 
-  if (loading) {
+  // In een effect, niet tijdens de render. router.replace() tijdens de render
+  // draait ook bij het prerenderen van deze pagina, en daar bestaat `location`
+  // niet: de build gooide er elke keer "ReferenceError: location is not
+  // defined" uit. /akkoord, dat verder identiek gebouwd is, deed het al zo.
+  useEffect(() => {
+    if (loading) return
+    if (!profile) { router.replace('/login'); return }
+    // Al gebeurd -- er valt niets af te dwingen. Wie deze URL met de hand
+    // intikt, gaat gewoon terug.
+    if (!profile.must_change_password) { router.replace('/dashboard') }
+  }, [loading, profile, router])
+
+  if (loading || !profile || !profile.must_change_password) {
     return (
       <div className="flex h-dvh items-center justify-center" style={{ backgroundColor: '#F8F7F4' }}>
         <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
       </div>
     )
   }
-  if (!profile) { router.replace('/login'); return null }
-  // Already done — nothing to force. Someone reaching this URL by hand just goes back.
-  if (!profile.must_change_password) { router.replace('/dashboard'); return null }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()

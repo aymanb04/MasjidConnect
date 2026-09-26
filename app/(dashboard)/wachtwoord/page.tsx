@@ -17,7 +17,7 @@
 // owner out of their own account. Supabase's updateUser does not verify it, so
 // we verify it ourselves by signing in with it first.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
@@ -37,8 +37,13 @@ export default function WachtwoordPage() {
   const [done, setDone]       = useState(false)
   const [error, setError]     = useState('')
 
-  if (loading) return <PageLoader />
-  if (!profile) { router.replace('/login'); return null }
+  // Zelfde reden als in /wachtwoord-instellen: redirecten tijdens de render
+  // draait mee bij het prerenderen, waar `location` niet bestaat.
+  useEffect(() => {
+    if (!loading && !profile) router.replace('/login')
+  }, [loading, profile, router])
+
+  if (loading || !profile) return <PageLoader />
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
