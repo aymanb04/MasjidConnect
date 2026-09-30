@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, EmptyState, LoadError } from '@/components/ui/PageShell'
+import { ScrollX } from '@/components/ui/ScrollX'
 import { Clock, Plus, X, Loader2 } from 'lucide-react'
 import { useScrollLock } from '@/lib/hooks/useScrollLock'
 
@@ -109,7 +110,7 @@ export default function RoosterPage() {
         />
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <ScrollX hint="Veeg opzij voor de andere dagen">
             <div className="grid min-w-max w-full" style={{ gridTemplateColumns: `repeat(${activeDays.length}, minmax(180px, 1fr))` }}>
               {activeDays.map((day, colIdx) => (
                 <div
@@ -152,7 +153,7 @@ export default function RoosterPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </ScrollX>
         </div>
       )}
 

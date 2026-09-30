@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
+import { ScrollX } from '@/components/ui/ScrollX'
 import { ArrowLeft, GraduationCap, Plus, X, Check, Pencil, Loader2, SlidersHorizontal, Target } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
@@ -539,7 +540,7 @@ function StaffScoresPage() {
           ) : (
             <button onClick={() => setShowNewTest(true)}
               className="btn-secondary text-sm flex items-center gap-1.5">
-              <Plus size={14} /> Toets / offline score toevoegen
+              <Plus size={14} /> Toets of mondelinge opdracht toevoegen
             </button>
           )}
         </div>
@@ -547,12 +548,23 @@ function StaffScoresPage() {
 
       {/* ── Homework grades grid ─────────────────────────────────────── */}
       {(assignments.length === 0 && tests.length === 0) || students.length === 0 ? (
-        <div className="card p-8 text-center text-gray-400 text-sm">
-          {students.length === 0 ? 'Nog geen leerlingen ingeschreven.' : 'Nog geen opdrachten of toetsen voor deze klas.'}
+        <div className="card p-8 text-center text-sm">
+          {students.length === 0 ? (
+            <span className="text-gray-400">Nog geen leerlingen ingeschreven.</span>
+          ) : (
+            <>
+              <p className="text-gray-500">Nog geen opdrachten of toetsen voor deze klas.</p>
+              {/* Zonder deze zin is dit een doodlopend scherm: je ziet een lege
+                  tabel en niets vertelt je dat je eerst zelf een kolom maakt. */}
+              <p className="text-gray-400 mt-1">
+                Maak hierboven een toets of mondelinge opdracht aan om punten te kunnen invullen.
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <ScrollX scrollToEndKey={tests.length}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-gray-50/60">
@@ -678,9 +690,10 @@ function StaffScoresPage() {
                             ) : (
                               <button
                                 onClick={() => { setEditingTestCell({ studentId: s.id, testId: t.id }); setEditTestScore('') }}
-                                className="text-gray-300 hover:text-amber-500 transition-colors p-1 rounded hover:bg-amber-50"
-                                title="Score invoeren">
-                                <Plus size={14} />
+                                className="mx-auto flex h-8 w-14 items-center justify-center rounded-lg border border-dashed border-gray-300 text-gray-400 transition-colors hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600"
+                                title="Score invoeren"
+                                aria-label={`Score invoeren voor ${s.first_name} ${s.last_name}`}>
+                                <Plus size={13} />
                               </button>
                             )}
                           </td>
@@ -736,7 +749,7 @@ function StaffScoresPage() {
                 </tr>
               </tfoot>
             </table>
-          </div>
+          </ScrollX>
         </div>
       )}
 
@@ -750,7 +763,7 @@ function StaffScoresPage() {
               Uit de puntenverdeling van deze klas. Leeg laten = telt nog niet mee.
             </span>
           </div>
-          <div className="overflow-x-auto">
+          <ScrollX>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-gray-50/40">
@@ -795,7 +808,7 @@ function StaffScoresPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollX>
         </div>
       )}
 
@@ -809,7 +822,7 @@ function StaffScoresPage() {
               Waar begon de leerling, waar moet hij naartoe, waar staat hij nu. De leerling en zijn ouders zien dit.
             </span>
           </div>
-          <div className="overflow-x-auto">
+          <ScrollX>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-gray-50/40">
@@ -869,7 +882,7 @@ function StaffScoresPage() {
                 })}
               </tbody>
             </table>
-          </div>
+          </ScrollX>
         </div>
       )}
 
@@ -881,7 +894,7 @@ function StaffScoresPage() {
             <h2 className="font-semibold text-sm text-gray-800">Examenresultaten</h2>
             <span className="text-xs text-gray-400 ml-1">Klik op <Plus size={11} className="inline"/> om een score in te voeren</span>
           </div>
-          <div className="overflow-x-auto">
+          <ScrollX>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-gray-50/40">
@@ -974,10 +987,11 @@ function StaffScoresPage() {
                             /* ── empty cell ── */
                             <button
                               onClick={() => openEdit(s.id, sem)}
-                              className="text-gray-300 hover:text-amber-500 transition-colors p-1 rounded hover:bg-amber-50"
+                              className="mx-auto flex h-8 w-14 items-center justify-center rounded-lg border border-dashed border-gray-300 text-gray-400 transition-colors hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600"
                               title="Score invoeren"
+                              aria-label={`Examenscore invoeren voor ${s.first_name} ${s.last_name}`}
                             >
-                              <Plus size={14}/>
+                              <Plus size={13}/>
                             </button>
                           )}
                         </td>
@@ -987,7 +1001,7 @@ function StaffScoresPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollX>
         </div>
       )}
     </div>

@@ -128,3 +128,25 @@
 
 /* Framer Motion layout animations */
 .layout-enter { animation: slideUp 0.25s ease-out; }
+
+/* Raakvlakken op een telefoon.
+ *
+ * Gemeten op 2026-09-30 met een iPhone 13-viewport: /beheer had 118 knoppen van
+ * 25x25px, /betalingen 34, /aanwezigheid 23. Het zijn overal dezelfde
+ * icoonknopjes in tabelrijen (bewerken, verwijderen) -- met p-1.5 rond een
+ * icoon van 13px kom je op 25px, en dat is te klein om betrouwbaar te raken.
+ *
+ * Alleen op een grof aanwijsapparaat (vinger), zodat de muisweergave exact
+ * blijft zoals ze is. Het icoon zelf groeit niet mee; enkel het gebied eromheen,
+ * dus visueel verandert er niets -- er valt alleen te mikken.
+ */
+@media (pointer: coarse) {
+  button:has(> svg:only-child),
+  a:has(> svg:only-child) {
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

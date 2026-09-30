@@ -7,6 +7,7 @@ import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import RapportDocument from '@/components/features/rapport/RapportDocument'
+import { ScrollX } from '@/components/ui/ScrollX'
 import { ArrowLeft, Printer, Loader2, CheckCircle2, Undo2, Save, Lock } from 'lucide-react'
 
 type Line = {
@@ -258,7 +259,7 @@ export default function RapportCardPage() {
       )}
 
       {/* live print preview / the printed document */}
-      <div className="card p-4 overflow-x-auto">
+      <ScrollX className="card p-4" hint="Veeg opzij om het hele rapport te zien">
         <RapportDocument
           schoolName={tenant?.name ?? 'MasjidConnect'}
           schoolLines={schoolLines}
@@ -269,7 +270,7 @@ export default function RapportCardPage() {
           semester={card.semester}
           lines={docLines}
         />
-      </div>
+      </ScrollX>
     </div>
   )
 }
