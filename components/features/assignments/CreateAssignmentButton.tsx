@@ -24,7 +24,8 @@ export default function CreateAssignmentButton({ onCreated }: { onCreated?: () =
   const [form, setForm]       = useState({
     class_id: searchParams?.get('klas') ?? '',
     title: '', description: '', due_date: '', max_score: '',
-    allow_text: true, allow_file: true, is_published: true,
+    // De Kroon hands homework in on paper, so "nee" is the default.
+    in_app: false, allow_text: true, allow_file: true, is_published: true,
   })
 
   useEffect(() => {
@@ -66,8 +67,8 @@ export default function CreateAssignmentButton({ onCreated }: { onCreated?: () =
         title: form.title.trim(), description: form.description || null,
         due_date: form.due_date || null,
         max_score: form.max_score ? parseInt(form.max_score) : null,
-        allow_text_submission: form.allow_text,
-        allow_file_submission: form.allow_file,
+        allow_text_submission: form.in_app && form.allow_text,
+        allow_file_submission: form.in_app && form.allow_file,
         is_published: form.is_published,
       }).select('id').single()
       // supabase-js never throws: without this the modal closed on failure and
@@ -103,7 +104,7 @@ export default function CreateAssignmentButton({ onCreated }: { onCreated?: () =
       }
       setOpen(false)
       setError('')
-      setForm({ class_id: '', title: '', description: '', due_date: '', max_score: '', allow_text: true, allow_file: true, is_published: true })
+      setForm({ class_id: '', title: '', description: '', due_date: '', max_score: '', in_app: false, allow_text: true, allow_file: true, is_published: true })
       setPerStudent(false); setStudents([]); setPicked({})
       // router.refresh() only re-runs server components; the huiswerk list
       // fetches client-side in a useEffect, so it would not pick this up.
@@ -189,11 +190,38 @@ export default function CreateAssignmentButton({ onCreated }: { onCreated?: () =
                 <div><label className="label">Deadline</label><input type="datetime-local" value={form.due_date} onChange={e => setForm(p => ({ ...p, due_date: e.target.value }))} className="input"/></div>
                 <div><label className="label">Max punten</label><input type="number" min={0} value={form.max_score} onChange={e => setForm(p => ({ ...p, max_score: e.target.value }))} placeholder="Leeg = geen score" className="input"/></div>
               </div>
-              <div><label className="label">Indieningstypes</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={form.allow_file} onChange={e => setForm(p => ({ ...p, allow_file: e.target.checked }))}/> Bestand</label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={form.allow_text} onChange={e => setForm(p => ({ ...p, allow_text: e.target.checked }))}/> Tekst</label>
+              {/* Paper or oral homework stores both flags as false. Only homework
+                  handed in through the app can be "te laat". */}
+              <div>
+                <label className="label">Inleveren via de app?</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setForm(p => ({ ...p, in_app: false }))}
+                    className={`flex-1 rounded-xl border px-3 py-2 text-sm transition-colors ${!form.in_app
+                      ? 'border-primary-500 bg-primary-50 font-medium text-primary-700'
+                      : 'border-border text-gray-600 hover:bg-gray-50'}`}>
+                    Nee, op papier of mondeling
+                  </button>
+                  <button type="button" onClick={() => setForm(p => ({ ...p, in_app: true }))}
+                    className={`flex-1 rounded-xl border px-3 py-2 text-sm transition-colors ${form.in_app
+                      ? 'border-primary-500 bg-primary-50 font-medium text-primary-700'
+                      : 'border-border text-gray-600 hover:bg-gray-50'}`}>
+                    Ja, leerlingen uploaden
+                  </button>
                 </div>
+                {form.in_app ? (
+                  <div className="mt-2 flex gap-4">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={form.allow_file} onChange={e => setForm(p => ({ ...p, allow_file: e.target.checked }))}/> Bestand</label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={form.allow_text} onChange={e => setForm(p => ({ ...p, allow_text: e.target.checked }))}/> Tekst</label>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-gray-500">
+                    Leerlingen zien het huiswerk en de deadline, maar krijgen geen uploadknop en
+                    staan nooit op &ldquo;te laat&rdquo;. Punten geven kan nog altijd.
+                  </p>
+                )}
+                {form.in_app && !form.allow_file && !form.allow_text && (
+                  <p className="mt-1 text-xs text-red-600">Kies Bestand, Tekst of allebei.</p>
+                )}
               </div>
               <label className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-gray-50 cursor-pointer">
                 <input type="checkbox" checked={form.is_published} onChange={e => setForm(p => ({ ...p, is_published: e.target.checked }))}/>
@@ -207,7 +235,7 @@ export default function CreateAssignmentButton({ onCreated }: { onCreated?: () =
             )}
             <div className="flex flex-shrink-0 gap-3 border-t border-border p-6">
               <button onClick={() => setOpen(false)} className="btn-secondary flex-1 justify-center">Annuleren</button>
-              <button onClick={handleCreate} disabled={loading || !form.class_id || !form.title.trim()} className="btn-primary flex-1 justify-center">
+              <button onClick={handleCreate} disabled={loading || !form.class_id || !form.title.trim() || (form.in_app && !form.allow_file && !form.allow_text)} className="btn-primary flex-1 justify-center">
                 {loading ? <><Loader2 size={15} className="animate-spin"/> Aanmaken…</> : 'Aanmaken'}
               </button>
             </div>

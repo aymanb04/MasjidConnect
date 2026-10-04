@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { useRouter } from 'next/navigation'
 import { Upload, X, CheckCircle2, Loader2, FileText, RotateCcw, Star, Clock } from 'lucide-react'
-import { formatFileSize, getFileIcon, getSubmissionStatusBadge, cn } from '@/lib/utils'
+import { formatFileSize, getFileIcon, getSubmissionStatusBadge, isHandedInViaApp, cn } from '@/lib/utils'
 import { SignedFileLink } from '@/components/SignedFileLink'
 
 interface Props {
@@ -34,7 +34,9 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
   const feedback        = sub?.submission_feedback?.[0]
   const isGraded        = sub?.status === 'graded'
   const isPastDeadline  = assignment.due_date ? new Date(assignment.due_date) < new Date() : false
-  const canSubmit       = !isGraded && !isPastDeadline
+  // Paper or oral homework: no upload form, and no deadline warnings either.
+  const viaApp          = isHandedInViaApp(assignment)
+  const canSubmit       = viaApp && !isGraded && !isPastDeadline
   const scoreDisplay    = feedback?.score != null
     ? assignment.max_score
       ? `${feedback.score}/${assignment.max_score}`
@@ -119,9 +121,18 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
   return (
     <div className="card p-6">
       <div className="flex items-center justify-between mb-5">
-        <h2 className="font-semibold text-gray-900">Mijn indiening</h2>
-        {sb && <span className={`badge ${sb.color}`}>{sb.label}</span>}
+        <h2 className="font-semibold text-gray-900">{viaApp ? 'Mijn indiening' : 'Inleveren'}</h2>
+        {viaApp && sb && <span className={`badge ${sb.color}`}>{sb.label}</span>}
       </div>
+
+      {!viaApp && !isGraded && (
+        <div className="flex items-center gap-3 p-3.5 rounded-xl bg-gray-50 border border-border">
+          <FileText size={15} className="text-gray-400 flex-shrink-0"/>
+          <p className="text-sm text-gray-600">
+            Dit huiswerk lever je niet in via de app. Je maakt het op papier of laat het in de klas zien.
+          </p>
+        </div>
+      )}
 
       {/* Score + feedback — shown prominently when graded */}
       {isGraded && (
@@ -153,7 +164,7 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
       )}
 
       {/* Submitted but not yet graded */}
-      {sub && !isGraded && (
+      {viaApp && sub && !isGraded && (
         <div className="mb-5 flex items-center gap-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200">
           <Clock size={15} className="text-amber-500 flex-shrink-0"/>
           <p className="text-sm text-amber-700">Ingediend — wacht op beoordeling van de leerkracht.</p>
@@ -261,7 +272,7 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
       )}
 
       {/* Deadline passed, not yet submitted */}
-      {isPastDeadline && !sub && (
+      {viaApp && isPastDeadline && !sub && (
         <div className="flex items-center gap-3 p-3.5 rounded-xl bg-red-50 border border-red-200">
           <Clock size={15} className="text-red-400 flex-shrink-0"/>
           <p className="text-sm text-red-600">De deadline is verstreken. Je kan deze taak niet meer indienen.</p>
@@ -269,7 +280,7 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
       )}
 
       {/* Deadline passed after submission (not graded) */}
-      {isPastDeadline && sub && !isGraded && (
+      {viaApp && isPastDeadline && sub && !isGraded && (
         <p className="text-xs text-center text-gray-400 mt-3">De deadline is verstreken — je indiening wacht op beoordeling.</p>
       )}
     </div>

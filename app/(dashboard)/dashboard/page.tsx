@@ -101,7 +101,7 @@ export default function DashboardPage() {
             <div className="text-center py-8"><CheckCircle2 size={32} className="mx-auto mb-2 text-green-400"/><p className="text-sm text-gray-400">Geen openstaand huiswerk!</p></div>
           ) : (
             <div className="space-y-2">
-              {assignments.map((a: any) => { const dl = getDeadlineLabel(a.due_date); return (
+              {assignments.map((a: any) => { const dl = getDeadlineLabel(a.due_date, { canBeLate: a.needs_upload === true }); return (
                 <Link key={a.id} href={`/huiswerk/${a.id}`} className="flex items-center justify-between p-3.5 rounded-xl border border-border hover:border-primary-200 hover:bg-primary-50/30 transition-all group">
                   <div><div className="font-medium text-gray-800 text-sm group-hover:text-primary-700">{a.title}</div><div className="text-xs text-gray-400">{a.classes?.name}</div></div>
                   <span className={`text-xs font-medium ${dl.color}`}>{dl.label}</span>

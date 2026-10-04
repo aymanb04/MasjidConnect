@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
-import { getDeadlineLabel, getSubmissionStatusBadge } from '@/lib/utils'
+import { getDeadlineLabel, getSubmissionStatusBadge, isHandedInViaApp } from '@/lib/utils'
 import { ArrowLeft, FileText, BookOpen, Users, Plus, Clock, GraduationCap, Mail, BarChart2, X, Loader2, SlidersHorizontal } from 'lucide-react'
 import Link from 'next/link'
 
@@ -172,8 +172,8 @@ export default function KlasDetailPage() {
             {assignments.length === 0 ? <p className="text-sm text-gray-400 text-center py-6">Geen huiswerk voor deze klas.</p> : (
               <div className="space-y-2">
                 {assignments.map((a: any) => {
-                  const dl = getDeadlineLabel(a.due_date)
                   const sub = mySubmissions[a.id]
+                  const dl = getDeadlineLabel(a.due_date, { canBeLate: profile?.role === 'student' && isHandedInViaApp(a) && !sub })
                   const sb = sub ? getSubmissionStatusBadge(sub.status) : null
                   return (
                     <Link key={a.id} href={`/huiswerk/${a.id}`} className="flex items-center justify-between p-3.5 rounded-xl border border-border hover:border-primary-200 hover:bg-primary-50/30 transition-all group">

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, EmptyState, LoadError } from '@/components/ui/PageShell'
-import { getDeadlineLabel, getSubmissionStatusBadge } from '@/lib/utils'
+import { getDeadlineLabel, getSubmissionStatusBadge, isHandedInViaApp } from '@/lib/utils'
 import { FileText, Clock, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
 import CreateAssignmentButton from '@/components/features/assignments/CreateAssignmentButton'
@@ -113,13 +113,16 @@ export default function HuiswerkPage() {
               </div>
               <div className="divide-y divide-border">
                 {group.items.map((a: any) => {
-                  const dl = getDeadlineLabel(a.due_date)
                   const sub = mySubmissions[a.id]
+                  const viaApp = isHandedInViaApp(a)
+                  const dl = getDeadlineLabel(a.due_date, { canBeLate: profile?.role === 'student' && viaApp && !sub })
                   const sb = sub ? getSubmissionStatusBadge(sub.status) : null
                   return (
                     <Link key={a.id} href={`/huiswerk/${a.id}`} className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50/70 transition-colors group">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${sub ? 'bg-green-100' : 'bg-amber-50'}`}>
-                        {sub ? <CheckCircle2 size={16} className="text-green-500"/> : <Clock size={16} className="text-amber-500"/>}
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${sub ? 'bg-green-100' : viaApp ? 'bg-amber-50' : 'bg-gray-100'}`}>
+                        {sub ? <CheckCircle2 size={16} className="text-green-500"/>
+                          : viaApp ? <Clock size={16} className="text-amber-500"/>
+                          : <FileText size={16} className="text-gray-400"/>}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm text-gray-800 group-hover:text-primary-700 transition-colors truncate">{a.title}</div>

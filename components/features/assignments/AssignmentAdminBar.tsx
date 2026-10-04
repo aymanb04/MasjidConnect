@@ -45,11 +45,15 @@ export default function AssignmentAdminBar({ assignment, submissions, onSaved }:
     description: assignment.description ?? '',
     due_date:    toLocalInput(assignment.due_date),
     max_score:   assignment.max_score != null ? String(assignment.max_score) : '',
+    // Beide vlaggen uit = op papier of mondeling. Bestaand huiswerk staat op
+    // de oude default (allebei aan); hier zet de leerkracht dat recht.
+    in_app:      !!(assignment.allow_file_submission || assignment.allow_text_submission),
   })
 
   const submissionCount = submissions.length
   const fileCount  = submissions.reduce((n, s) => n + (s.submission_files?.length ?? 0), 0)
   const gradeCount = submissions.filter(s => s.submission_feedback?.[0]?.score != null).length
+  const wasInApp = !!(assignment.allow_file_submission || assignment.allow_text_submission)
   const scoreChanged = String(assignment.max_score ?? '') !== form.max_score
 
   async function save() {
@@ -63,6 +67,12 @@ export default function AssignmentAdminBar({ assignment, submissions, onSaved }:
         // Een leeg veld betekent "geen deadline", niet "vandaag".
         due_date: form.due_date ? new Date(form.due_date).toISOString() : null,
         max_score: form.max_score ? parseInt(form.max_score) : null,
+        // Alleen bij een omschakeling aanraken: een titel bewerken mag een taak
+        // met enkel "Bestand" niet stilzwijgend ook "Tekst" geven. Terug naar
+        // "ja" zet beide types aan.
+        ...(form.in_app !== wasInApp
+          ? { allow_file_submission: form.in_app, allow_text_submission: form.in_app }
+          : {}),
         updated_at: new Date().toISOString(),
       })
       .eq('id', assignment.id)
@@ -188,6 +198,19 @@ export default function AssignmentAdminBar({ assignment, submissions, onSaved }:
             <label htmlFor="hw-max" className="block text-xs text-gray-500 mb-1">Max. punten</label>
             <input id="hw-max" type="number" min={1} className="input w-full" value={form.max_score}
               onChange={e => setForm(p => ({ ...p, max_score: e.target.value }))} />
+          </div>
+        </div>
+        <div>
+          <span className="block text-xs text-gray-500 mb-1">Inleveren via de app?</span>
+          <div className="flex gap-2">
+            {[{ v: false, l: 'Nee, op papier of mondeling' }, { v: true, l: 'Ja, leerlingen uploaden' }].map(o => (
+              <button key={String(o.v)} type="button" onClick={() => setForm(p => ({ ...p, in_app: o.v }))}
+                className={`flex-1 rounded-xl border px-3 py-2 text-xs transition-colors ${form.in_app === o.v
+                  ? 'border-primary-500 bg-primary-50 font-medium text-primary-700'
+                  : 'border-border text-gray-600 hover:bg-gray-50'}`}>
+                {o.l}
+              </button>
+            ))}
           </div>
         </div>
         {scoreChanged && gradeCount > 0 && (

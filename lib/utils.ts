@@ -19,13 +19,24 @@ export function formatRelative(date: string | Date): string {
   return formatDistanceToNow(new Date(date), { addSuffix: true, locale: nl })
 }
 
-export function getDeadlineLabel(dueDate: string | null | undefined): {
+/** Does the pupil hand this homework in through the app at all? Both flags off
+ *  means paper or oral homework: the teacher checks it in class. */
+export function isHandedInViaApp(a: { allow_text_submission?: boolean | null; allow_file_submission?: boolean | null }): boolean {
+  return !!(a.allow_text_submission || a.allow_file_submission)
+}
+
+// `canBeLate`: only a pupil who still owes an upload is "te laat". It used to
+// be every past deadline, so at De Kroon -- where homework is on paper -- every
+// family saw red "Te laat" on homework their child had done.
+export function getDeadlineLabel(dueDate: string | null | undefined, { canBeLate = false } = {}): {
   label: string
   color: string
 } {
   if (!dueDate) return { label: 'Geen deadline', color: 'text-gray-400' }
   const d = new Date(dueDate)
-  if (isPast(d))    return { label: `Te laat — ${formatDate(d)}`, color: 'text-red-500' }
+  if (isPast(d))    return canBeLate
+    ? { label: `Te laat — ${formatDate(d)}`, color: 'text-red-500' }
+    : { label: `Deadline was ${formatDate(d)}`, color: 'text-gray-400' }
   if (isToday(d))   return { label: 'Vandaag',    color: 'text-amber-500' }
   if (isTomorrow(d)) return { label: 'Morgen',    color: 'text-amber-400' }
   return { label: formatDate(d), color: 'text-gray-500' }

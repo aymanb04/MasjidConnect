@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
-import { formatDateTime, getDeadlineLabel } from '@/lib/utils'
+import { formatDateTime, getDeadlineLabel, isHandedInViaApp } from '@/lib/utils'
 import { ArrowLeft, Clock } from 'lucide-react'
 import Link from 'next/link'
 import SubmitAssignmentForm from '@/components/features/assignments/SubmitAssignmentForm'
@@ -146,8 +146,11 @@ export default function HuiswerkDetailPage() {
   )
   if (!assignment) return null
 
-  const dl = getDeadlineLabel(assignment.due_date)
   const isTeacher = ['teacher','admin','super_admin'].includes(profile?.role ?? '')
+  const viaApp = isHandedInViaApp(assignment)
+  const dl = getDeadlineLabel(assignment.due_date, {
+    canBeLate: profile?.role === 'student' && viaApp && !mySubmission,
+  })
 
   return (
     <div className="animate-slide-up max-w-3xl">
@@ -189,6 +192,7 @@ export default function HuiswerkDetailPage() {
         <div className="flex gap-2 mt-4">
           {assignment.allow_file_submission && <span className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg">📎 Bestand uploaden</span>}
           {assignment.allow_text_submission && <span className="text-xs bg-purple-50 text-purple-700 px-2.5 py-1 rounded-lg">✏️ Tekst invoeren</span>}
+          {!viaApp && <span className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-lg">📄 Op papier of mondeling</span>}
         </div>
         {isTeacher && (
           <AssignmentAdminBar
@@ -203,7 +207,7 @@ export default function HuiswerkDetailPage() {
         <SubmitAssignmentForm assignmentId={id as string} assignment={assignment} existingSubmission={mySubmission} userId={profile.id} />
       )}
       {isTeacher && (
-        <TeacherSubmissionsView roster={roster} studentCount={studentCount} assignmentId={id as string} maxScore={assignment.max_score} perStudent={perStudentRows.length > 0} onGraded={() => loadData(true)} />
+        <TeacherSubmissionsView roster={roster} studentCount={studentCount} assignmentId={id as string} maxScore={assignment.max_score} perStudent={perStudentRows.length > 0} viaApp={viaApp} onGraded={() => loadData(true)} />
       )}
     </div>
   )

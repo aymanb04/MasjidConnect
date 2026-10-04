@@ -25,6 +25,9 @@ interface Props {
    *  rows means the whole class, so this is NOT the same as "somebody has a
    *  task text" -- a row may exist with an empty task. */
   perStudent?: boolean
+  /** False for paper or oral homework. Nobody uploads, so "Niets ingediend"
+   *  next to every pupil is noise. */
+  viaApp?: boolean
   /** Re-runs the parent's client-side loader. router.refresh() cannot: the
    *  detail page fetches in a useEffect, not in a server component. */
   onGraded?: () => void
@@ -35,7 +38,7 @@ interface Props {
 // inbox of submissions showed him an empty page and no way to award a mark.
 // Every pupil therefore appears, with their own task beside their name, whether
 // or not they handed anything in.
-export default function TeacherSubmissionsView({ roster, studentCount, assignmentId, maxScore, perStudent, onGraded }: Props) {
+export default function TeacherSubmissionsView({ roster, studentCount, assignmentId, maxScore, perStudent, viaApp = true, onGraded }: Props) {
   const [expanded, setExpanded]   = useState<string | null>(null)
   const [feedbacks, setFeedbacks] = useState<Record<string, { score: string; comment: string }>>({})
   const [saving, setSaving]       = useState<string | null>(null)
@@ -163,10 +166,12 @@ export default function TeacherSubmissionsView({ roster, studentCount, assignmen
           <div className="text-2xl font-semibold text-amber-500">{Math.max(0, roster.length - graded.length)}</div>
           <div className="text-xs text-gray-500">Nog te beoordelen</div>
         </div>
-        <div className="text-center">
-          <div className="text-2xl font-semibold text-gray-900">{handedIn.length}</div>
-          <div className="text-xs text-gray-500">Ingediend</div>
-        </div>
+        {viaApp && (
+          <div className="text-center">
+            <div className="text-2xl font-semibold text-gray-900">{handedIn.length}</div>
+            <div className="text-xs text-gray-500">Ingediend</div>
+          </div>
+        )}
         <div className="flex-1 ml-4">
           <div className="flex justify-between text-xs text-gray-500 mb-1">
             <span>Beoordeeld</span>
@@ -243,13 +248,13 @@ export default function TeacherSubmissionsView({ roster, studentCount, assignmen
                         the class one by one should not have to open each pupil. */}
                     {entry.task_text
                       ? <div className="text-xs text-gray-600 truncate">{entry.task_text}</div>
-                      : <div className="text-xs text-gray-400">
+                      : viaApp && <div className="text-xs text-gray-400">
                           {didHand ? formatDateTime(sub.submitted_at) : 'Niets ingediend'}
                         </div>}
                   </div>
-                  {didHand
+                  {viaApp && (didHand
                     ? <span className="badge bg-blue-50 text-blue-700">Ingediend</span>
-                    : <span className="badge bg-gray-100 text-gray-500">Niets ingediend</span>}
+                    : <span className="badge bg-gray-100 text-gray-500">Niets ingediend</span>)}
                   {hasFb?.score != null && (
                     <span className="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-medium">
                       {hasFb.score}{maxScore ? `/${maxScore}` : ''} pt
