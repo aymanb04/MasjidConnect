@@ -116,9 +116,18 @@ async function main() {
         check('student reads own profile', !error && data?.length === 1 && data[0].role === 'student')
 
         for (const t of ['fee_payments', 'fee_config', 'staff_pay', 'payroll_entries',
-            'student_notes', 'student_documents', 'invitations', 'audit_logs']) {
+            'student_documents', 'invitations', 'audit_logs']) {
             await assertHidden(student.client, t, `${t} hidden from student`)
         }
+
+        // Since migration 39 a pupil reads the notes a teacher SHARED with them
+        // -- their own, and only those. "Hidden" was the pre-39 rule and failed
+        // from the first shared note on.
+        const { data: notes, error: notesErr } = await student.client
+            .from('student_notes').select('student_id, visible_to_student').limit(200)
+        check('student_notes: only own, only shared',
+            !notesErr && (notes ?? []).every(n => n.student_id === student.uid && n.visible_to_student === true),
+            notesErr?.message ?? `${(notes ?? []).filter(n => n.student_id !== student.uid || !n.visible_to_student).length} rows that should be hidden`)
 
         for (const t of ['test_scores', 'exam_scores', 'attendance_records', 'category_scores']) {
             const { data, error } = await student.client.from(t).select('student_id').limit(200)
@@ -394,6 +403,90 @@ async function main() {
                     badErr ? '' : 'INSERT SUCCEEDED — migration 26 §3 has regressed')
                 if (badRow) await svc.from('submission_files').delete().eq('id', badRow.id)
             }
+        }
+    }
+
+    // ── calendar_events (migration 42) ───────────────────────────────────────
+    // Only the school's admin writes; pupils never see staff-only rows and see
+    // group rows only for their own group. Every probe row is created here and
+    // deleted by id -- never by filter.
+    console.log('\ncalendar_events:')
+    if (!SERVICE) {
+        skipped += 1
+        console.log('  SKIP  calendar_events — no SUPABASE_SERVICE_ROLE_KEY')
+    } else {
+        const svc = createClient(URL_!, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } })
+        const { error: tableErr } = await svc.from('calendar_events').select('id').limit(1)
+        if (tableErr) {
+            skipped += 1
+            console.log(`  SKIP  calendar_events — table not there yet (${tableErr.message}); apply migration 42`)
+        } else {
+            const { data: adminMe } = await svc.from('profiles').select('tenant_id').eq('id', admin.uid).single()
+            const myTenant = adminMe!.tenant_id
+            const made: string[] = []
+            const base = { tenant_id: myTenant, title: 'rls-smoke probe', starts_on: '2099-01-01', ends_on: '2099-01-01' }
+
+            const { data: sRow, error: sErr } = await student.client.from('calendar_events')
+                .insert(base).select('id').maybeSingle()
+            check('student cannot create a calendar event', !!sErr, sErr ? '' : 'INSERT SUCCEEDED')
+            if (sRow) made.push(sRow.id)
+
+            const { data: tRow, error: tErr } = await teacher.client.from('calendar_events')
+                .insert(base).select('id').maybeSingle()
+            check('teacher cannot create a calendar event', !!tErr, tErr ? '' : 'INSERT SUCCEEDED')
+            if (tRow) made.push(tRow.id)
+
+            const { data: staffRow, error: aErr } = await admin.client.from('calendar_events')
+                .insert({ ...base, audience: 'teachers', created_by: admin.uid }).select('id').maybeSingle()
+            check('admin creates a calendar event in own school', !aErr && !!staffRow, aErr?.message)
+            if (staffRow) {
+                made.push(staffRow.id)
+                const { data: sSees } = await student.client.from('calendar_events').select('id').eq('id', staffRow.id)
+                check('student does not see a staff-only event', (sSees ?? []).length === 0, `saw ${sSees?.length}`)
+                const { data: tSees } = await teacher.client.from('calendar_events').select('id').eq('id', staffRow.id)
+                check('teacher sees a staff-only event', (tSees ?? []).length === 1, `saw ${tSees?.length}`)
+            }
+
+            // Group targeting: one of the pupil's groups, and one they are not in.
+            const { data: enr } = await svc.from('class_students').select('class_id').eq('student_id', student.uid)
+            const { data: myCls } = await svc.from('classes').select('group_id')
+                .in('id', (enr ?? []).map(e => e.class_id)).not('group_id', 'is', null)
+            const myGroups = new Set((myCls ?? []).map(c => c.group_id))
+            const { data: tenantGroups } = await svc.from('groups').select('id').eq('tenant_id', myTenant)
+            const inGroup = (tenantGroups ?? []).find(g => myGroups.has(g.id))
+            const outGroup = (tenantGroups ?? []).find(g => !myGroups.has(g.id))
+            for (const [g, expect, label] of [
+                [inGroup, 1, 'student sees an event for own group'],
+                [outGroup, 0, 'student does not see an event for another group'],
+            ] as const) {
+                if (!g) { skipped += 1; console.log(`  SKIP  ${label} — no such group`); continue }
+                const { data: gRow } = await admin.client.from('calendar_events')
+                    .insert({ ...base, audience: 'group', group_id: g.id, created_by: admin.uid }).select('id').maybeSingle()
+                if (!gRow) { check(label, false, 'admin could not create the probe'); continue }
+                made.push(gRow.id)
+                const { data: seen } = await student.client.from('calendar_events').select('id').eq('id', gRow.id)
+                check(label, (seen ?? []).length === expect, `saw ${seen?.length}`)
+            }
+
+            // Cross-tenant: a foreign tenant_id, and our tenant with a foreign group.
+            const { data: foreignGroup } = await svc.from('groups').select('id, tenant_id')
+                .neq('tenant_id', myTenant).limit(1).maybeSingle()
+            if (!foreignGroup) {
+                skipped += 2
+                console.log('  SKIP  calendar cross-tenant — only one tenant')
+            } else {
+                const { data: fRow, error: fErr } = await admin.client.from('calendar_events')
+                    .insert({ ...base, tenant_id: foreignGroup.tenant_id, created_by: admin.uid }).select('id').maybeSingle()
+                check('admin cannot create an event in another school', !!fErr, fErr ? '' : 'INSERT SUCCEEDED')
+                if (fRow) made.push(fRow.id)
+                const { data: gRow, error: gErr } = await admin.client.from('calendar_events')
+                    .insert({ ...base, audience: 'group', group_id: foreignGroup.id, created_by: admin.uid })
+                    .select('id').maybeSingle()
+                check('admin cannot attach an event to another school\'s group', !!gErr, gErr ? '' : 'INSERT SUCCEEDED')
+                if (gRow) made.push(gRow.id)
+            }
+
+            for (const id of made) await svc.from('calendar_events').delete().eq('id', id)
         }
     }
 
