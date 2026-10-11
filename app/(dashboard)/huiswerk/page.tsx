@@ -127,6 +127,8 @@ export default function HuiswerkPage() {
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm text-gray-800 group-hover:text-primary-700 transition-colors truncate">{a.title}</div>
                         <span className={`text-xs ${dl.color}`}>{dl.label}</span>
+                        {/* Pupils never receive drafts (RLS); staff must see which ones they are. */}
+                        {!a.is_published && <span className="ml-2 text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">Concept</span>}
                       </div>
                       {sb && <span className={`badge flex-shrink-0 ${sb.color}`}>{sb.label}</span>}
                     </Link>

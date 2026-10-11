@@ -162,6 +162,7 @@ export default function HuiswerkDetailPage() {
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs font-medium px-2.5 py-0.5 rounded-full text-white" style={{ backgroundColor: assignment.classes?.color ?? '#1B6B4A' }}>{assignment.classes?.name}</span>
               {assignment.max_score && <span className="text-xs bg-gray-100 text-gray-600 px-2.5 py-0.5 rounded-full">Max {assignment.max_score} punten</span>}
+              {isTeacher && !assignment.is_published && <span className="text-xs bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-medium">Concept</span>}
             </div>
             <h1 className="text-xl font-semibold text-gray-900">{assignment.title}</h1>
           </div>
@@ -182,6 +183,12 @@ export default function HuiswerkDetailPage() {
           </div>
         )}
 
+        {/* A draft used to look exactly like live homework to its teacher. */}
+        {isTeacher && !assignment.is_published && (
+          <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900">
+            Dit huiswerk is nog een concept: de leerlingen zien het niet. Publiceer het via Bewerken.
+          </p>
+        )}
         {/* Staff: make it obvious this is not a whole-class assignment. */}
         {profile?.role !== 'student' && perStudentRows.length > 0 && perStudentRows.length < classSize && (
           <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900">
@@ -198,6 +205,7 @@ export default function HuiswerkDetailPage() {
           <AssignmentAdminBar
             assignment={assignment}
             submissions={allSubmissions}
+            perStudentRows={perStudentRows}
             onSaved={() => loadData(true)}
           />
         )}

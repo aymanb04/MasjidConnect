@@ -40,7 +40,12 @@ export default function KlasDetailPage() {
 
     const [{ data: k, error: kErr }, { data: a, error: aErr }, { data: m }, { data: tc }] = await Promise.all([
       supabase.from('classes').select('*, school_years(name), groups(name)').eq('id', klasId).single(),
-      supabase.from('assignments').select('*').eq('class_id', klasId).eq('is_published', true).order('due_date', { ascending: true }),
+      // Staff see drafts too, labelled; hiding them here left a teacher no way to
+      // find homework they had not published yet.
+      (isTeacher
+        ? supabase.from('assignments').select('*').eq('class_id', klasId)
+        : supabase.from('assignments').select('*').eq('class_id', klasId).eq('is_published', true)
+      ).order('due_date', { ascending: true }),
       supabase.from('lesson_modules').select('*, module_documents(id)').eq('class_id', klasId).eq('is_visible', true).order('order_index'),
       supabase.from('class_teachers').select('profiles(id, first_name, last_name, email)').eq('class_id', klasId),
     ])
@@ -177,7 +182,7 @@ export default function KlasDetailPage() {
                   const sb = sub ? getSubmissionStatusBadge(sub.status) : null
                   return (
                     <Link key={a.id} href={`/huiswerk/${a.id}`} className="flex items-center justify-between p-3.5 rounded-xl border border-border hover:border-primary-200 hover:bg-primary-50/30 transition-all group">
-                      <div className="min-w-0 flex-1"><div className="font-medium text-sm text-gray-800 group-hover:text-primary-700 truncate">{a.title}</div><div className={`text-xs mt-0.5 ${dl.color}`}><Clock size={10} className="inline mr-1"/>{dl.label}</div></div>
+                      <div className="min-w-0 flex-1"><div className="font-medium text-sm text-gray-800 group-hover:text-primary-700 truncate">{a.title}</div><div className={`text-xs mt-0.5 ${dl.color}`}><Clock size={10} className="inline mr-1"/>{dl.label}{!a.is_published && <span className="ml-2 bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">Concept</span>}</div></div>
                       {sb && <span className={`badge ml-3 flex-shrink-0 ${sb.color}`}>{sb.label}</span>}
                     </Link>
                   )
