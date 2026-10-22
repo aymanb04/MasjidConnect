@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { MeemMark } from '@/components/ui/MeemMark'
@@ -13,6 +13,18 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
+  const emailRef    = useRef<HTMLInputElement>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
+
+  // Text that lands in the fields before React hydrates (typed on a slow phone,
+  // or put there by browser/password-manager autofill) never fires onChange.
+  // Under React 19 it stays visible while the state is still '', so the button
+  // looked filled-in but disabled. Seen on the live site 2026-10-22 right after
+  // the Next 15 upgrade. Copy the DOM values into state once on mount.
+  useEffect(() => {
+    if (emailRef.current?.value)    setEmail(emailRef.current.value)
+    if (passwordRef.current?.value) setPassword(passwordRef.current.value)
+  }, [])
 
   // Already-authenticated visitors (e.g. bounced here while their token was
   // still refreshing) go straight to the dashboard instead of re-entering
@@ -87,14 +99,14 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="label" htmlFor="email">E-mailadres</label>
-              <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)}
+              <input id="email" ref={emailRef} type="email" value={email} onChange={e => setEmail(e.target.value)}
                 placeholder="naam@moskee.be" required autoComplete="email"
                 className={cn('input', error && 'border-red-400')} />
             </div>
             <div>
               <label className="label" htmlFor="password">Wachtwoord</label>
               <div className="relative">
-                <input id="password" type={showPass ? 'text' : 'password'} value={password}
+                <input id="password" ref={passwordRef} type={showPass ? 'text' : 'password'} value={password}
                   onChange={e => setPassword(e.target.value)} placeholder="••••••••" required
                   autoComplete="current-password" className={cn('input pr-10', error && 'border-red-400')} />
                 <button type="button" onClick={() => setShowPass(!showPass)}

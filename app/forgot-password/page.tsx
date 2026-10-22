@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { MeemMark } from '@/components/ui/MeemMark'
 import { Loader2, ArrowLeft, CheckCircle2 } from 'lucide-react'
@@ -11,6 +11,13 @@ export default function ForgotPasswordPage() {
     const [loading, setLoading] = useState(false)
     const [sent, setSent]       = useState(false)
     const [error, setError]     = useState('')
+    const emailRef = useRef<HTMLInputElement>(null)
+
+    // Autofill can fill the field before React hydrates, which fires no onChange:
+    // the address shows but the button stays disabled. Same fix as /login.
+    useEffect(() => {
+        if (emailRef.current?.value) setEmail(emailRef.current.value)
+    }, [])
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
@@ -71,6 +78,7 @@ export default function ForgotPasswordPage() {
                             <div>
                                 <label className="label">E-mailadres</label>
                                 <input
+                                    ref={emailRef}
                                     type="email"
                                     value={email}
                                     onChange={e => setEmail(e.target.value)}
