@@ -12,6 +12,11 @@ import { FileText, Loader2, Sparkles, ChevronRight, CheckCircle2, PencilLine } f
 type Student = { id: string; first_name: string; last_name: string }
 type CardRow = { id: string; student_id: string; status: 'draft' | 'published' }
 
+type BulkReport = { made: number; skipped: string[]; failed: string[] }
+
+// A pupil who simply has nothing to report on (no classes this year). Not an error.
+class SkipError extends Error {}
+
 const STAFF = ['admin', 'super_admin', 'teacher', 'leerlingenbegeleiding']
 
 export default function RapportenPage() {
@@ -26,6 +31,8 @@ export default function RapportenPage() {
   const [loading, setLoading]     = useState(true)
   const [busy, setBusy]           = useState<string | null>(null)           // student_id being generated
   const [bulkRunning, setBulk]    = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
+  const [bulkReport, setBulkReport]     = useState<BulkReport | null>(null)
   const [err, setErr]             = useState<string | null>(null)
   const [loadErr, setLoadErr]     = useState<unknown>(null)
 
@@ -102,56 +109,55 @@ export default function RapportenPage() {
     const tid = profile!.tenant_id
     if (!year) throw new Error('geen actief schooljaar')
 
-    const { data: cs } = await supabase.from('class_students').select('class_id').eq('student_id', studentId)
-    const enrolled = (cs ?? []).map((r: any) => r.class_id)
-    if (!enrolled.length) throw new Error('leerling zit in geen enkele klas')
+    // Every read must succeed. A failed read used to come back as "no rows", so
+    // the card was saved with that subject's score missing and nobody was told.
+    const must = <T,>(r: { data: T | null; error: any }, what: string): T => {
+      if (r.error) throw new Error(`${what} laden mislukt: ${r.error.message}`)
+      return (r.data ?? []) as T
+    }
+    const none = { data: [] as any[], error: null }
 
-    const { data: classRows } = await supabase.from('classes')
-      .select('id, name, group_id').in('id', enrolled).eq('school_year_id', year.id).eq('is_archived', false)
-    const classes = classRows ?? []
-    if (!classes.length) throw new Error('geen klassen dit schooljaar')
+    const cs = must<any[]>(await supabase.from('class_students').select('class_id').eq('student_id', studentId), 'klassen')
+    const enrolled = cs.map((r: any) => r.class_id)
+    if (!enrolled.length) throw new SkipError('zit in geen enkele klas')
+
+    const classes = must<any[]>(await supabase.from('classes')
+      .select('id, name, group_id').in('id', enrolled).eq('school_year_id', year.id).eq('is_archived', false), 'klassen')
+    if (!classes.length) throw new SkipError('heeft geen klassen dit schooljaar')
     const classIds = classes.map((c: any) => c.id)
 
     let level = ''
     const groupIds = Array.from(new Set(classes.map((c: any) => c.group_id).filter(Boolean)))
     if (groupIds.length) {
-      const { data: g } = await supabase.from('groups').select('id, name').in('id', groupIds as string[])
-      level = g?.[0]?.name ?? ''
+      const g = must<any[]>(await supabase.from('groups').select('id, name').in('id', groupIds as string[]), 'groep')
+      level = g[0]?.name ?? ''
     }
 
-    const { data: assigns } = await supabase.from('assignments')
-      .select('id, class_id, max_score').in('class_id', classIds).eq('is_published', true)
-    const assignList = assigns ?? []
-    const { data: subs } = assignList.length
+    const assignList = must<any[]>(await supabase.from('assignments')
+      .select('id, class_id, max_score').in('class_id', classIds).eq('is_published', true), 'huiswerk')
+    const subList = must<any[]>(assignList.length
       ? await supabase.from('submissions').select('id, assignment_id').eq('student_id', studentId).in('assignment_id', assignList.map((a: any) => a.id))
-      : { data: [] as any[] }
-    const subList = subs ?? []
-    const { data: fbs } = subList.length
+      : none, 'inzendingen')
+    const fbList = must<any[]>(subList.length
       ? await supabase.from('submission_feedback').select('submission_id, score').in('submission_id', subList.map((s: any) => s.id))
-      : { data: [] as any[] }
-    const fbList = fbs ?? []
-    const { data: tests } = await supabase.from('class_tests').select('id, class_id, max_score').in('class_id', classIds)
-    const testList = tests ?? []
-    const { data: tscores } = testList.length
+      : none, 'huiswerkpunten')
+    const testList = must<any[]>(await supabase.from('class_tests').select('id, class_id, max_score').in('class_id', classIds), 'toetsen')
+    const tsList = must<any[]>(testList.length
       ? await supabase.from('test_scores').select('test_id, score').eq('student_id', studentId).in('test_id', testList.map((t: any) => t.id))
-      : { data: [] as any[] }
-    const tsList = tscores ?? []
+      : none, 'toetspunten')
 
     // Weighting, if this class has one. A class without categories keeps the
     // old pooled average -- see lib/grading.ts.
-    const { data: cats } = await supabase.from('grade_categories')
-      .select('id, class_id, name, source, weight, sort_order').in('class_id', classIds).order('sort_order')
-    const catList = cats ?? []
-    const { data: catScores } = catList.length
+    const catList = must<any[]>(await supabase.from('grade_categories')
+      .select('id, class_id, name, source, weight, sort_order').in('class_id', classIds).order('sort_order'), 'puntenverdeling')
+    const csList = must<any[]>(catList.length
       ? await supabase.from('category_scores').select('category_id, score, max_score')
           .eq('student_id', studentId).in('category_id', catList.map((c: any) => c.id))
-      : { data: [] as any[] }
-    const csList = catScores ?? []
+      : none, 'punten per onderdeel')
     // Exams were never part of the old average; a weighted class can now count them.
-    const { data: exams } = await supabase.from('exam_scores')
+    const examList = must<any[]>(await supabase.from('exam_scores')
       .select('class_id, score, max_score')
-      .eq('student_id', studentId).eq('semester', semester).in('class_id', classIds)
-    const examList = exams ?? []
+      .eq('student_id', studentId).eq('semester', semester).in('class_id', classIds), 'examens')
 
     function avgForClass(cid: string): number | null {
       let hwEarned = 0, hwMax = 0
@@ -182,41 +188,67 @@ export default function RapportenPage() {
       }).result
     }
 
+    // Work the scores out before writing anything.
+    const lines = classes.map((c: any) => ({
+      class_id: c.id, subject_snapshot: c.name, result: avgForClass(c.id), comment: '',
+    }))
+
     const { data: card, error } = await supabase.from('rapport_cards').insert({
       tenant_id: tid, student_id: studentId, school_year_id: year.id, semester,
       status: 'draft', level_snapshot: level, generated_by: profile!.id,
     }).select('id').single()
-    if (error) throw error
+    if (error) throw new Error(`rapport aanmaken mislukt: ${error.message}`)
 
-    const lineRows = classes.map((c: any) => ({
-      rapport_card_id: card.id, class_id: c.id, subject_snapshot: c.name,
-      result: avgForClass(c.id), comment: '',
-    }))
-    const { error: lerr } = await supabase.from('rapport_lines').insert(lineRows)
-    if (lerr) throw lerr
+    const { error: lerr } = await supabase.from('rapport_lines')
+      .insert(lines.map(l => ({ ...l, rapport_card_id: card.id })))
+    if (lerr) {
+      // The card and its lines are two inserts. An empty card would block a
+      // retry (one card per pupil per semester), so take it back out.
+      const { data: gone } = await supabase.from('rapport_cards').delete().eq('id', card.id).select('id')
+      if (!gone?.length) {
+        throw new Error(`vakken opslaan mislukt (${lerr.message}); er staat nu een leeg rapport, verwijder het en probeer opnieuw`)
+      }
+      throw new Error(`vakken opslaan mislukt: ${lerr.message}`)
+    }
     return card.id
   }
 
   async function handleGenerate(studentId: string) {
-    setBusy(studentId); setErr(null)
+    setBusy(studentId); setErr(null); setBulkReport(null)
     try {
       const cardId = await generateForStudent(studentId)
       router.push(`/rapporten/${cardId}`)
     } catch (e: any) {
-      setErr(e.message || 'Genereren mislukt')
+      const s = students.find(x => x.id === studentId)
+      const who = s ? `${s.first_name} ${s.last_name}` : 'Deze leerling'
+      setErr(e instanceof SkipError ? `${who} ${e.message}.` : `Genereren mislukt: ${e.message || 'onbekende fout'}`)
       setBusy(null)
     }
   }
 
   async function handleBulk() {
     if (!confirm('Rapporten aanmaken voor alle leerlingen zonder rapport? Scores worden automatisch ingevuld (aanpasbaar).')) return
-    setBulk(true); setErr(null)
+    setBulk(true); setErr(null); setBulkReport(null)
     const todo = students.filter(s => !cards[s.id])
-    for (const s of todo) {
-      try { await generateForStudent(s.id) } catch { /* skip failures (e.g. no classes) */ }
+    const report: BulkReport = { made: 0, skipped: [], failed: [] }
+    for (let i = 0; i < todo.length; i++) {
+      const s = todo[i]
+      setBulkProgress({ done: i, total: todo.length })
+      const name = `${s.first_name} ${s.last_name}`
+      try {
+        await generateForStudent(s.id)
+        report.made++
+      } catch (e: any) {
+        // A pupil without classes this year is expected; anything else is an error
+        // the admin has to see. These used to be swallowed without a trace.
+        if (e instanceof SkipError) report.skipped.push(`${name} (${e.message})`)
+        else report.failed.push(`${name}: ${e.message || 'onbekende fout'}`)
+      }
     }
+    setBulkProgress(null)
     setBulk(false)
     await loadData()
+    setBulkReport(report)
   }
 
   if (profileLoading || loading) return <PageLoader />
@@ -280,8 +312,34 @@ export default function RapportenPage() {
                 <button onClick={handleBulk} disabled={bulkRunning}
                   className="btn-secondary text-sm flex items-center gap-1.5 mb-4">
                   {bulkRunning ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  Genereer voor alle leerlingen zonder rapport
+                  {bulkProgress
+                    ? `Bezig… ${bulkProgress.done} van ${bulkProgress.total}`
+                    : 'Genereer voor alle leerlingen zonder rapport'}
                 </button>
+              )}
+
+              {bulkReport && (
+                <div className={`mb-4 text-sm rounded-lg px-3 py-2 border ${bulkReport.failed.length
+                  ? 'text-red-700 bg-red-50 border-red-200'
+                  : 'text-green-800 bg-green-50 border-green-200'}`}>
+                  <p className="font-medium">
+                    {bulkReport.made} {bulkReport.made === 1 ? 'rapport' : 'rapporten'} aangemaakt
+                    {bulkReport.failed.length > 0 && `, ${bulkReport.failed.length} mislukt`}
+                    {bulkReport.skipped.length > 0 && `, ${bulkReport.skipped.length} overgeslagen`}.
+                  </p>
+                  {bulkReport.failed.length > 0 && (
+                    <>
+                      <p className="mt-1">Niet gelukt (probeer deze leerlingen opnieuw):</p>
+                      <ul className="list-disc pl-5 mt-0.5">{bulkReport.failed.map(f => <li key={f}>{f}</li>)}</ul>
+                    </>
+                  )}
+                  {bulkReport.skipped.length > 0 && (
+                    <>
+                      <p className="mt-1 text-gray-600">Overgeslagen:</p>
+                      <ul className="list-disc pl-5 mt-0.5 text-gray-600">{bulkReport.skipped.map(f => <li key={f}>{f}</li>)}</ul>
+                    </>
+                  )}
+                </div>
               )}
 
               {students.length === 0 ? (
