@@ -32,6 +32,7 @@ interface ClassItem {
   id: string
   name: string
   color: string
+  group_id?: string | null
   group_name?: string
   school_year_name?: string
 }
@@ -100,13 +101,13 @@ export default function AanwezigheidPage() {
     } else if (role === 'teacher') {
       const { data, error } = await supabase
         .from('class_teachers')
-        .select('classes(id, name, color, created_at, groups(name, created_at), school_years(name))')
+        .select('classes(id, name, color, created_at, group_id, groups(name, created_at), school_years(name))')
         .eq('teacher_id', profile!.id)
       if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
       setClasses(sortClasses(
         (data ?? []).map((r: any) => ({
           id: r.classes.id, name: r.classes.name, color: r.classes.color,
-          created_at: r.classes.created_at,
+          created_at: r.classes.created_at, group_id: r.classes.group_id,
           group_name: r.classes.groups?.name, group_created_at: r.classes.groups?.created_at,
           school_year_name: r.classes.school_years?.name,
         }))
@@ -115,13 +116,13 @@ export default function AanwezigheidPage() {
       // admin / super_admin
       const { data, error } = await supabase
         .from('classes')
-        .select('id, name, color, created_at, groups(name, created_at), school_years(name)')
+        .select('id, name, color, created_at, group_id, groups(name, created_at), school_years(name)')
         .eq('tenant_id', profile!.tenant_id)
         .eq('is_archived', false)
       if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
       setClasses(sortClasses(
         (data ?? []).map((c: any) => ({
-          id: c.id, name: c.name, color: c.color, created_at: c.created_at,
+          id: c.id, name: c.name, color: c.color, created_at: c.created_at, group_id: c.group_id,
           group_name: c.groups?.name, group_created_at: c.groups?.created_at,
           school_year_name: c.school_years?.name,
         }))
@@ -169,6 +170,9 @@ export default function AanwezigheidPage() {
       {view.type === 'mark' && (
         <MarkAttendanceView
           cls={view.cls}
+          // Other classes of the same group that this person may mark: for a
+          // teacher only their own (the list is already theirs), for an admin all.
+          siblings={classes.filter(c => c.group_id && c.group_id === view.cls.group_id && c.id !== view.cls.id)}
           profile={profile!}
           onBack={() => setView({ type: 'classes' })}
         />
@@ -330,13 +334,43 @@ function ClassListView({
 
 // ─── MarkAttendanceView ───────────────────────────────────────────────────────
 
-function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile: any; onBack: () => void }) {
+// Group-day marking (2026-10-22). A teacher who teaches a group two or three
+// subjects on one day used to take the register once per subject: on 19 of the
+// first 62 group-days at De Kroon the same teacher marked the same group twice.
+// Now they can tick the group's other classes and mark once. The list is the
+// UNION of those classes' pupils, and each class gets its own session with
+// records for ITS pupils only, because not every pupil takes every subject
+// (e.g. Niveau 3: 15 pupils, 10 in all three). Per-subject statistics, alerts
+// and history keep working unchanged.
+//
+// Which other classes are ticked is remembered per person and group. The
+// first time nothing is ticked: the rooster is empty at De Kroon, so the app
+// cannot know which subjects are taught that day, and one teacher marks their
+// two classes of a group on different days.
+
+const groupChoiceKey = (userId: string, groupId: string) => `mc_att_group_${userId}_${groupId}`
+
+function readGroupChoice(userId: string, groupId: string | null | undefined, siblingIds: string[]): string[] {
+  if (!groupId) return []
+  try {
+    const raw = window.localStorage.getItem(groupChoiceKey(userId, groupId))
+    const ids: unknown = raw ? JSON.parse(raw) : []
+    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string' && siblingIds.includes(id)) : []
+  } catch { return [] }
+}
+
+function MarkAttendanceView({ cls, siblings, profile, onBack }: {
+  cls: ClassItem; siblings: ClassItem[]; profile: any; onBack: () => void
+}) {
   const today = format(new Date(), 'yyyy-MM-dd')
 
   const [date,      setDate]      = useState(today) // selectable: retroactive entry allowed, future blocked
+  const [alsoIds,   setAlsoIds]   = useState<string[]>(() => readGroupChoice(profile.id, cls.group_id, siblings.map(s => s.id)))
   const [students,  setStudents]  = useState<StudentItem[]>([])
+  const [enrolment, setEnrolment] = useState<Record<string, string[]>>({})  // student → class ids (of the active ones)
   const [statuses,  setStatuses]  = useState<Record<string, AttendanceStatus>>({})
-  const [existing,  setExisting]  = useState<string | null>(null) // session id if already exists
+  const [sessionOf, setSessionOf] = useState<Record<string, string>>({})    // class → existing session on `date`
+  const [differs,   setDiffers]   = useState<Set<string>>(new Set())        // pupils marked differently per subject before
   const [loading,   setLoading]   = useState(true)
   const [loadErr,   setLoadErr]   = useState<unknown>(null)
   const [saving,    setSaving]    = useState(false)
@@ -344,12 +378,16 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
   const [prevAbsent,    setPrevAbsent]    = useState<{ date: string; names: string[] } | null>(null)
   const [prevDismissed, setPrevDismissed] = useState(false)
 
+  const active   = [cls, ...siblings.filter(s => alsoIds.includes(s.id))]
+  const activeKey = active.map(c => c.id).join(',')
+  const existing = sessionOf[cls.id] ?? null
+  const nameOf   = (id: string) => [cls, ...siblings].find(c => c.id === id)?.name ?? ''
+
   useEffect(() => {
     setLoading(true)
-    setExisting(null)
     setPrevDismissed(false)
     loadData()
-  }, [date])
+  }, [date, activeKey])
 
   // Every query here is checked. This loader used to destructure `{ data }` only
   // and fall back to `?? []`, which meant a failed student query rendered the
@@ -359,45 +397,49 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
   // (SECURITY_AND_INFRA §1), so it is a realistic path, not a theoretical one.
   async function loadData() {
     setLoadErr(null)
+    const ids = active.map(c => c.id)
 
-    // Check for existing session on the selected date
-    const { data: sess, error: sessErr } = await supabase
+    // Sessions already taken on the selected date, for every active class
+    const { data: sessRows, error: sessErr } = await supabase
       .from('attendance_sessions')
-      .select('id')
-      .eq('class_id', cls.id)
+      .select('id, class_id')
+      .in('class_id', ids)
       .eq('session_date', date)
-      .maybeSingle()
     if (sessErr) { console.error(sessErr); setLoadErr(sessErr); setLoading(false); return }
+    const sessMap: Record<string, string> = Object.fromEntries((sessRows ?? []).map((r: any) => [r.class_id, r.id]))
 
-    let initStatuses: Record<string, AttendanceStatus> = {}
-
-    if (sess) {
-      setExisting(sess.id)
-      // Load existing records
+    // Their records, by class
+    const recsByClass: Record<string, Record<string, AttendanceStatus>> = {}
+    const sessIds = Object.values(sessMap)
+    if (sessIds.length) {
       const { data: records, error: recErr } = await supabase
         .from('attendance_records')
-        .select('student_id, status')
-        .eq('session_id', sess.id)
+        .select('session_id, student_id, status')
+        .in('session_id', sessIds)
       if (recErr) { console.error(recErr); setLoadErr(recErr); setLoading(false); return }
-      for (const r of (records ?? [])) {
-        initStatuses[r.student_id] = r.status as AttendanceStatus
+      const classOfSession = Object.fromEntries(Object.entries(sessMap).map(([c, sid]) => [sid, c]))
+      for (const r of (records ?? []) as any[]) {
+        const c = classOfSession[r.session_id]
+        ;(recsByClass[c] ??= {})[r.student_id] = r.status as AttendanceStatus
       }
     }
 
-    // Load enrolled students
+    // Enrolled pupils of every active class
     const { data: links, error: linkErr } = await supabase
       .from('class_students')
-      .select('profiles(id, first_name, last_name)')
-      .eq('class_id', cls.id)
+      .select('class_id, profiles(id, first_name, last_name)')
+      .in('class_id', ids)
     if (linkErr) { console.error(linkErr); setLoadErr(linkErr); setLoading(false); return }
-    const studs: StudentItem[] = (links ?? [])
-      .map((l: any) => l.profiles)
-      .filter(Boolean)
-      .sort((a: any, b: any) => a.last_name.localeCompare(b.last_name))
+    const byId: Record<string, StudentItem> = {}
+    const enrol: Record<string, string[]> = {}
+    for (const l of (links ?? []) as any[]) {
+      if (!l.profiles) continue
+      byId[l.profiles.id] = l.profiles
+      ;(enrol[l.profiles.id] ??= []).push(l.class_id)
+    }
+    const studs = Object.values(byId).sort((a, b) => a.last_name.localeCompare(b.last_name))
 
-    setStudents(studs)
-
-    // Who was absent in the most recent session before this date?
+    // Who was absent in the most recent session of THIS class before this date?
     const { data: prevSess } = await supabase
       .from('attendance_sessions')
       .select('id, session_date')
@@ -421,22 +463,29 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
       setPrevAbsent(null)
     }
 
-    // Default all to 'present' for new sessions
-    if (!sess) {
-      for (const s of studs) initStatuses[s.id] = 'present'
-    } else {
-      // Fill in any students not yet in records with 'present'
-      for (const s of studs) {
-        if (!initStatuses[s.id]) initStatuses[s.id] = 'present'
-      }
+    // Start from what was saved: this class first, then a ticked class; else present.
+    const init: Record<string, AttendanceStatus> = {}
+    const diff = new Set<string>()
+    for (const s of studs) {
+      const saved = ids.map(c => recsByClass[c]?.[s.id]).filter(Boolean) as AttendanceStatus[]
+      init[s.id] = recsByClass[cls.id]?.[s.id] ?? saved[0] ?? 'present'
+      if (new Set(saved).size > 1) diff.add(s.id)
     }
 
-    setStatuses(initStatuses)
+    setSessionOf(sessMap)
+    setStudents(studs)
+    setEnrolment(enrol)
+    setDiffers(diff)
+    setStatuses(init)
     setLoading(false)
   }
 
   function setStatus(studentId: string, status: AttendanceStatus) {
     setStatuses(prev => ({ ...prev, [studentId]: status }))
+  }
+
+  function toggleAlso(id: string) {
+    setAlsoIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
   async function handleSave() {
@@ -451,46 +500,57 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
       return
     }
     setSaving(true)
-    try {
-      let sessionId = existing
-
-      if (!sessionId) {
-        // Create new session (selected date may be in the past — backfill)
-        const { data: sess, error } = await supabase
-          .from('attendance_sessions')
-          .insert({ class_id: cls.id, teacher_id: profile.id, session_date: date })
-          .select('id')
-          .single()
-        if (error) throw new Error(error.message)
-        sessionId = sess.id
+    const saved: string[] = []
+    const failed: string[] = []
+    // One class at a time, each with only its own pupils. A class without
+    // pupils is skipped for the same reason as above.
+    for (const c of active) {
+      const mine = students.filter(s => enrolment[s.id]?.includes(c.id))
+      if (!mine.length) continue
+      try {
+        let sessionId = sessionOf[c.id]
+        if (!sessionId) {
+          // Create new session (selected date may be in the past — backfill)
+          const { data: sess, error } = await supabase
+            .from('attendance_sessions')
+            .insert({ class_id: c.id, teacher_id: profile.id, session_date: date })
+            .select('id')
+            .single()
+          if (error) throw new Error(error.message)
+          sessionId = sess.id
+          setSessionOf(prev => ({ ...prev, [c.id]: sess.id }))
+        }
+        const { error: recErr } = await supabase
+          .from('attendance_records')
+          .upsert(mine.map(s => ({ session_id: sessionId, student_id: s.id, status: statuses[s.id] ?? 'present' })),
+                  { onConflict: 'session_id,student_id' })
+        if (recErr) throw new Error(recErr.message)
+        saved.push(c.name)
+      } catch (err: any) {
+        failed.push(`${c.name}: ${err.message}`)
       }
-
-      // Upsert all records
-      const records = students.map(s => ({
-        session_id: sessionId!,
-        student_id: s.id,
-        status: statuses[s.id] ?? 'present',
-      }))
-
-      const { error: recErr } = await supabase
-        .from('attendance_records')
-        .upsert(records, { onConflict: 'session_id,student_id' })
-
-      if (recErr) throw new Error(recErr.message)
-
-      setDone(true)
-      setTimeout(onBack, 1500)
-    } catch (err: any) {
-      alert('Opslaan mislukt: ' + err.message)
-    } finally {
-      setSaving(false)
     }
+    setSaving(false)
+
+    if (failed.length) {
+      // Pressing save again is safe: sessions found or made above are reused
+      // and the records are upserted.
+      alert((saved.length ? `Opgeslagen voor ${saved.join(', ')}.\n` : '') +
+            `Niet opgeslagen:\n${failed.join('\n')}\n\nProbeer opnieuw.`)
+      return
+    }
+    if (cls.group_id && siblings.length) {
+      try { window.localStorage.setItem(groupChoiceKey(profile.id, cls.group_id), JSON.stringify(alsoIds)) } catch {}
+    }
+    setDone(true)
+    setTimeout(onBack, 1500)
   }
 
   const presentCount  = Object.values(statuses).filter(s => s === 'present').length
   const absentCount   = Object.values(statuses).filter(s => s === 'absent').length
   const lateCount     = Object.values(statuses).filter(s => s === 'late').length
   const excusedCount  = Object.values(statuses).filter(s => s === 'excused').length
+  const multi         = active.length > 1
 
   return (
     <div>
@@ -507,7 +567,9 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
           {cls.name[0]}
         </div>
         <div>
-          <h2 className="font-semibold text-gray-900">{cls.name}</h2>
+          <h2 className="font-semibold text-gray-900">
+            {multi ? `${cls.group_name ?? ''} — ${active.map(c => c.name).join(', ')}` : cls.name}
+          </h2>
           <p className="text-sm text-gray-400 capitalize">
             {format(new Date(date), 'EEEE d MMMM yyyy', { locale: nl })}
           </p>
@@ -520,7 +582,7 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
       </div>
 
       {/* Date picker — backfill a missed day (future dates blocked) */}
-      <div className="flex items-center gap-2 mb-5">
+      <div className="flex items-center gap-2 mb-4">
         <label htmlFor="attendance-date" className="text-sm text-gray-500">Datum:</label>
         <input
           id="attendance-date"
@@ -540,10 +602,40 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
         )}
       </div>
 
+      {/* Same group, same day: mark the other classes in one go */}
+      {siblings.length > 0 && !done && (
+        <div className="rounded-xl border border-primary-100 bg-primary-50/50 p-3.5 mb-5">
+          <p className="text-sm font-medium text-gray-800 mb-2">
+            Geef je {cls.group_name ?? 'deze groep'} {date === today ? 'vandaag' : 'die dag'} ook een ander vak? Neem dan alles in één keer op:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {siblings.map(s => {
+              const on = alsoIds.includes(s.id)
+              return (
+                <label key={s.id}
+                  className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border cursor-pointer transition-colors ${
+                    on ? 'border-primary-300 bg-white text-primary-700 font-medium' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}>
+                  <input type="checkbox" checked={on} onChange={() => toggleAlso(s.id)} disabled={saving}
+                    className="accent-primary-600" />
+                  {s.name}
+                  {on && sessionOf[s.id] && <span className="text-xs text-amber-600 font-normal">(al opgenomen)</span>}
+                </label>
+              )
+            })}
+          </div>
+          {multi && (
+            <p className="text-xs text-gray-500 mt-2">
+              Elk vak krijgt zijn eigen aanwezigheid, enkel voor de leerlingen die dat vak volgen.
+            </p>
+          )}
+        </div>
+      )}
+
       {done ? (
         <div className="card p-8 flex flex-col items-center gap-2">
           <CheckCircle2 size={40} className="text-primary-500" />
           <p className="font-semibold text-gray-900">Aanwezigheid opgeslagen!</p>
+          {multi && <p className="text-sm text-gray-500">{active.map(c => c.name).join(', ')}</p>}
         </div>
       ) : loading ? (
         <div className="flex items-center justify-center gap-2 py-12 text-gray-400">
@@ -566,7 +658,7 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
               <AlertTriangle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
               <div className="flex-1 text-sm text-amber-800">
                 <p className="font-medium mb-0.5">
-                  Afwezig op de vorige sessie ({format(new Date(prevAbsent.date), 'EEE d MMM', { locale: nl })}):
+                  Afwezig op de vorige sessie{multi ? ` ${cls.name}` : ''} ({format(new Date(prevAbsent.date), 'EEE d MMM', { locale: nl })}):
                 </p>
                 <p>{prevAbsent.names.join(', ')}</p>
               </div>
@@ -599,6 +691,8 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
           <div className="card divide-y divide-border overflow-hidden mb-4">
             {students.map(student => {
               const current = statuses[student.id] ?? 'present'
+              const theirs  = active.map(c => c.id).filter(id => enrolment[student.id]?.includes(id))
+              const partial = multi && theirs.length < active.length
               return (
                 <div key={student.id} className="p-3 sm:p-4">
                   <div className="flex items-center gap-3 mb-2">
@@ -607,7 +701,17 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
                     </div>
                     <span className="text-sm font-medium text-gray-800 flex-1">
                       {student.first_name} {student.last_name}
+                      {partial && (
+                        <span className="ml-2 text-xs font-normal text-gray-400">
+                          enkel {theirs.map(nameOf).join(', ')}
+                        </span>
+                      )}
                     </span>
+                    {differs.has(student.id) && (
+                      <span className="text-xs text-amber-600" title="Eerder verschillend opgenomen per vak; opslaan zet overal dezelfde status">
+                        verschilde per vak
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-1.5 flex-wrap">
                     {STATUS_OPTIONS.map(opt => {
@@ -640,7 +744,7 @@ function MarkAttendanceView({ cls, profile, onBack }: { cls: ClassItem; profile:
           >
             {saving
               ? <><Loader2 size={15} className="animate-spin" /> Opslaan…</>
-              : <><CheckCircle2 size={15} /> Aanwezigheid opslaan</>
+              : <><CheckCircle2 size={15} /> {multi ? `Opslaan voor ${active.length} vakken` : 'Aanwezigheid opslaan'}</>
             }
           </button>
         </>
