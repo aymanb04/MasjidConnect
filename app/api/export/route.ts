@@ -35,6 +35,10 @@ const supabaseAdmin = createClient(
 
 const SIGNED_URL_TTL = 60 * 60   // one hour
 
+// A tenant export is ~60 sequential reads. De Kroon took 3-11 s in October 2026
+// (0.55 MB), which is too close to a default function timeout to leave implicit.
+export const maxDuration = 60
+
 type FileEntry = { bucket: string; path: string; name: string; url: string | null }
 
 async function signAll(bucket: string, paths: string[]): Promise<FileEntry[]> {
@@ -95,32 +99,88 @@ async function exportUser(userId: string) {
     return data
 }
 
-/** Everything of one school — the exit export promised by DPA art. 11.2. */
-async function exportTenant(tenantId: string) {
-    const out: Record<string, unknown> = {}
+// PostgREST returns at most 1000 rows per request and says nothing when it stops
+// there: De Kroon's attendance_records (1215 rows in October 2026) came back as
+// exactly 1000. So every read below pages until a short page, and a long id list
+// is split so the IN (...) filter stays within URL limits.
+const PAGE = 1000
+const ID_CHUNK = 200
 
-    // Tenant-scoped tables, straightforwardly.
-    for (const table of ['tenants', 'school_years', 'groups', 'classes', 'profiles',
-                         'announcements', 'families', 'student_details', 'student_notes',
-                         'student_documents', 'student_reports', 'tenant_documents',
-                         'tenant_document_acks', 'fee_payments', 'fee_config'] as const) {
-        const col = table === 'tenants' ? 'id' : 'tenant_id'
-        const { data } = await supabaseAdmin.from(table).select('*').eq(col, tenantId)
-        if (data?.length) out[table] = data
-    }
-
-    // Tables reached through the school's classes rather than carrying tenant_id.
-    const { data: classes } = await supabaseAdmin
-        .from('classes').select('id').eq('tenant_id', tenantId)
-    const classIds = (classes ?? []).map(c => c.id)
-    if (classIds.length) {
-        for (const table of ['class_students', 'class_teachers', 'assignments',
-                             'lesson_modules', 'class_tests', 'exam_scores',
-                             'attendance_sessions'] as const) {
-            const { data } = await supabaseAdmin.from(table).select('*').in('class_id', classIds)
-            if (data?.length) out[table] = data
+/** All rows of `table` where `col` equals / is in `match`. Throws on any error. */
+async function fetchAll(
+    table: string, col: string, match: string | string[],
+    opts: { select?: string; orderBy?: string } = {},
+): Promise<any[]> {
+    const values = Array.isArray(match) ? match : [match]
+    const rows: any[] = []
+    for (let i = 0; i < values.length; i += ID_CHUNK) {
+        const chunk = values.slice(i, i + ID_CHUNK)
+        for (let from = 0; ; from += PAGE) {
+            let q = supabaseAdmin.from(table).select(opts.select ?? '*')
+            q = chunk.length === 1 ? q.eq(col, chunk[0]) : q.in(col, chunk)
+            // A stable order, or pages can overlap or skip rows.
+            const { data, error } = await q.order(opts.orderBy ?? 'id').range(from, from + PAGE - 1)
+            if (error) throw new Error(`${table}: ${error.message}`)
+            rows.push(...(data ?? []))
+            if (!data || data.length < PAGE) break
         }
     }
+    return rows
+}
+
+// Tables that carry tenant_id themselves. Two have no `id` column and are paged on
+// their own key. Adding a tenant table to the schema? Add it here too: before
+// 2026-10-21 this list stopped at 15 tables and the export left out the school's
+// attendance, homework, grades and rapports without anyone noticing.
+const TENANT_TABLES: { table: string; orderBy?: string; select?: string }[] = [
+    { table: 'school_years' }, { table: 'groups' }, { table: 'classes' },
+    { table: 'profiles' }, { table: 'announcements' }, { table: 'families' },
+    { table: 'student_details', orderBy: 'student_id' }, { table: 'student_notes' },
+    { table: 'student_documents' }, { table: 'student_reports' },
+    { table: 'tenant_documents' }, { table: 'tenant_document_acks' },
+    { table: 'fee_config' }, { table: 'fee_payments' }, { table: 'payments' },
+    { table: 'payroll_entries' }, { table: 'staff_pay', orderBy: 'staff_id' },
+    { table: 'grade_categories' }, { table: 'student_goals' }, { table: 'rapport_cards' },
+    { table: 'calendar_events' }, { table: 'class_sessions' }, { table: 'oudercontact_slots' },
+    { table: 'feedback' }, { table: 'audit_logs' },
+    // The token is a live credential for an invitation not yet accepted.
+    { table: 'invitations', select: 'id, tenant_id, email, role, class_id, invited_by, accepted_at, expires_at, created_at' },
+]
+
+/** Everything of one school — the exit export promised by DPA art. 11.2. */
+async function exportTenant(tenantId: string) {
+    const out: Record<string, unknown[]> = {}
+    const put = (table: string, rows: any[]) => { out[table] = rows }
+    const ids = (table: string) => (out[table] ?? []).map((r: any) => r.id as string)
+    // An empty id list means there is nothing under it, not "fetch everything".
+    const under = async (table: string, col: string, parent: string) => {
+        const p = ids(parent)
+        put(table, p.length ? await fetchAll(table, col, p) : [])
+    }
+
+    put('tenants', await fetchAll('tenants', 'id', tenantId))
+    for (const t of TENANT_TABLES) {
+        put(t.table, await fetchAll(t.table, 'tenant_id', tenantId, { orderBy: t.orderBy, select: t.select }))
+    }
+
+    // Reached through the school's classes.
+    for (const table of ['class_students', 'class_teachers', 'assignments', 'lesson_modules',
+                         'class_tests', 'exam_scores', 'attendance_sessions']) {
+        await under(table, 'class_id', 'classes')
+    }
+
+    // One level further down.
+    await under('assignment_students',   'assignment_id',   'assignments')
+    await under('submissions',           'assignment_id',   'assignments')
+    await under('submission_feedback',   'submission_id',   'submissions')
+    await under('submission_files',      'submission_id',   'submissions')
+    await under('attendance_records',    'session_id',      'attendance_sessions')
+    await under('test_scores',           'test_id',         'class_tests')
+    await under('rapport_lines',         'rapport_card_id', 'rapport_cards')
+    await under('category_scores',       'category_id',     'grade_categories')
+    await under('oudercontact_bookings', 'slot_id',         'oudercontact_slots')
+    await under('module_documents',      'module_id',       'lesson_modules')
+
     return out
 }
 
@@ -138,7 +198,14 @@ export async function POST(request: Request) {
     }
 
     try {
-        const { scope, userId } = await request.json()
+        // Read the body once. The tenant branch below used to re-read it with
+        // request.clone(), which throws once the body is consumed, so a
+        // super_admin tenant export had never once succeeded.
+        const body = await request.json().catch(() => null)
+        if (!body || typeof body !== 'object') {
+            return NextResponse.json({ error: 'Ongeldige aanvraag' }, { status: 400 })
+        }
+        const { scope, userId } = body
 
         if (scope === 'user') {
             if (!userId) return NextResponse.json({ error: 'userId verplicht' }, { status: 400 })
@@ -165,9 +232,20 @@ export async function POST(request: Request) {
         }
 
         if (scope === 'tenant') {
-            const tenantId = caller.role === 'super_admin'
-                ? ((await request.clone().json()).tenantId ?? caller.tenant_id)
-                : caller.tenant_id
+            // An admin always gets their own school, whatever the body says. A
+            // super_admin has no tenant of their own (tenant_id is NULL), so they
+            // must name one: falling back to theirs would export nothing and still
+            // answer 200.
+            let tenantId = caller.tenant_id
+            if (caller.role === 'super_admin') {
+                if (typeof body.tenantId !== 'string' || !body.tenantId) {
+                    return NextResponse.json({ error: 'tenantId verplicht' }, { status: 400 })
+                }
+                const { data: t } = await supabaseAdmin
+                    .from('tenants').select('id').eq('id', body.tenantId).maybeSingle()
+                if (!t) return NextResponse.json({ error: 'School niet gevonden' }, { status: 404 })
+                tenantId = body.tenantId
+            }
             const data = await exportTenant(tenantId)
             console.info('[/api/export] tenant export by', caller.id, 'for', tenantId)
             return NextResponse.json({
