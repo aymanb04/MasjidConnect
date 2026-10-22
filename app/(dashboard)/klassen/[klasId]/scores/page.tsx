@@ -158,15 +158,24 @@ function StaffScoresPage() {
     }
 
     if (studentList.length && assignmentList.length) {
-      const { data: subs } = await supabase
+      const { data: subs, error: subsErr } = await supabase
         .from('submissions')
         .select('id, student_id, assignment_id, status')
         .in('assignment_id', assignmentList.map((x: any) => x.id))
+      if (subsErr) { console.error(subsErr); setLoadErr(subsErr); setLoading(false); return }
 
+      // The ids go into the URL, and somewhere between 300 and 400 of them the
+      // request is refused outright (measured 2026-10-22). Without the chunks
+      // and the error check, a busy class would show every grade as empty.
       const subIds = subs?.map((s: any) => s.id) ?? []
-      const { data: feedbacks } = subIds.length
-        ? await supabase.from('submission_feedback').select('submission_id, score').in('submission_id', subIds)
-        : { data: [] as any[] }
+      const feedbacks: any[] = []
+      for (let i = 0; i < subIds.length; i += 200) {
+        const { data, error: fbErr } = await supabase
+          .from('submission_feedback').select('submission_id, score')
+          .in('submission_id', subIds.slice(i, i + 200))
+        if (fbErr) { console.error(fbErr); setLoadErr(fbErr); setLoading(false); return }
+        feedbacks.push(...(data ?? []))
+      }
 
       const fbMap: Record<string, number | null> = {}
       feedbacks?.forEach((f: any) => { fbMap[f.submission_id] = f.score ?? null })
@@ -894,6 +903,17 @@ function StaffScoresPage() {
             <h2 className="font-semibold text-sm text-gray-800">Examenresultaten</h2>
             <span className="text-xs text-gray-400 ml-1">Klik op <Plus size={11} className="inline"/> om een score in te voeren</span>
           </div>
+          {/* Without an Examen part in the weighting, lib/grading leaves the exam
+              out of Gem. and the rapport. Say so where the exam is typed in. */}
+          {!allCats.some(c => c.source === 'examen') && (
+            <p className="px-4 py-2 text-xs text-amber-800 bg-amber-50 border-b border-amber-100">
+              Het examen telt nu <strong>niet</strong> mee in het gemiddelde en het rapport, want de
+              puntenverdeling van deze klas heeft geen onderdeel Examen.{' '}
+              <Link href={`/klassen/${klasId}/puntenverdeling`} className="underline font-medium">
+                Puntenverdeling instellen
+              </Link>
+            </p>
+          )}
           <ScrollX>
             <table className="w-full text-sm">
               <thead>
