@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { formatDate, getRoleBadge } from '@/lib/utils'
-import { Building2, Users, TrendingUp, Shield, Plus, X, Loader2, ChevronDown, ChevronRight, GraduationCap, Pencil, MessageSquare, CheckCheck, Trash2, ExternalLink } from 'lucide-react'
+import { Building2, Users, TrendingUp, Shield, Plus, X, Loader2, ChevronDown, ChevronRight, GraduationCap, Pencil, MessageSquare, CheckCheck, Trash2, ExternalLink, Download } from 'lucide-react'
 import Link from 'next/link'
 import { InviteUserButton } from '@/components/features/admin/InviteUserButton'
 import { DeleteUserButton } from '@/components/features/admin/DeleteUserButton'
@@ -32,6 +32,7 @@ export default function SuperAdminPage() {
   const [archivedLoading, setArchivedLoading] = useState<Record<string, boolean>>({})
   const [feedback, setFeedback]               = useState<any[]>([])
   const [feedbackLoading, setFeedbackLoading] = useState(true)
+  const [exporting, setExporting]             = useState<string | null>(null)
 
   useEffect(() => {
     if (!profile) return
@@ -78,6 +79,35 @@ export default function SuperAdminPage() {
   async function deleteFeedback(id: string) {
     setFeedback(prev => prev.filter(f => f.id !== id))
     await supabase.from('feedback').delete().eq('id', id)
+  }
+
+  // The school's exit export (DPA art. 11.2). Until 2026-10-22 this had no
+  // button and ran from the browser console (WORKLOG 2026-10-21, B5).
+  async function exportTenant(t: any) {
+    setExporting(t.id)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify({ scope: 'tenant', tenantId: t.id }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        alert(`Export mislukt (${res.status}): ${body?.error ?? 'onbekende fout'}`)
+        return
+      }
+      const url = URL.createObjectURL(await res.blob())
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `export-${t.slug}-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e: any) {
+      alert(`Export mislukt: ${e?.message ?? 'netwerkfout'}`)
+    } finally {
+      setExporting(null)
+    }
   }
 
   async function toggleTenant(tenantId: string) {
@@ -236,6 +266,12 @@ export default function SuperAdminPage() {
                       <button onClick={() => toggleArchivedFor(t.id)}
                         className={`text-xs px-2 py-1 rounded-lg border transition-colors ${showArchivedFor[t.id] ? 'border-gray-300 bg-gray-100 text-gray-700' : 'border-border text-gray-400 hover:text-gray-600'}`}>
                         Gearchiveerd
+                      </button>
+                      <button onClick={() => exportTenant(t)} disabled={exporting === t.id}
+                        title="Volledige export van de schoolgegevens (JSON, zonder bestanden)"
+                        className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-border text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50">
+                        {exporting === t.id ? <Loader2 size={12} className="animate-spin"/> : <Download size={12}/>}
+                        Export
                       </button>
                       <Link href={`/klassen?mosque=${t.id}`}
                         className="flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700 font-medium">

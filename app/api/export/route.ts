@@ -62,37 +62,40 @@ async function exportUser(userId: string) {
     if (!profile) return null
 
     const data: Record<string, unknown> = { profiel: profile }
+    // Every read goes through fetchAll, which throws: a failed read used to be
+    // skipped silently, and the person got an incomplete copy presented as whole.
+    const put = (table: string, rows: any[]) => { if (rows.length) data[table] = rows }
 
     for (const { table, key } of [...OWNED_TABLES, ...SCRUBBED_TABLES, ...EXPORT_ONLY_TABLES]) {
-        const { data: rows } = await supabaseAdmin.from(table).select('*').eq(key, userId)
-        if (rows?.length) data[table] = rows
+        put(table, await fetchAll(table, key, userId, { orderBy: table === 'student_details' ? 'student_id' : 'id' }))
     }
 
+    // Also about this person, but outside personal-data-map.ts because adding
+    // them there would change what erasure does too (that is a separate
+    // decision, see WORKLOG 2026-10-22 E4). Missing from this export until then.
+    put('student_goals',       await fetchAll('student_goals', 'student_id', userId))
+    put('category_scores',     await fetchAll('category_scores', 'student_id', userId))
+    put('assignment_students', await fetchAll('assignment_students', 'student_id', userId))
+    put('student_documents',   await fetchAll('student_documents', 'student_id', userId))
+    put('student_reports',     await fetchAll('student_reports', 'student_id', userId))
+    put('staff_pay',           await fetchAll('staff_pay', 'staff_id', userId, { orderBy: 'staff_id' }))
+    put('payroll_entries',     await fetchAll('payroll_entries', 'staff_id', userId))
+    const cards = (data.rapport_cards as any[] | undefined) ?? []
+    if (cards.length) put('rapport_lines', await fetchAll('rapport_lines', 'rapport_card_id', cards.map(c => c.id)))
+
     // Submissions and the feedback on them: the pupil's own work.
-    const { data: subs } = await supabaseAdmin
-        .from('submissions').select('*').eq('student_id', userId)
-    if (subs?.length) {
-        data.submissions = subs
-        const ids = subs.map(s => s.id)
-        const { data: fb } = await supabaseAdmin
-            .from('submission_feedback').select('*').in('submission_id', ids)
-        if (fb?.length) data.submission_feedback = fb
-    }
+    const subs = await fetchAll('submissions', 'student_id', userId)
+    put('submissions', subs)
+    const subIds = subs.map(s => s.id)
+    if (subIds.length) put('submission_feedback', await fetchAll('submission_feedback', 'submission_id', subIds))
 
     // Files, as a manifest with one-hour download links.
     const files: FileEntry[] = []
-    const { data: docs } = await supabaseAdmin
-        .from('student_documents').select('file_url').eq('student_id', userId)
-    files.push(...await signAll('student-documents', (docs ?? []).map(d => d.file_url)))
-
-    const { data: reps } = await supabaseAdmin
-        .from('student_reports').select('file_url').eq('student_id', userId)
-    files.push(...await signAll('student-reports', (reps ?? []).map(r => r.file_url)))
-
-    if (subs?.length) {
-        const { data: sf } = await supabaseAdmin
-            .from('submission_files').select('file_url').in('submission_id', subs.map(s => s.id))
-        files.push(...await signAll('submission-files', (sf ?? []).map(f => f.file_url)))
+    files.push(...await signAll('student-documents', ((data.student_documents as any[]) ?? []).map(d => d.file_url)))
+    files.push(...await signAll('student-reports', ((data.student_reports as any[]) ?? []).map(r => r.file_url)))
+    if (subIds.length) {
+        const sf = await fetchAll('submission_files', 'submission_id', subIds)
+        files.push(...await signAll('submission-files', sf.map(f => f.file_url)))
     }
     if (files.length) data.bestanden = files
 
