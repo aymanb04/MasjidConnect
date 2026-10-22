@@ -253,7 +253,10 @@ export default function TeacherSubmissionsView({ roster, studentCount, assignmen
                         </div>}
                   </div>
                   {viaApp && (didHand
-                    ? <span className="badge bg-blue-50 text-blue-700">Ingediend</span>
+                    ? sub.is_late
+                      // Set by the database when the pupil handed in after the deadline (mig 43).
+                      ? <span className="badge bg-red-100 text-red-700">Te laat ingediend</span>
+                      : <span className="badge bg-blue-50 text-blue-700">Ingediend</span>
                     : <span className="badge bg-gray-100 text-gray-500">Niets ingediend</span>)}
                   {hasFb?.score != null && (
                     <span className="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-medium">

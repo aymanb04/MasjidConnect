@@ -2,7 +2,6 @@
 
 import { useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
-import { useRouter } from 'next/navigation'
 import { Upload, X, CheckCircle2, Loader2, FileText, RotateCcw, Star, Clock } from 'lucide-react'
 import { formatFileSize, getFileIcon, getSubmissionStatusBadge, isHandedInViaApp, cn } from '@/lib/utils'
 import { SignedFileLink } from '@/components/SignedFileLink'
@@ -12,6 +11,9 @@ interface Props {
   assignment: any
   existingSubmission: any
   userId: string
+  // Reloads the submission after a hand-in. router.refresh() never did: this
+  // page loads client-side, so the badge (and "te laat") only showed after a reload.
+  onSubmitted?: () => void
 }
 
 const ALLOWED_TYPES = ['application/pdf', 'application/msword',
@@ -19,7 +21,7 @@ const ALLOWED_TYPES = ['application/pdf', 'application/msword',
   'image/jpeg', 'image/png', 'image/webp']
 const MAX_SIZE = 20 * 1024 * 1024
 
-export default function SubmitAssignmentForm({ assignmentId, assignment, existingSubmission, userId }: Props) {
+export default function SubmitAssignmentForm({ assignmentId, assignment, existingSubmission, userId, onSubmitted }: Props) {
   const [text, setText]         = useState(existingSubmission?.text_content ?? '')
   const [files, setFiles]       = useState<File[]>([])
   const [loading, setLoading]   = useState(false)
@@ -27,7 +29,6 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
   const [success, setSuccess]   = useState(false)
   const [dragging, setDragging] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const router  = useRouter()
 
   const sub             = existingSubmission
   const sb              = sub ? getSubmissionStatusBadge(sub.status) : null
@@ -36,7 +37,11 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
   const isPastDeadline  = assignment.due_date ? new Date(assignment.due_date) < new Date() : false
   // Paper or oral homework: no upload form, and no deadline warnings either.
   const viaApp          = isHandedInViaApp(assignment)
-  const canSubmit       = viaApp && !isGraded && !isPastDeadline
+  // After the deadline a pupil may still hand in, marked "te laat" by the
+  // database (migration 43). Work that was in on time stays locked, so it
+  // cannot turn late by being resubmitted.
+  const isLate          = sub?.is_late === true
+  const canSubmit       = viaApp && !isGraded && (!isPastDeadline || !sub || isLate)
   const scoreDisplay    = feedback?.score != null
     ? assignment.max_score
       ? `${feedback.score}/${assignment.max_score}`
@@ -108,7 +113,7 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
       }
       setSuccess(true)
       setFiles([])
-      setTimeout(() => router.refresh(), 1000)
+      onSubmitted?.()
     } catch (e: any) {
       // Never surface e.message: it is the raw English Postgres/Storage string.
       console.error(e)
@@ -122,7 +127,10 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
     <div className="card p-6">
       <div className="flex items-center justify-between mb-5">
         <h2 className="font-semibold text-gray-900">{viaApp ? 'Mijn indiening' : 'Inleveren'}</h2>
-        {viaApp && sb && <span className={`badge ${sb.color}`}>{sb.label}</span>}
+        <div className="flex items-center gap-2">
+          {viaApp && isLate && <span className="badge bg-red-100 text-red-700">Te laat ingediend</span>}
+          {viaApp && sb && <span className={`badge ${sb.color}`}>{sb.label}</span>}
+        </div>
       </div>
 
       {!viaApp && !isGraded && (
@@ -199,9 +207,17 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
         </div>
       )}
 
-      {/* Submission form — only if not graded and deadline not passed */}
+      {/* Submission form: not graded, and before the deadline or (late) not yet in on time */}
       {canSubmit && (
         <>
+          {isPastDeadline && !sub && (
+            <div className="mb-4 flex items-center gap-3 p-3.5 rounded-xl bg-red-50 border border-red-200">
+              <Clock size={15} className="text-red-400 flex-shrink-0"/>
+              <p className="text-sm text-red-600">
+                De deadline is verstreken. Je kan nog indienen, maar je taak krijgt de vermelding &ldquo;te laat&rdquo;.
+              </p>
+            </div>
+          )}
           {assignment.allow_text_submission && (
             <div className="mb-4">
               <label className="label">Antwoord typen</label>
@@ -266,21 +282,17 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
             }
           </button>
           {sub && (
-            <p className="text-xs text-center text-gray-400 mt-2">Je kan je indiening opnieuw uploaden tot de deadline.</p>
+            <p className="text-xs text-center text-gray-400 mt-2">
+              {isLate
+                ? 'Je kan opnieuw indienen tot de leerkracht je taak beoordeelt.'
+                : 'Je kan je indiening opnieuw uploaden tot de deadline.'}
+            </p>
           )}
         </>
       )}
 
-      {/* Deadline passed, not yet submitted */}
-      {viaApp && isPastDeadline && !sub && (
-        <div className="flex items-center gap-3 p-3.5 rounded-xl bg-red-50 border border-red-200">
-          <Clock size={15} className="text-red-400 flex-shrink-0"/>
-          <p className="text-sm text-red-600">De deadline is verstreken. Je kan deze taak niet meer indienen.</p>
-        </div>
-      )}
-
-      {/* Deadline passed after submission (not graded) */}
-      {viaApp && isPastDeadline && sub && !isGraded && (
+      {/* Handed in on time, deadline now passed: locked until graded */}
+      {viaApp && isPastDeadline && sub && !isLate && !isGraded && (
         <p className="text-xs text-center text-gray-400 mt-3">De deadline is verstreken — je indiening wacht op beoordeling.</p>
       )}
     </div>

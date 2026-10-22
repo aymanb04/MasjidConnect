@@ -212,7 +212,7 @@ export default function HuiswerkDetailPage() {
       </div>
 
       {profile?.role === 'student' && (
-        <SubmitAssignmentForm assignmentId={id as string} assignment={assignment} existingSubmission={mySubmission} userId={profile.id} />
+        <SubmitAssignmentForm assignmentId={id as string} assignment={assignment} existingSubmission={mySubmission} userId={profile.id} onSubmitted={() => loadData(true)} />
       )}
       {isTeacher && (
         <TeacherSubmissionsView roster={roster} studentCount={studentCount} assignmentId={id as string} maxScore={assignment.max_score} perStudent={perStudentRows.length > 0} viaApp={viaApp} onGraded={() => loadData(true)} />

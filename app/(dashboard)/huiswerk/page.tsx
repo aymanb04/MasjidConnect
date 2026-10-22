@@ -130,6 +130,7 @@ export default function HuiswerkPage() {
                         {/* Pupils never receive drafts (RLS); staff must see which ones they are. */}
                         {!a.is_published && <span className="ml-2 text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">Concept</span>}
                       </div>
+                      {sub?.is_late && <span className="badge flex-shrink-0 bg-red-100 text-red-700">Te laat</span>}
                       {sb && <span className={`badge flex-shrink-0 ${sb.color}`}>{sb.label}</span>}
                     </Link>
                   )
