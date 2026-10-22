@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Next 15 picks the workspace root from the nearest lockfile upwards; a stray
+  // C:\Users\Boula\package-lock.json made it trace from the home folder locally.
+  outputFileTracingRoot: __dirname,
   images: {
     unoptimized: true,
   },
