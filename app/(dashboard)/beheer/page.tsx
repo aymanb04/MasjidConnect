@@ -317,39 +317,44 @@ export default function BeheerPage() {
             {filteredUsers.map((u: any) => {
               const rb = getRoleBadge(u.role)
               return (
-                <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
+                // flex-wrap + a minimum name width: when the row is too narrow (a
+                // phone), the icons drop to a second line instead of squeezing the
+                // name to nothing and pushing the last icon out of the card.
+                <div key={u.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
                   <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
                     style={{ backgroundColor: '#EEF6F1', color: '#1B6B4A' }}>
                     {u.first_name?.[0]}{u.last_name?.[0]}
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-[7rem]">
                     <div className="text-sm font-medium text-gray-800 truncate">{u.first_name} {u.last_name}</div>
                     <div className="text-xs text-gray-400 truncate">{u.email}</div>
                   </div>
                   <span className={`badge flex-shrink-0 ${rb.color}`}>{rb.label}</span>
-                  <ExportUserButton userId={u.id} name={`${u.first_name} ${u.last_name}`} />
-                  {u.id !== profile.id && (
-                    <ResetPasswordButton userId={u.id} name={`${u.first_name} ${u.last_name}`} />
-                  )}
-                  <button
-                    onClick={() => setEditUser(u)}
-                    className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-300 hover:text-primary-600 hover:bg-primary-50 transition-all flex-shrink-0"
-                    title="Gegevens, rol en klassen bewerken"
-                  >
-                    <Pencil size={13} />
-                  </button>
-                  {u.role === 'student' && (
+                  <div className="flex flex-wrap items-center justify-end gap-1 ml-auto max-w-full">
+                    <ExportUserButton userId={u.id} name={`${u.first_name} ${u.last_name}`} />
+                    {u.id !== profile.id && (
+                      <ResetPasswordButton userId={u.id} name={`${u.first_name} ${u.last_name}`} />
+                    )}
                     <button
-                      onClick={() => setMoveStudent({ id: u.id, first_name: u.first_name, last_name: u.last_name })}
+                      onClick={() => setEditUser(u)}
                       className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-300 hover:text-primary-600 hover:bg-primary-50 transition-all flex-shrink-0"
-                      title="Verplaatsen naar andere klas"
+                      title="Gegevens, rol en klassen bewerken"
                     >
-                      <ArrowLeftRight size={13} />
+                      <Pencil size={13} />
                     </button>
-                  )}
-                  {u.id !== profile.id && (
-                    <DeleteUserButton userId={u.id} name={`${u.first_name} ${u.last_name}`} onDeleted={loadData}/>
-                  )}
+                    {u.role === 'student' && (
+                      <button
+                        onClick={() => setMoveStudent({ id: u.id, first_name: u.first_name, last_name: u.last_name })}
+                        className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-300 hover:text-primary-600 hover:bg-primary-50 transition-all flex-shrink-0"
+                        title="Verplaatsen naar andere klas"
+                      >
+                        <ArrowLeftRight size={13} />
+                      </button>
+                    )}
+                    {u.id !== profile.id && (
+                      <DeleteUserButton userId={u.id} name={`${u.first_name} ${u.last_name}`} onDeleted={loadData}/>
+                    )}
+                  </div>
                 </div>
               )
             })}
