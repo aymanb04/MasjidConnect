@@ -18,10 +18,64 @@ import { OWNED_TABLES, SCRUBBED_TABLES } from './personal-data-map'
 // This module is the single erasure path. Both routes call it, so they cannot
 // drift apart again.
 //
-// DELIBERATELY NOT ERASED — payments and fee_payments. Accounting records carry
-// a statutory retention duty (Belgian bookkeeping law, 7 years), which
+// DELIBERATELY NOT ERASED — fee_payments and payroll_entries. Accounting records
+// carry a statutory retention duty (Belgian bookkeeping law, 7 years), which
 // Art. 17(3)(b) carves out of the right to erasure. They key on a UUID whose
 // profile is scrubbed, so they hold no readable identity afterwards.
+//
+// KEPT, WITHOUT A NAME — scores, attendance, rapport cards, submissions: the
+// school's statistics. Their free-text columns are cleared (see SCRUBBED_TABLES
+// and the rapport comments below).
+//
+// NOT REACHED — free text that names the pupil somewhere else: a session note
+// ("A. was ziek"), an announcement, a note on another pupil's row. Nothing ties
+// that text to the person's id, so it cannot be found reliably. Say so to a
+// school that asks for an erasure.
+//
+// A HARD DELETE IS RARE. attendance_records.student_id and
+// submissions.student_id have no ON DELETE rule (live, 2026-10-23), so the auth
+// user of anyone with a single attendance record or submission cannot be
+// deleted. That is why closeAccount() runs first in both routes: the person is
+// anonymised whether or not the delete afterwards succeeds.
+
+/**
+ * Close the account and scrub the profile: ban + new e-mail, then overwrite
+ * the name, e-mail and phone. The UUID stays, so the rows kept
+ * for statistics stay valid.
+ *
+ * The ban comes FIRST so the person can never sign in between the scrub and
+ * the account closure. Returns an error message, or null on success.
+ */
+export async function closeAccount(admin: SupabaseClient, userId: string): Promise<string | null> {
+  const { error: authErr } = await admin.auth.admin.updateUserById(userId, {
+    email:        `anon-${userId}@deleted.invalid`,
+    ban_duration: '876000h',
+  })
+  if (authErr) return `auth ban: ${authErr.message}`
+
+  // There is no admin "log this user out" endpoint: the call that used to sit
+  // here (/auth/v1/admin/users/<id>/logout) got a 404 every time (checked
+  // 2026-10-23). The ban is what works: a session can no longer be refreshed
+  // ("User Banned"). An access token already issued stays valid until it
+  // expires (max 1 hour), but the app ends any session whose profile is
+  // inactive (useProfile) and the API routes refuse it (requireRole).
+
+  // is_anonymized marks the row as erased, so reactivation is blocked (a
+  // first name of 'Verwijderd' is not a safe sentinel: it could be real).
+  const { error: profileErr } = await admin
+    .from('profiles')
+    .update({
+      first_name:    'Verwijderd',
+      last_name:     '',
+      email:         `anon-${userId}@deleted.invalid`,
+      phone:         null,
+      is_active:     false,
+      is_anonymized: true,
+    })
+    .eq('id', userId)
+  if (profileErr) return `profile scrub: ${profileErr.message}`
+  return null
+}
 
 export interface ErasureReport {
   /** bucket → number of objects removed */
@@ -171,6 +225,18 @@ export async function eraseUserData(
   for (const { table, key, column } of SCRUBBED_TABLES) {
     const { error } = await admin.from(table).update({ [column]: null }).eq(key, userId)
     if (error) report.errors.push(`${table} scrub: ${error.message}`)
+  }
+
+  // ── The teacher's rapport comments about this pupil ────────────────────────
+  // The cards and results stay (statistics); the comment is free text about the
+  // pupil. Lines key on the card, not on the pupil, so they need their own step.
+  const { data: cards, error: cardsErr } = await admin
+    .from('rapport_cards').select('id').eq('student_id', userId)
+  if (cardsErr) report.errors.push(`rapport_cards read: ${cardsErr.message}`)
+  if (cards?.length) {
+    const { error } = await admin
+      .from('rapport_lines').update({ comment: null }).in('rapport_card_id', cards.map(c => c.id))
+    if (error) report.errors.push(`rapport_lines scrub: ${error.message}`)
   }
 
   // ── Pending invitations key on the e-mail address, not the user id ─────────

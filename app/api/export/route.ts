@@ -67,19 +67,13 @@ async function exportUser(userId: string) {
     const put = (table: string, rows: any[]) => { if (rows.length) data[table] = rows }
 
     for (const { table, key } of [...OWNED_TABLES, ...SCRUBBED_TABLES, ...EXPORT_ONLY_TABLES]) {
-        put(table, await fetchAll(table, key, userId, { orderBy: table === 'student_details' ? 'student_id' : 'id' }))
+        // student_details and staff_pay are keyed on the person and have no id column.
+        put(table, await fetchAll(table, key, userId, { orderBy: table === 'student_details' || table === 'staff_pay' ? key : 'id' }))
     }
 
-    // Also about this person, but outside personal-data-map.ts because adding
-    // them there would change what erasure does too (that is a separate
-    // decision, see WORKLOG 2026-10-22 E4). Missing from this export until then.
-    put('student_goals',       await fetchAll('student_goals', 'student_id', userId))
-    put('category_scores',     await fetchAll('category_scores', 'student_id', userId))
-    put('assignment_students', await fetchAll('assignment_students', 'student_id', userId))
+    // Erased by their own code in lib/gdpr-erasure.ts, because they point at files.
     put('student_documents',   await fetchAll('student_documents', 'student_id', userId))
     put('student_reports',     await fetchAll('student_reports', 'student_id', userId))
-    put('staff_pay',           await fetchAll('staff_pay', 'staff_id', userId, { orderBy: 'staff_id' }))
-    put('payroll_entries',     await fetchAll('payroll_entries', 'staff_id', userId))
     const cards = (data.rapport_cards as any[] | undefined) ?? []
     if (cards.length) put('rapport_lines', await fetchAll('rapport_lines', 'rapport_card_id', cards.map(c => c.id)))
 

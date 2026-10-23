@@ -53,39 +53,57 @@ export function DeleteUserButton({ userId, name, onDeleted }: { userId: string; 
     return <Loader2 size={14} className="animate-spin text-gray-400 flex-shrink-0" />
   }
 
-  if (mode === 'confirm-gdpr') {
-    return (
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        <span className="text-xs text-red-600 font-medium">PII wissen, data anoniem bewaren?</span>
-        <button onClick={anonymize}
-          className="text-xs bg-red-600 text-white px-2 py-1 rounded-lg hover:bg-red-700 transition-colors">
-          Ja, wissen
-        </button>
-        <button onClick={() => setMode('idle')}
-          className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-200 transition-colors">
-          Nee
-        </button>
+  // The confirmations open as a small box ABOVE the icon instead of inline:
+  // inline, next to the row's other icons, the question pushed the buttons out
+  // of the card and squeezed the name away. Above, because the superadmin
+  // card clips with overflow-hidden and there is always a header above a row.
+  const confirmBox = (children: React.ReactNode) => (
+    <div className="relative flex-shrink-0">
+      <Archive size={14} className="m-1 text-gray-400" />
+      <div className="absolute right-0 bottom-full mb-1 z-20 w-60 rounded-xl border border-border bg-white shadow-lg p-3">
+        {children}
       </div>
+    </div>
+  )
+
+  if (mode === 'confirm-gdpr') {
+    return confirmBox(
+      <>
+        <p className="text-xs text-red-600 font-medium leading-snug">Persoonsgegevens van {name} definitief wissen?</p>
+        <p className="text-xs text-gray-500 leading-snug mt-1">Cijfers en aanwezigheid blijven anoniem bewaard. Dit kan niet ongedaan worden.</p>
+        <div className="flex justify-end gap-1.5 mt-2.5">
+          <button onClick={() => setMode('idle')}
+            className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-200 transition-colors">
+            Nee
+          </button>
+          <button onClick={anonymize}
+            className="text-xs bg-red-600 text-white px-2 py-1 rounded-lg hover:bg-red-700 transition-colors">
+            Ja, wissen
+          </button>
+        </div>
+      </>
     )
   }
 
   if (mode === 'confirm-archive') {
-    return (
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        <span className="text-xs text-gray-500">{name} archiveren?</span>
-        <button onClick={archive}
-          className="text-xs bg-gray-700 text-white px-2 py-1 rounded-lg hover:bg-gray-800 transition-colors">
-          Ja
-        </button>
-        <button onClick={() => setMode('confirm-gdpr')}
-          className="text-xs text-red-500 hover:text-red-600 px-1 py-1 transition-colors underline underline-offset-2">
-          GDPR
-        </button>
-        <button onClick={() => setMode('idle')}
-          className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-200 transition-colors">
-          Nee
-        </button>
-      </div>
+    return confirmBox(
+      <>
+        <p className="text-xs text-gray-700 font-medium leading-snug">{name} archiveren?</p>
+        <div className="flex items-center justify-end gap-1.5 mt-2.5">
+          <button onClick={() => setMode('confirm-gdpr')}
+            className="text-xs text-red-500 hover:text-red-600 px-1 py-1 mr-auto transition-colors underline underline-offset-2">
+            GDPR
+          </button>
+          <button onClick={() => setMode('idle')}
+            className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-200 transition-colors">
+            Nee
+          </button>
+          <button onClick={archive}
+            className="text-xs bg-gray-700 text-white px-2 py-1 rounded-lg hover:bg-gray-800 transition-colors">
+            Ja
+          </button>
+        </div>
+      </>
     )
   }
 

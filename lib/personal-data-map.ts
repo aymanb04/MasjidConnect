@@ -17,6 +17,12 @@ export const OWNED_TABLES = [
   { table: 'student_notes',        key: 'student_id' },
   { table: 'feedback',             key: 'user_id'    },
   { table: 'tenant_document_acks', key: 'user_id'    },
+  // Free text about one pupil's progress ("begonnen bij / doel / nu"). It has
+  // no use for the school's statistics once the name is gone.
+  { table: 'student_goals',        key: 'student_id' },
+  // A staff member's current hourly rate. Not a bookkeeping record: every
+  // payroll entry keeps its own rate_snapshot.
+  { table: 'staff_pay',            key: 'staff_id'   },
 ] as const
 
 /**
@@ -28,6 +34,11 @@ export const SCRUBBED_TABLES = [
   { table: 'attendance_records',    key: 'student_id', column: 'note'  },
   { table: 'exam_scores',           key: 'student_id', column: 'notes' },
   { table: 'oudercontact_bookings', key: 'student_id', column: 'note'  },
+  { table: 'category_scores',       key: 'student_id', column: 'note'  },
+  // Cleared, never deleted: an assignment with no assignment_students rows
+  // means "the whole class", so deleting this pupil's row could open a
+  // per-pupil task to everyone.
+  { table: 'assignment_students',   key: 'student_id', column: 'task_text' },
 ] as const
 
 /** Tables exported but never erased — see the note below. */
@@ -39,6 +50,7 @@ export const EXPORT_ONLY_TABLES = [
   // carved out of the right to erasure by Art. 17(3)(b). The data subject can
   // still SEE them under Art. 15 — the right of access has no such carve-out.
   { table: 'fee_payments',    key: 'student_id' },
+  { table: 'payroll_entries', key: 'staff_id'   },
 ] as const
 
 /** Buckets that can hold files belonging to one person. */

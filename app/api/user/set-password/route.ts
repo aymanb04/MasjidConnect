@@ -125,16 +125,11 @@ export async function POST(request: Request) {
             .from('profiles').update({ must_change_password: true }).eq('id', userId)
         if (flagErr) console.error('[/api/user/set-password] flag:', flagErr.message)
 
-        // Anyone already signed in with the old password is signed out — if the
-        // reset is because someone else knew it, leaving their session alive
-        // would defeat the point.
-        await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${userId}/logout`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-                apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            },
-        })
+        // Anyone already signed in with the old password is signed out: GoTrue
+        // revokes the refresh tokens itself when an admin sets a password
+        // (checked 2026-10-23: the old session's refresh fails with "Refresh
+        // Token Not Found"). The admin /logout call that used to follow got a
+        // 404 every time; it never did this.
 
         // Who reset whose password, never the password itself.
         console.info('[/api/user/set-password] by', caller.id, 'for', userId)

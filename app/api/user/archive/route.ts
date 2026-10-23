@@ -58,15 +58,11 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
         }
 
-        // Force-revoke all active sessions immediately so the user is kicked out
-        // right away rather than waiting for their JWT to expire (up to 1 hour)
-        await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${userId}/logout`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-                'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            },
-        })
+        // The ban is what ends their sessions: a banned user's refresh token is
+        // refused ("User Banned"). The admin /logout call that used to follow
+        // returned 404 every time (no such endpoint, checked 2026-10-23). An
+        // access token already issued lasts at most 1 hour, and the app ends a
+        // session whose profile is inactive (useProfile).
 
         return NextResponse.json({ success: true })
     } catch (e: any) {
