@@ -11,7 +11,9 @@ const supabaseAdmin = createClient(
 const MAX_MESSAGE_LEN = 4000
 
 export async function POST(req: NextRequest) {
-  const auth = await requireRole(req, ['student', 'teacher', 'admin', 'super_admin', 'leerlingenbegeleiding'])
+  // Staff only, like the button: pupil accounts (and the parents using them)
+  // were writing to the school here, but this inbox is MasjidConnect's.
+  const auth = await requireRole(req, ['teacher', 'admin', 'super_admin', 'leerlingenbegeleiding'])
   if ('error' in auth) return auth.error
 
   const rl = await checkRateLimit('/api/feedback', auth.caller.id)

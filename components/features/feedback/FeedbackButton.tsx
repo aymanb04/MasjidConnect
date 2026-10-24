@@ -22,7 +22,10 @@ export function FeedbackButton() {
   const [done,       setDone]       = useState(false)
   const [error,      setError]      = useState('')
 
-  if (!profile) return null
+  // Staff only. Parents use their child's pupil account, and they took this
+  // button for a way to reach the school: their messages landed in the
+  // MasjidConnect inbox, which nobody at the school ever sees (2026-10-24).
+  if (!profile || profile.role === 'student') return null
 
   function openPanel() {
     setDone(false)
