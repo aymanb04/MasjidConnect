@@ -43,9 +43,11 @@ export default function RapportDocument({
 }: RapportDocProps) {
   return (
     <>
-      {/* Print isolation: only #rapport-print prints, app chrome hidden. */}
+      {/* Printing happens on /afdrukken/rapporten, outside the dashboard layout.
+          Printing from inside it clipped the card to the scrolling <main>: the
+          third subject and the signatures never reached the paper. */}
       <style>{`
-        #rapport-print {
+        .rapport-doc {
           --ink:#1f2937; --muted:#6b7280; --line:#d1d5db;
           --subject-bg:#faedcf; --subject-ink:#3f7a3a;
           --result-bg:#e7f0e0; --comment-bg:#eef4ea; --brand:#e8a13a;
@@ -54,38 +56,32 @@ export default function RapportDocument({
           direction:rtl; width:210mm; max-width:100%; margin:0 auto; padding:14mm;
           box-sizing:border-box;
         }
-        #rapport-print *{ box-sizing:border-box; }
-        #rapport-print .rp-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
-        #rapport-print .rp-brand{ display:flex; align-items:center; gap:8px; }
-        #rapport-print .rp-logo-txt{ font-weight:800; font-size:24px; letter-spacing:.5px; color:var(--brand); font-family:"Segoe UI",sans-serif; }
-        #rapport-print .rp-logo-img{ height:40px; width:auto; }
-        #rapport-print .rp-school{ text-align:left; font-size:13px; line-height:1.7; }
-        #rapport-print .rp-school .rp-name{ font-size:15px; font-weight:700; }
-        #rapport-print hr.rp-rule{ border:0; border-top:2px solid var(--ink); margin:10px 0 0; }
-        #rapport-print .rp-meta{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:14px 0 20px; text-align:center; font-size:13px; }
-        #rapport-print .rp-lab{ color:var(--muted); font-size:12px; }
-        #rapport-print .rp-val{ font-weight:700; margin-top:4px; min-height:20px; border-bottom:1px solid var(--line); padding-bottom:4px; }
-        #rapport-print table{ width:100%; border-collapse:separate; border-spacing:0 8px; }
-        #rapport-print thead th{ background:#f3f4f6; padding:9px 12px; font-size:13px; font-weight:700; }
-        #rapport-print thead th .rp-nl{ display:block; color:var(--muted); font-weight:600; font-size:12px; }
-        #rapport-print td{ padding:12px; vertical-align:middle; }
-        #rapport-print .rp-subject{ background:var(--subject-bg); width:26%; text-align:center; border-radius:6px; }
-        #rapport-print .rp-subject .rp-ar{ color:var(--subject-ink); font-weight:800; font-size:16px; }
-        #rapport-print .rp-subject .rp-nl2{ color:var(--subject-ink); font-weight:700; font-size:13px; }
-        #rapport-print .rp-result{ background:var(--result-bg); width:16%; text-align:center; font-size:20px; font-weight:800; border-radius:6px; }
-        #rapport-print .rp-comment{ background:var(--comment-bg); text-align:start; unicode-bidi:plaintext; border-radius:6px; font-size:13px; color:#374151; min-height:44px; }
-        #rapport-print .rp-signs{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:56px; text-align:center; font-size:13px; color:var(--muted); }
-        #rapport-print .rp-signs .rp-slot{ border-top:1px solid var(--ink); padding-top:8px; }
-        #rapport-print .rp-signs small, #rapport-print .rp-school small{ color:var(--muted); }
-        @media print {
-          body * { visibility:hidden !important; }
-          #rapport-print, #rapport-print * { visibility:visible !important; }
-          #rapport-print { position:absolute; left:0; top:0; margin:0; padding:14mm; box-shadow:none; }
-          @page { size:A4; margin:0; }
-        }
+        .rapport-doc *{ box-sizing:border-box; }
+        .rapport-doc .rp-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+        .rapport-doc .rp-brand{ display:flex; align-items:center; gap:8px; }
+        .rapport-doc .rp-logo-txt{ font-weight:800; font-size:24px; letter-spacing:.5px; color:var(--brand); font-family:"Segoe UI",sans-serif; }
+        .rapport-doc .rp-logo-img{ height:40px; width:auto; }
+        .rapport-doc .rp-school{ text-align:left; font-size:13px; line-height:1.7; }
+        .rapport-doc .rp-school .rp-name{ font-size:15px; font-weight:700; }
+        .rapport-doc hr.rp-rule{ border:0; border-top:2px solid var(--ink); margin:10px 0 0; }
+        .rapport-doc .rp-meta{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:14px 0 20px; text-align:center; font-size:13px; }
+        .rapport-doc .rp-lab{ color:var(--muted); font-size:12px; }
+        .rapport-doc .rp-val{ font-weight:700; margin-top:4px; min-height:20px; border-bottom:1px solid var(--line); padding-bottom:4px; }
+        .rapport-doc table{ width:100%; border-collapse:separate; border-spacing:0 8px; }
+        .rapport-doc thead th{ background:#f3f4f6; padding:9px 12px; font-size:13px; font-weight:700; }
+        .rapport-doc thead th .rp-nl{ display:block; color:var(--muted); font-weight:600; font-size:12px; }
+        .rapport-doc td{ padding:12px; vertical-align:middle; }
+        .rapport-doc .rp-subject{ background:var(--subject-bg); width:26%; text-align:center; border-radius:6px; }
+        .rapport-doc .rp-subject .rp-ar{ color:var(--subject-ink); font-weight:800; font-size:16px; }
+        .rapport-doc .rp-subject .rp-nl2{ color:var(--subject-ink); font-weight:700; font-size:13px; }
+        .rapport-doc .rp-result{ background:var(--result-bg); width:16%; text-align:center; font-size:20px; font-weight:800; border-radius:6px; }
+        .rapport-doc .rp-comment{ background:var(--comment-bg); text-align:start; unicode-bidi:plaintext; border-radius:6px; font-size:13px; color:#374151; min-height:44px; }
+        .rapport-doc .rp-signs{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:56px; text-align:center; font-size:13px; color:var(--muted); }
+        .rapport-doc .rp-signs .rp-slot{ border-top:1px solid var(--ink); padding-top:8px; }
+        .rapport-doc .rp-signs small, .rapport-doc .rp-school small{ color:var(--muted); }
       `}</style>
 
-      <div id="rapport-print">
+      <div className="rapport-doc">
         <div className="rp-head">
           <div className="rp-brand">
             {logoUrl

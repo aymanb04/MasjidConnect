@@ -8,7 +8,8 @@ import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import RapportDocument from '@/components/features/rapport/RapportDocument'
 import { ScrollX } from '@/components/ui/ScrollX'
-import { ArrowLeft, Printer, Loader2, CheckCircle2, Undo2, Save, Lock } from 'lucide-react'
+import { ArrowLeft, Printer, Loader2, CheckCircle2, Undo2, Save, Lock, RefreshCw } from 'lucide-react'
+import { recalculateCard } from '@/lib/rapport'
 
 type Line = {
   id: string; class_id: string; subject_snapshot: string | null
@@ -117,6 +118,22 @@ export default function RapportCardPage() {
     )
   }
 
+  // The card's scores are a snapshot from the day it was made.
+  async function recalc() {
+    if (!card) return
+    if (!confirm('Scores opnieuw berekenen uit de puntenlijst? Commentaar blijft staan; een score die met de hand is aangepast, wordt overschreven. Niet-opgeslagen wijzigingen gaan verloren.')) return
+    setSaving(true); setSaveMsg(null)
+    try {
+      const r = await recalculateCard(card)
+      await loadData()
+      setSaveMsg({ kind: 'ok', text: `Scores bijgewerkt (${r.updated} ${r.updated === 1 ? 'vak' : 'vakken'}` +
+        (r.added ? `, ${r.added} toegevoegd` : '') + (r.removed ? `, ${r.removed} verwijderd` : '') + ').' })
+    } catch (e: any) {
+      setSaveMsg({ kind: 'err', text: `Bijwerken mislukt: ${e.message || 'onbekende fout'}` })
+    }
+    setSaving(false)
+  }
+
   async function togglePublish() {
     if (!card) return
     setPublishing(true)
@@ -193,7 +210,8 @@ export default function RapportCardPage() {
             {card.status === 'published'
               ? <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2.5 py-1 rounded-lg"><CheckCircle2 size={13} /> Gepubliceerd</span>
               : <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-100 px-2.5 py-1 rounded-lg">Concept</span>}
-            <button onClick={() => window.print()} className="btn-secondary text-sm flex items-center gap-1.5"><Printer size={14} /> Afdrukken / PDF</button>
+            <a href={`/afdrukken/rapporten?ids=${card.id}`} target="_blank" rel="noopener"
+              className="btn-secondary text-sm flex items-center gap-1.5"><Printer size={14} /> Afdrukken / PDF</a>
             {isAdmin && (
               <button onClick={togglePublish} disabled={publishing}
                 className={card.status === 'draft' ? 'btn-primary text-sm flex items-center gap-1.5' : 'btn-secondary text-sm flex items-center gap-1.5'}>
@@ -211,9 +229,17 @@ export default function RapportCardPage() {
           <div className="px-4 py-3 border-b border-border bg-gray-50/60 flex items-center justify-between">
             <h2 className="font-semibold text-sm text-gray-800">Scores &amp; commentaar per vak</h2>
             {card.status === 'draft'
-              ? <button onClick={saveChanges} disabled={saving} className="btn-primary text-xs flex items-center gap-1.5">
+              ? <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <button onClick={recalc} disabled={saving} className="btn-secondary text-xs flex items-center gap-1.5"
+                    title="Haal de scores opnieuw uit de puntenlijst">
+                    <RefreshCw size={12} /> Scores bijwerken
+                  </button>
+                )}
+                <button onClick={saveChanges} disabled={saving} className="btn-primary text-xs flex items-center gap-1.5">
                   {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Opslaan
                 </button>
+                </div>
               : <span className="text-xs text-gray-400">Gepubliceerd — zet terug naar concept om te wijzigen</span>}
           </div>
           {saveMsg && (

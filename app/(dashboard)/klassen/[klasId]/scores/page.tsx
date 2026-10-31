@@ -59,6 +59,10 @@ function StaffScoresPage() {
   const [editScore, setEditScore]     = useState('')
   const [editMaxScore, setEditMaxScore] = useState('20')
   const [savingCell, setSavingCell]   = useState(false)
+  // Set right after an exam mark is saved in a class whose weighting has no
+  // Examen part: the mark is stored but counts nowhere, so ask once whether it
+  // should. "Nee" is remembered per class in this browser so it doesn't nag.
+  const [askExamCounts, setAskExamCounts] = useState(false)
   // Surfaces failed/invalid score writes. Before this, every write path here
   // closed its cell regardless of the result, so a refused save looked identical
   // to a successful one until the page was reloaded.
@@ -468,6 +472,16 @@ function StaffScoresPage() {
       data,
     ])
     setEditingCell(null)
+    if (!allCats.some(c => c.source === 'examen') && !examDeclined()) setAskExamCounts(true)
+  }
+
+  const examDeclinedKey = `mc:exam-not-counted:${klasId}`
+  function examDeclined() {
+    try { return localStorage.getItem(examDeclinedKey) === '1' } catch { return false }
+  }
+  function declineExamCounts() {
+    try { localStorage.setItem(examDeclinedKey, '1') } catch { /* private window: just ask again next time */ }
+    setAskExamCounts(false)
   }
 
   async function deleteExamScore(studentId: string, semester: 1 | 2) {
@@ -905,7 +919,25 @@ function StaffScoresPage() {
           </div>
           {/* Without an Examen part in the weighting, lib/grading leaves the exam
               out of Gem. and the rapport. Say so where the exam is typed in. */}
-          {!allCats.some(c => c.source === 'examen') && (
+          {askExamCounts && !allCats.some(c => c.source === 'examen') && (
+            <div role="alert" className="px-4 py-3 bg-amber-100 border-b border-amber-200 text-sm text-amber-900">
+              <p className="font-medium">Het punt is opgeslagen, maar telt niet mee in het rapport.</p>
+              <p className="text-xs mt-0.5 mb-2.5">
+                Deze klas heeft geen onderdeel Examen in de puntenverdeling. Wil je dat het examen meetelt?
+                Je ziet de nieuwe verdeling eerst, en niets verandert voor je op Opslaan klikt.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => router.push(`/klassen/${klasId}/puntenverdeling?examen=1`)}
+                  className="btn-primary text-xs py-1.5 px-3">
+                  Ja, laat het examen meetellen
+                </button>
+                <button onClick={declineExamCounts} className="btn-secondary text-xs py-1.5 px-3">
+                  Nee, niet meetellen
+                </button>
+              </div>
+            </div>
+          )}
+          {!askExamCounts && !allCats.some(c => c.source === 'examen') && (
             <p className="px-4 py-2 text-xs text-amber-800 bg-amber-50 border-b border-amber-100">
               Het examen telt nu <strong>niet</strong> mee in het gemiddelde en het rapport, want de
               puntenverdeling van deze klas heeft geen onderdeel Examen.{' '}

@@ -11,7 +11,7 @@
 // vandaan · hoeveel procent", a running total that has to reach 100, and three
 // presets to start from. No jargon, no ids, nothing to calculate by hand.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/singleton'
@@ -46,6 +46,16 @@ export default function PuntenverdelingPage() {
   const [siblings, setSiblings] = useState<any[]>([])
   const [copyTo, setCopyTo]     = useState<Set<string>>(new Set())
   const [copying, setCopying]   = useState(false)
+  const [examProposed, setExamProposed] = useState(false)
+  // ?examen=1 comes from the Puntenlijst: "Ja, laat het examen meetellen". Read
+  // once at mount: load() can run more than once, and must keep proposing until
+  // the teacher saves.
+  const wantsExam = useRef(false)
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('examen') !== '1') return
+    wantsExam.current = true
+    window.history.replaceState(null, '', window.location.pathname)
+  }, [])
 
   const canEdit = ['admin', 'super_admin', 'teacher'].includes(profile?.role ?? '')
 
@@ -62,9 +72,21 @@ export default function PuntenverdelingPage() {
     const { data: cats, error: cErr } = await supabase
       .from('grade_categories').select('*').eq('class_id', klasId).order('sort_order')
     if (cErr) { setLoadErr(cErr); setLoading(false); return }
-    setRows((cats ?? []).map((c: any) => ({
+    const loaded: Row[] = (cats ?? []).map((c: any) => ({
       id: c.id, name: c.name, source: c.source, weight: Number(c.weight), sort_order: c.sort_order,
-    })))
+    }))
+    // Propose an Examen part but save nothing: the teacher sees the new split
+    // first, because it changes every pupil's average in this class.
+    if (wantsExam.current && !loaded.some(r => r.source === 'examen')) {
+      const preset = PRESETS.find(p => p.rows.some(r => r.source === 'examen'))!
+      setRows(loaded.length === 0
+        ? preset.rows.map((r, i) => ({ name: r.name, source: r.source, weight: r.weight, sort_order: i }))
+        : [...loaded, { name: 'Examen', source: 'examen', weight: '', sort_order: loaded.length }])
+      setExamProposed(true)
+      setSaved(false)
+    } else {
+      setRows(loaded)
+    }
 
     // Other classes in the same school year, to copy this split to. A school
     // grades Qur'an the same way in every group; retyping it seven times is how
@@ -116,6 +138,7 @@ export default function PuntenverdelingPage() {
       })),
     )
     if (insErr) { setErr('Opslaan mislukt: ' + insErr.message); setSaving(false); return }
+    wantsExam.current = false   // saved: the teacher has decided, don't re-propose
     setSaving(false); setSaved(true)
     await load()
   }
@@ -166,6 +189,16 @@ export default function PuntenverdelingPage() {
           </p>
         </div>
       </div>
+
+      {examProposed && !saved && (
+        <div className="card p-4 mb-5 bg-amber-50 border-amber-200 text-sm text-amber-900">
+          <p className="font-medium mb-0.5">We hebben een onderdeel Examen toegevoegd.</p>
+          <p className="text-xs">
+            Nog niets is opgeslagen. Controleer de percentages (samen 100%) en klik op Opslaan.
+            Daarna telt het examen mee in het gemiddelde en het rapport van deze klas.
+          </p>
+        </div>
+      )}
 
       {rows.length === 0 && (
         <div className="card p-4 mb-5">
