@@ -1,5 +1,5 @@
 -- MasjidConnect — Supabase Schema
--- Last synced: 2026-06-13
+-- Last synced: 2026-06-13 (appendices: migrations 30-32, 42 — 33-41 not yet)
 --
 -- 2026-06-13 (migrations 13–18, mosque feedback feature batch):
 --   - New role 'leerlingenbegeleiding' (role CHECK + counselor read branches)
@@ -2080,3 +2080,36 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS
     WHERE assignment_id = a_id AND student_id = auth.uid()
   );
 $$;
+
+-- ============================================================
+-- Migration 42 (2026-10-11): activiteiten in de agenda
+-- ============================================================
+-- NOTE: migrations 33-41 are NOT reflected in this snapshot yet; read their own
+-- files in supabase/. Full RLS for this table is in 42_calendar_events.sql.
+
+CREATE TABLE IF NOT EXISTS public.calendar_events (
+  id          uuid NOT NULL DEFAULT uuid_generate_v4(),
+  tenant_id   uuid NOT NULL,
+  title       text NOT NULL,           -- 1..200 chars
+  description text,
+  starts_on   date NOT NULL,           -- a Brussels calendar day, not timestamptz
+  ends_on     date NOT NULL,           -- >= starts_on
+  start_time  time,                    -- both null = all day
+  end_time    time,
+  audience    text NOT NULL DEFAULT 'school',  -- school | group | teachers
+  group_id    uuid,                    -- set iff audience = 'group'
+  is_closure  boolean NOT NULL DEFAULT false,  -- "Geen les"
+  created_by  uuid,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT calendar_events_pkey PRIMARY KEY (id),
+  CONSTRAINT calendar_events_tenant_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE,
+  CONSTRAINT calendar_events_group_fkey FOREIGN KEY (group_id) REFERENCES public.groups(id) ON DELETE CASCADE,
+  CONSTRAINT calendar_events_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id) ON DELETE SET NULL
+);
+-- Policies: calendar_events_read (super_admin; else own tenant AND (admin OR
+-- school OR teachers-for-staff OR group IN my_group_ids())),
+-- calendar_events_admin_write (FOR ALL, admin of own tenant / super_admin;
+-- WITH CHECK pins group_id to the same tenant).
+-- my_group_ids(): SECURITY DEFINER set of the caller's groups (as pupil or
+-- teacher). Do not inline its joins into the policy.
