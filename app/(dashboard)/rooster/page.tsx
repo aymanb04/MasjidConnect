@@ -1,5 +1,6 @@
 'use client'
 
+import { classLabel, byClassLabel } from '@/lib/utils'
 import { useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
@@ -56,7 +57,7 @@ export default function RoosterPage() {
       const { data: s, error: sErr } = await supabase.from('class_sessions').select('*, classes(name, color)').eq('tenant_id', profile!.tenant_id).order('day_of_week').order('start_time')
       if (sErr) { console.error(sErr); setLoadErr(sErr); setLoading(false); return }
       data = s ?? []
-      const { data: c } = await supabase.from('classes').select('id, name, color').eq('tenant_id', profile!.tenant_id).eq('is_archived', false).order('name')
+      const { data: c } = await supabase.from('classes').select('id, name, color, groups(name)').eq('tenant_id', profile!.tenant_id).eq('is_archived', false).order('name')
       setClasses(c ?? [])
     } else {
       const { data: s, error: sErr } = await supabase.from('class_sessions').select('*, classes(name, color), tenants(name)').order('day_of_week').order('start_time')
@@ -141,7 +142,7 @@ export default function RoosterPage() {
                         {isAdmin && (
                           <button
                             onClick={() => deleteSession(s.id)}
-                            className="absolute top-2 right-2 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-0.5 text-gray-300 hover:text-red-400 transition-all"
+                            className="absolute top-2 right-2 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-0.5 text-gray-400 hover:text-red-400 transition-all"
                             title="Verwijderen"
                           >
                             <X size={13}/>
@@ -209,7 +210,7 @@ function AddSessionModal({ classes, tenantId, onClose, onAdded }: {
             <label className="label">Klas *</label>
             <select value={form.class_id} onChange={e => setForm(p => ({ ...p, class_id: e.target.value }))} className="input">
               <option value="">Kies een klas…</option>
-              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {[...classes].sort(byClassLabel).map(c => <option key={c.id} value={c.id}>{classLabel(c)}</option>)}
             </select>
           </div>
           <div>

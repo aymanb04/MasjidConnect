@@ -90,3 +90,21 @@ export function slugify(text: string): string {
     .replace(/-+/g, '-')
     .trim()
 }
+
+/**
+ * How to name a class in a list: "Koran — Groep 2 — 9 tot 11 jaar". A class is
+ * one subject for one group, so the subject alone is ambiguous: a teacher of
+ * Koran in three groups saw "Koran, Koran, Koran" when giving homework
+ * (2026-11-01). Load the class with `groups(name)` to get the group.
+ */
+export function classLabel(c: { name: string; groups?: { name: string } | { name: string }[] | null }): string {
+  const g = Array.isArray(c.groups) ? c.groups[0] : c.groups
+  return g?.name ? `${c.name} — ${g.name}` : c.name
+}
+
+/** Sort classes by group, then subject — the order a school thinks in. */
+export function byClassLabel(a: Parameters<typeof classLabel>[0], b: Parameters<typeof classLabel>[0]): number {
+  const ga = (Array.isArray(a.groups) ? a.groups[0] : a.groups)?.name ?? ''
+  const gb = (Array.isArray(b.groups) ? b.groups[0] : b.groups)?.name ?? ''
+  return ga.localeCompare(gb, 'nl') || a.name.localeCompare(b.name, 'nl')
+}

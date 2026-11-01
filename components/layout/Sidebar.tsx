@@ -92,7 +92,10 @@ export default function Sidebar({ profile, tenant, onClose }: Props) {
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
+      {/* The small links scroll WITH the menu instead of being pinned under it.
+          Pinned, they took a third of an iPhone SE screen (2026-11-01) and pushed
+          Dossiers and Hulp out of sight, with nothing to say there was more. */}
+      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
         {filtered.map(item => {
           const Icon   = item.icon
           const active = pathname === item.href || pathname.startsWith(item.href + '/')
@@ -105,6 +108,20 @@ export default function Sidebar({ profile, tenant, onClose }: Props) {
             </Link>
           )
         })}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pt-3 mt-2 border-t border-border">
+          <Link href="/wachtwoord" onClick={onClose}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            <KeyRound size={11}/> Wachtwoord
+          </Link>
+          <Link href="/privacy" onClick={onClose}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            <Lock size={11}/> Privacy
+          </Link>
+          <Link href="/voorwaarden" onClick={onClose}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            <FileText size={11}/> Voorwaarden
+          </Link>
+        </div>
       </nav>
 
       <div className="border-t border-border p-3">
@@ -122,20 +139,6 @@ export default function Sidebar({ profile, tenant, onClose }: Props) {
           <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Afmelden">
             <LogOut size={15} />
           </button>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
-          <Link href="/wachtwoord" onClick={onClose}
-            className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
-            <KeyRound size={11}/> Wachtwoord
-          </Link>
-          <Link href="/privacy" onClick={onClose}
-            className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
-            <Lock size={11}/> Privacy
-          </Link>
-          <Link href="/voorwaarden" onClick={onClose}
-            className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
-            <FileText size={11}/> Voorwaarden
-          </Link>
         </div>
       </div>
     </aside>

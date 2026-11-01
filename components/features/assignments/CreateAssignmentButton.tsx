@@ -1,5 +1,6 @@
 'use client'
 
+import { classLabel, byClassLabel } from '@/lib/utils'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
@@ -32,11 +33,11 @@ export default function CreateAssignmentButton({ onCreated }: { onCreated?: () =
     if (!open || !profile) return
     async function load() {
       if (profile!.role === 'admin') {
-        const { data } = await supabase.from('classes').select('id, name').eq('tenant_id', profile!.tenant_id).eq('is_archived', false)
-        setClasses(data ?? [])
+        const { data } = await supabase.from('classes').select('id, name, groups(name)').eq('tenant_id', profile!.tenant_id).eq('is_archived', false)
+        setClasses([...(data ?? [])].sort(byClassLabel))
       } else {
-        const { data } = await supabase.from('class_teachers').select('classes(id, name)').eq('teacher_id', profile!.id)
-        setClasses(data?.map((d: any) => d.classes).filter(Boolean) ?? [])
+        const { data } = await supabase.from('class_teachers').select('classes(id, name, groups(name))').eq('teacher_id', profile!.id)
+        setClasses((data?.map((d: any) => d.classes).filter(Boolean) ?? []).sort(byClassLabel))
       }
     }
     load()
@@ -130,7 +131,7 @@ export default function CreateAssignmentButton({ onCreated }: { onCreated?: () =
               <div><label className="label">Klas *</label>
                 <select value={form.class_id} onChange={e => setForm(p => ({ ...p, class_id: e.target.value }))} className="input">
                   <option value="">Kies een klas…</option>
-                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {classes.map(c => <option key={c.id} value={c.id}>{classLabel(c)}</option>)}
                 </select>
               </div>
               <div><label className="label">Titel *</label>

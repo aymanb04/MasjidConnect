@@ -157,7 +157,9 @@ export default function TeacherSubmissionsView({ roster, studentCount, assignmen
 
   return (
     <div className="card p-6">
-      <div className="flex items-center gap-6 mb-5 pb-5 border-b border-border">
+      {/* flex-wrap: on a phone the progress bar ran off the right edge and the
+          whole page scrolled sideways (2026-11-01). It now takes its own line. */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mb-5 pb-5 border-b border-border">
         <div className="text-center">
           <div className="text-2xl font-semibold text-primary-600">{graded.length}</div>
           <div className="text-xs text-gray-500">Beoordeeld</div>
@@ -172,7 +174,7 @@ export default function TeacherSubmissionsView({ roster, studentCount, assignmen
             <div className="text-xs text-gray-500">Ingediend</div>
           </div>
         )}
-        <div className="flex-1 ml-4">
+        <div className="basis-full sm:basis-auto sm:flex-1 sm:ml-4 min-w-0">
           <div className="flex justify-between text-xs text-gray-500 mb-1">
             <span>Beoordeeld</span>
             <span>{roster.length > 0 ? Math.round((graded.length / roster.length) * 100) : 0}%</span>
@@ -342,6 +344,15 @@ export default function TeacherSubmissionsView({ roster, studentCount, assignmen
                       <p className="text-xs font-medium text-gray-700 mb-3 flex items-center gap-1.5">
                         <MessageSquare size={13} /> Punten en feedback
                       </p>
+                      {/* Without a maximum the points are saved but count nowhere
+                          (lib/grading skips them): found running the Hulp guide,
+                          2026-11-01. Say so where the points are typed in. */}
+                      {!maxScore && (
+                        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2 mb-3">
+                          Dit huiswerk heeft geen max punten. De punten worden bewaard, maar tellen niet mee in
+                          het gemiddelde en het rapport. Vul Max punten in via Bewerken.
+                        </p>
+                      )}
 
                       <div className="grid grid-cols-3 gap-3 mb-3">
                         <div className="col-span-1">

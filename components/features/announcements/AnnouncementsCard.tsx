@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
-import { formatRelative } from '@/lib/utils'
+import { formatRelative, classLabel, byClassLabel } from '@/lib/utils'
 import type { Profile, Announcement } from '@/lib/types'
 import { Megaphone, Plus, X, Loader2, School, Trash2, Tag, Users } from 'lucide-react'
 
@@ -79,7 +79,7 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
     } else if (profile.role === 'teacher') {
       const { data } = await supabase
         .from('class_teachers')
-        .select('classes(id, name, color)')
+        .select('classes(id, name, color, groups(name))')
         .eq('teacher_id', profile.id)
       setMyClasses(
         (data ?? [])
@@ -89,7 +89,7 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
     } else {
       // admin / super_admin — all classes + groups in their tenant
       const [{ data: cls }, { data: grps }] = await Promise.all([
-        supabase.from('classes').select('id, name, color').eq('tenant_id', profile.tenant_id).eq('is_archived', false).order('name'),
+        supabase.from('classes').select('id, name, color, groups(name)').eq('tenant_id', profile.tenant_id).eq('is_archived', false).order('name'),
         supabase.from('groups').select('id, name').eq('tenant_id', profile.tenant_id).order('name'),
       ])
       setMyClasses((cls ?? []) as ClassOption[])
@@ -182,7 +182,7 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
         <div className="flex gap-1.5 flex-wrap mb-3">
           <button
             onClick={() => setFilterClassId(null)}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               filterClassId === null
                 ? 'bg-primary-50 text-primary-700'
                 : 'text-gray-500 hover:bg-gray-50'
@@ -194,7 +194,7 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
             <button
               key={cls.id}
               onClick={() => setFilterClassId(filterClassId === cls.id ? null : cls.id)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 filterClassId === cls.id
                   ? 'bg-primary-50 text-primary-700'
                   : 'text-gray-500 hover:bg-gray-50'
@@ -239,8 +239,8 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
                 className="input text-sm"
               >
                 <option value="">Kies een klas…</option>
-                {myClasses.map(cls => (
-                  <option key={cls.id} value={cls.id}>{cls.name}</option>
+                {[...myClasses].sort(byClassLabel).map(cls => (
+                  <option key={cls.id} value={cls.id}>{classLabel(cls)}</option>
                 ))}
               </select>
             </div>
@@ -267,7 +267,7 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
                   className="input text-sm"
                 >
                   <option value="">Kies een klas…</option>
-                  {myClasses.map(cls => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
+                  {[...myClasses].sort(byClassLabel).map(cls => <option key={cls.id} value={cls.id}>{classLabel(cls)}</option>)}
                 </select>
               )}
               {form.audience === 'group' && (
@@ -360,7 +360,7 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
                     {canDelete && (
                       <button
                         onClick={() => handleDelete(ann.id)}
-                        className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-all flex-shrink-0 p-0.5"
+                        className="[@media(hover:hover)]:opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 transition-all flex-shrink-0 p-0.5"
                       >
                         <Trash2 size={13} />
                       </button>

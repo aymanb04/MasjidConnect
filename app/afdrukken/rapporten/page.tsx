@@ -47,6 +47,15 @@ export default function RapportenAfdrukkenPage() {
   const [err, setErr]         = useState<string | null>(null)
   const [group, setGroup]     = useState('')               // '' = all groups
   const [withDrafts, setWithDrafts] = useState(false)
+  // A rapport is A4 wide (210mm ≈ 794px). On a phone it stuck out to the LEFT
+  // (it is right-to-left), out of reach. Scale it to the screen; print is A4.
+  const [fit, setFit] = useState(1)
+  useEffect(() => {
+    const measure = () => setFit(Math.min(1, (window.innerWidth - 16) / 794))
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [])
 
   useEffect(() => {
     if (profileLoading) return
@@ -131,6 +140,7 @@ export default function RapportenAfdrukkenPage() {
           .no-print { display:none !important; }
           .afdruk .rapport-doc { margin:0; box-shadow:none; break-after:page; }
           .afdruk .rapport-doc:last-child { break-after:auto; }
+          .afdruk-docs { zoom:1 !important; }
           @page { size:A4; margin:0; }
         }
       `}</style>
@@ -166,6 +176,7 @@ export default function RapportenAfdrukkenPage() {
         <p className="no-print text-center text-sm text-gray-500 py-8">Geen rapporten om af te drukken.</p>
       )}
 
+      <div className="afdruk-docs" style={{ zoom: fit }}>
       {shown.map(c => {
         const n = names[c.student_id]
         return (
@@ -185,6 +196,7 @@ export default function RapportenAfdrukkenPage() {
           />
         )
       })}
+      </div>
     </div>
   )
 }

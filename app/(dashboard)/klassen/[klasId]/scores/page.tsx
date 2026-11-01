@@ -700,12 +700,12 @@ function StaffScoresPage() {
                                 </span>
                                 <button
                                   onClick={() => { setEditingTestCell({ studentId: s.id, testId: t.id }); setEditTestScore(String(ts.score)) }}
-                                  className="text-gray-300 hover:text-gray-500 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                                  className="text-gray-400 hover:text-gray-500 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
                                   title="Bewerken">
                                   <Pencil size={11} />
                                 </button>
                                 <button onClick={() => deleteTestScore(s.id, t.id)}
-                                  className="text-gray-300 hover:text-red-400 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                                  className="text-gray-400 hover:text-red-400 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
                                   title="Verwijderen">
                                   <X size={11} />
                                 </button>
@@ -790,7 +790,7 @@ function StaffScoresPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-gray-50/40">
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[160px]">Leerling</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[130px] sm:min-w-[160px] sticky left-0 bg-gray-50 z-10">Leerling</th>
                   {manualCats.map((c: any) => (
                     <th key={c.id} className="px-4 py-3 font-medium text-gray-600 text-center min-w-[120px]">
                       {c.name}
@@ -804,7 +804,7 @@ function StaffScoresPage() {
               <tbody className="divide-y divide-border">
                 {students.map((s: any) => (
                   <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3 text-gray-800">{s.first_name} {s.last_name}</td>
+                    <td className="px-4 py-3 text-gray-800 sticky left-0 bg-white z-10">{s.first_name} {s.last_name}</td>
                     {manualCats.map((c: any) => {
                       const cur = catScoreMap[s.id]?.[c.id]
                       const busy = savingCat === `${s.id}:${c.id}`
@@ -849,7 +849,7 @@ function StaffScoresPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-gray-50/40">
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[160px]">Leerling</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[130px] sm:min-w-[160px] sticky left-0 bg-gray-50 z-10">Leerling</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[140px]">Begonnen bij</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[140px]">Doel</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[140px]">Nu</th>
@@ -881,7 +881,7 @@ function StaffScoresPage() {
                   )
                   return (
                     <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3 text-gray-800">{s.first_name} {s.last_name}</td>
+                      <td className="px-4 py-3 text-gray-800 sticky left-0 bg-white z-10">{s.first_name} {s.last_name}</td>
                       {cell('start_point', 'bv. soera 1')}
                       {cell('target_point', 'bv. soera 10')}
                       {cell('current_point', 'bv. soera 4')}
@@ -952,7 +952,7 @@ function StaffScoresPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-gray-50/40">
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[160px]">Leerling</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[130px] sm:min-w-[160px] sticky left-0 bg-gray-50 z-10">Leerling</th>
                   <th className="px-6 py-3 font-medium text-gray-600 text-center min-w-[160px]">Examen S1</th>
                   <th className="px-6 py-3 font-medium text-gray-600 text-center min-w-[160px]">Examen S2</th>
                 </tr>
@@ -960,7 +960,9 @@ function StaffScoresPage() {
               <tbody className="divide-y divide-border">
                 {students.map((s: any) => (
                   <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3">
+                    {/* Sticky, like the points table: swiped to Examen S2 on a phone,
+                        the names scrolled away and left rows of "+" (2026-11-01). */}
+                    <td className="px-4 py-3 sticky left-0 bg-white z-10">
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-medium flex-shrink-0">
                           {s.first_name[0]}{s.last_name[0]}
@@ -1024,14 +1026,14 @@ function StaffScoresPage() {
                               </span>
                               <button
                                 onClick={() => openEdit(s.id, sem, exam)}
-                                className="text-gray-300 hover:text-gray-500 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                                className="text-gray-400 hover:text-gray-500 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
                                 title="Bewerken"
                               >
                                 <Pencil size={11}/>
                               </button>
                               <button
                                 onClick={() => deleteExamScore(s.id, sem)}
-                                className="text-gray-300 hover:text-red-400 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                                className="text-gray-400 hover:text-red-400 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
                                 title="Verwijderen"
                               >
                                 <X size={11}/>

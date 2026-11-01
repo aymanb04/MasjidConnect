@@ -77,6 +77,8 @@ export function MoveStudentModal({ student, tenantId, onClose, onSaved }: Props)
           group_name:       c.groups?.name,
           school_year_name: c.school_years?.name,
         }))
+        // by group, then subject: ordered by subject alone, Groep 3 came before Groep 1
+        .sort((a: any, b: any) => (a.group_name ?? '').localeCompare(b.group_name ?? '', 'nl') || a.name.localeCompare(b.name, 'nl'))
     )
 
     setLoading(false)

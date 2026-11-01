@@ -55,7 +55,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
       'Ga naar masjidconnect.be en klik op Inloggen.',
       'Vul het e-mailadres in dat je van de school kreeg, en het wachtwoord.',
       'Klik op Inloggen.',
-      'Heb je een startwachtwoord gekregen, dan vraagt de app meteen om je eigen wachtwoord te kiezen. Zie "Je eigen wachtwoord kiezen".',
+      'De eerste keer vraagt de app je de gebruiksvoorwaarden en de privacyverklaring te aanvaarden. Vink aan dat je ze gelezen hebt en klik op "Akkoord en doorgaan" (bij een leerling heet de knop "Gelezen en doorgaan").',
+      'Heb je een startwachtwoord gekregen, dan vraagt de app daarna om je eigen wachtwoord te kiezen. Zie "Je eigen wachtwoord kiezen".',
     ],
     letOp: [
       'Neem het wachtwoord letterlijk over, ook de hoofdletters. "Abc" en "abc" zijn niet hetzelfde.',
@@ -407,7 +408,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       'Een gedeelde notitie staat in het goud op het dashboard van de leerling, onder "Nota’s van de school".',
       'Ook een interne notitie kan een ouder later opvragen. Schrijf feiten, geen vermoedens.',
       'Schrijf niets over gezondheid of de thuissituatie. Geef dat mondeling door aan het bestuur.',
-      'Per ongeluk gedeeld? Klik op "Terug op intern zetten".',
+      'Per ongeluk gedeeld? Klik bij de notitie op "Intern zetten". Met "Delen" deel je een interne notitie alsnog.',
     ],
     keywords: 'nota notitie dossier ouders delen intern gedrag opvolging',
   },
@@ -445,8 +446,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
     intro: 'Een klas is één vak voor één groep. "Arabisch – Groep 2" en "Koran – Groep 2" zijn twee klassen.',
     steps: [
       'Ga naar Beheer en klik op Klas aanmaken.',
-      'Kies het Schooljaar en de Groep. Bestaat de groep nog niet, typ dan de naam.',
-      'Vul het Vak in, eventueel een Beschrijving, en kies een Kleur. Klik op Aanmaken.',
+      'Kies het Schooljaar en de Groep. Bestaat de groep nog niet, kies dan "+ Nieuwe groep aanmaken…" en typ de naam.',
+      'Vul het Vak in, eventueel een Beschrijving, en kies een Kleur. Klik op Klas aanmaken.',
     ],
     letOp: [
       'De groepsnaam staat op het rapport als "Niveau". Schrijf hem zoals de ouders hem kennen.',
@@ -486,7 +487,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     id: 'leerling-verplaatsen', category: 'Klassen en gebruikers', for: ['admin'],
     title: 'Een leerling in een andere klas zetten',
     steps: [
-      'Beheer → bij de leerling "Verplaatsen naar andere klas".',
+      'Beheer → bij de leerling het icoon met de twee pijltjes (Verplaatsen naar andere klas).',
       'Onder Huidige klassen haal je hem uit een klas (Verwijderen uit klas).',
       'Bij "Toevoegen aan klas" kies je de nieuwe klas en klik je op Toevoegen.',
       'Klik op Opslaan.',
@@ -501,7 +502,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     id: 'nieuw-wachtwoord', category: 'Klassen en gebruikers', for: ['admin'],
     title: 'Iemand een nieuw wachtwoord geven',
     steps: [
-      'Beheer → bij de persoon "Nieuw wachtwoord instellen" → bevestig.',
+      'Beheer → bij de persoon het sleuteltje (Nieuw wachtwoord instellen) → Ja.',
       'De app toont een nieuw wachtwoord. Klik op Kopiëren en geef het aan de persoon.',
       'Bij de volgende keer aanmelden moet die zelf een eigen wachtwoord kiezen.',
     ],
@@ -515,7 +516,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     id: 'archiveren', category: 'Klassen en gebruikers', for: ['admin'],
     title: 'Een leerling of leerkracht die vertrekt',
     steps: [
-      'Beheer → bij de persoon het archief-icoon (Archiveren) → bevestig.',
+      'Beheer → bij de persoon het archiefdoosje (Archiveren) → Ja.',
       'De persoon kan niet meer aanmelden. Punten, aanwezigheid en rapporten blijven bewaard.',
       'Komt iemand terug: Beheer → Gearchiveerd → Reactiveren.',
     ],
@@ -528,7 +529,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     id: 'gegevens-exporteren', category: 'Klassen en gebruikers', for: ['admin'],
     title: 'Een ouder vraagt welke gegevens jullie hebben',
     steps: [
-      'Beheer → bij de leerling "Gegevens exporteren".',
+      'Beheer → bij de leerling het pijltje naar beneden (Gegevens exporteren).',
       'Er wordt een bestand gedownload met alles wat de app over die leerling bijhoudt. Geef het aan de ouder.',
     ],
     letOp: [

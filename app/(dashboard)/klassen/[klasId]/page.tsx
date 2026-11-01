@@ -182,7 +182,7 @@ export default function KlasDetailPage() {
                   const sb = sub ? getSubmissionStatusBadge(sub.status) : null
                   return (
                     <Link key={a.id} href={`/huiswerk/${a.id}`} className="flex items-center justify-between p-3.5 rounded-xl border border-border hover:border-primary-200 hover:bg-primary-50/30 transition-all group">
-                      <div className="min-w-0 flex-1"><div className="font-medium text-sm text-gray-800 group-hover:text-primary-700 truncate">{a.title}</div><div className={`text-xs mt-0.5 ${dl.color}`}><Clock size={10} className="inline mr-1"/>{dl.label}{!a.is_published && <span className="ml-2 bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">Concept</span>}</div></div>
+                      <div className="min-w-0 flex-1"><div className="font-medium text-sm text-gray-800 group-hover:text-primary-700 line-clamp-2 break-words">{a.title}</div><div className={`text-xs mt-0.5 ${dl.color}`}><Clock size={10} className="inline mr-1"/>{dl.label}{!a.is_published && <span className="ml-2 bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">Concept</span>}</div></div>
                       {sb && <span className={`badge ml-3 flex-shrink-0 ${sb.color}`}>{sb.label}</span>}
                     </Link>
                   )
@@ -256,14 +256,14 @@ export default function KlasDetailPage() {
                       {mailtoHref && (
                         <a
                           href={mailtoHref}
-                          className={`transition-colors p-0.5 ${isStudent ? 'text-primary-500 hover:text-primary-700' : 'text-gray-300 hover:text-primary-600 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100'}`}
+                          className={`transition-colors p-0.5 ${isStudent ? 'text-primary-500 hover:text-primary-700' : 'text-gray-400 hover:text-primary-600 [@media(hover:hover)]:opacity-0 group-hover:opacity-100'}`}
                           title={`Mail ${t.first_name}`}
                         >
                           <Mail size={14}/>
                         </a>
                       )}
                       {isAdmin && (
-                        <button onClick={() => removeTeacher(t.id)} className="text-gray-200 hover:text-red-400 transition-colors p-0.5 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100" title="Verwijderen">
+                        <button onClick={() => removeTeacher(t.id)} className="text-gray-400 hover:text-red-400 transition-colors p-0.5 [@media(hover:hover)]:opacity-0 group-hover:opacity-100" title="Verwijderen">
                           <X size={13}/>
                         </button>
                       )}
@@ -367,7 +367,7 @@ export default function KlasDetailPage() {
                         </div>
                         <span className="text-sm text-gray-700 flex-1 min-w-0 truncate">{s.first_name} {s.last_name}</span>
                         {mailtoHref && (
-                          <a href={mailtoHref} className="text-gray-300 hover:text-primary-600 transition-colors p-0.5 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100" title={`Mail ${s.first_name}`}>
+                          <a href={mailtoHref} className="text-gray-400 hover:text-primary-600 transition-colors p-0.5 [@media(hover:hover)]:opacity-0 group-hover:opacity-100" title={`Mail ${s.first_name}`}>
                             <Mail size={14}/>
                           </a>
                         )}

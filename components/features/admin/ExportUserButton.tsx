@@ -50,7 +50,7 @@ export function ExportUserButton({ userId, name }: { userId: string; name: strin
 
   return (
     <button onClick={run}
-      className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-300 hover:text-primary-600 hover:bg-primary-50 transition-all flex-shrink-0"
+      className="[@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-all flex-shrink-0"
       title="Gegevens exporteren (inzage / overdraagbaarheid)">
       <Download size={13} />
     </button>

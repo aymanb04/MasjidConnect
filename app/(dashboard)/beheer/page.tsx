@@ -236,7 +236,7 @@ export default function BeheerPage() {
                             <span className="text-sm text-gray-700 flex-1">{s.first_name} {s.last_name}</span>
                             <button
                               onClick={() => removeStudentFromClass(klas.id, s.id)}
-                              className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1 text-gray-300 hover:text-red-400 transition-all"
+                              className="[@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-400 transition-all"
                               title="Verwijder uit klas"
                             >
                               <X size={13}/>
@@ -337,7 +337,7 @@ export default function BeheerPage() {
                     )}
                     <button
                       onClick={() => setEditUser(u)}
-                      className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-300 hover:text-primary-600 hover:bg-primary-50 transition-all flex-shrink-0"
+                      className="[@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-all flex-shrink-0"
                       title="Gegevens, rol en klassen bewerken"
                     >
                       <Pencil size={13} />
@@ -345,7 +345,7 @@ export default function BeheerPage() {
                     {u.role === 'student' && (
                       <button
                         onClick={() => setMoveStudent({ id: u.id, first_name: u.first_name, last_name: u.last_name })}
-                        className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-300 hover:text-primary-600 hover:bg-primary-50 transition-all flex-shrink-0"
+                        className="[@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-all flex-shrink-0"
                         title="Verplaatsen naar andere klas"
                       >
                         <ArrowLeftRight size={13} />

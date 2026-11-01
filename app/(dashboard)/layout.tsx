@@ -72,7 +72,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     // Keep content clear of the notch (landscape) and home indicator
                     paddingLeft: 'env(safe-area-inset-left, 0px)',
                     paddingRight: 'env(safe-area-inset-right, 0px)',
-                    paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+                    // + room for the round feedback button (bottom-right, fixed): without
+                    // it the last card's delete button on /rooster sat under it (2026-11-01).
+                    paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 4.5rem)',
                 }}
             >
                 {/* Mobile top bar */}

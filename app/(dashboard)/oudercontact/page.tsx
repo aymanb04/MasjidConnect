@@ -1,5 +1,6 @@
 'use client'
 
+import { classLabel, byClassLabel } from '@/lib/utils'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
@@ -100,11 +101,11 @@ export default function OudercontactPage() {
     // Staff: load classes for the create form (teachers → own, admin → tenant)
     if (isStaff) {
       if (role === 'teacher') {
-        const { data } = await supabase.from('class_teachers').select('classes(id, name)').eq('teacher_id', profile!.id)
-        setMyClasses((data ?? []).map((r: any) => r.classes).filter(Boolean))
+        const { data } = await supabase.from('class_teachers').select('classes(id, name, groups(name))').eq('teacher_id', profile!.id)
+        setMyClasses((data ?? []).map((r: any) => r.classes).filter(Boolean).sort(byClassLabel))
       } else {
-        const { data } = await supabase.from('classes').select('id, name').eq('tenant_id', tid).eq('is_archived', false).order('name')
-        setMyClasses(data ?? [])
+        const { data } = await supabase.from('classes').select('id, name, groups(name)').eq('tenant_id', tid).eq('is_archived', false)
+        setMyClasses([...(data ?? [])].sort(byClassLabel))
       }
     }
     // Admin: students for booking-on-behalf
@@ -220,7 +221,7 @@ export default function OudercontactPage() {
               <label className="label">Klas (optioneel)</label>
               <select value={form.class_id} onChange={e => setForm(p => ({ ...p, class_id: e.target.value }))} className="input">
                 <option value="">Geen specifieke klas</option>
-                {myClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {myClasses.map(c => <option key={c.id} value={c.id}>{classLabel(c)}</option>)}
               </select>
             </div>
             <div>

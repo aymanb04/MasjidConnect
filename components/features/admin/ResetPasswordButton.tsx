@@ -120,7 +120,7 @@ export function ResetPasswordButton({
 
   return (
     <button onClick={() => setState('confirm')}
-      className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-300 hover:text-primary-600 hover:bg-primary-50 transition-all flex-shrink-0"
+      className="[@media(hover:hover)]:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-all flex-shrink-0"
       title="Nieuw wachtwoord instellen">
       <KeyRound size={13} />
     </button>

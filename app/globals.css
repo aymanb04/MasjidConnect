@@ -150,3 +150,23 @@
     justify-content: center;
   }
 }
+
+/*
+ * Invoervelden op 16px op een touchscreen.
+ *
+ * Gemeten op 2026-11-01 (WebKit, iPhone 8 en 13): elk invoerveld in de app was
+ * 14px (.input heeft text-sm). Safari op een iPhone zoomt de hele pagina in
+ * zodra je een veld kleiner dan 16px aantikt, en zoomt daarna niet terug: bij
+ * het aanmelden, bij elke score, bij elk formulier. Voor wie niet weet dat je
+ * met twee vingers terug kan knijpen, staat de pagina dan half buiten beeld.
+ *
+ * Alleen op een vinger (pointer: coarse), zoals de regel hierboven: met een
+ * muis blijft alles zoals het was.
+ */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

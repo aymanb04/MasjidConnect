@@ -75,11 +75,12 @@ export function FeedbackButton() {
 
   return (
     <>
-      {/* Floating trigger button */}
+      {/* Floating trigger button. z-40, under the dialogs (z-50): at z-50 it sat on
+          top of every open dialog, over its save button on a phone (2026-11-01). */}
       <button
         onClick={openPanel}
         title="Feedback geven"
-        className="fixed z-50 w-12 h-12 rounded-full shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2"
+        className="fixed z-40 w-12 h-12 rounded-full shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2"
         style={{
           backgroundColor: '#1B6B4A',
           outlineColor: '#1B6B4A',

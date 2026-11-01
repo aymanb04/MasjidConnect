@@ -1,5 +1,6 @@
 'use client'
 
+import { classLabel, byClassLabel } from '@/lib/utils'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
@@ -46,7 +47,7 @@ export function InviteUserButton({ tenantId, onInvited }: Props) {
     supabase.from('groups').select('id, name').eq('tenant_id', tid).order('name')
       .then(({ data }) => setGroups(data ?? []))
 
-    supabase.from('classes').select('id, name').eq('tenant_id', tid).eq('is_archived', false).order('name')
+    supabase.from('classes').select('id, name, groups(name)').eq('tenant_id', tid).eq('is_archived', false).order('name')
       .then(({ data }) => setClasses(data ?? []))
   }, [open, form.tenant_id])
 
@@ -225,7 +226,7 @@ export function InviteUserButton({ tenantId, onInvited }: Props) {
                         disabled={!form.tenant_id}
                       >
                         <option value="">Geen klas</option>
-                        {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        {[...classes].sort(byClassLabel).map(c => <option key={c.id} value={c.id}>{classLabel(c)}</option>)}
                       </select>
                     </div>
                   )}

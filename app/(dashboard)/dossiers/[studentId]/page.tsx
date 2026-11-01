@@ -554,11 +554,14 @@ export default function DossierDetailPage() {
                       </span>
                     )}
                     {(n.author_id === profile.id || isAdmin) && (
-                      <div className="ml-auto flex items-center gap-2 opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-all">
+                      <div className="ml-auto flex items-center gap-2 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-all">
+                        {/* A word, not only an eye: on a phone there is no tooltip, and a
+                            faint 13px icon was all a teacher saw (Hulp run, 2026-11-01). */}
                         <button onClick={() => toggleNoteVisibility(n)}
-                          className="text-gray-300 hover:text-primary-600 transition-colors"
+                          className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-primary-600 transition-colors"
                           title={n.visible_to_student ? 'Terug op intern zetten' : 'Delen met de leerling en de ouders'}>
                           {n.visible_to_student ? <EyeOff size={13} /> : <Eye size={13} />}
+                          {n.visible_to_student ? 'Intern zetten' : 'Delen'}
                         </button>
                         <button onClick={() => deleteNote(n.id)}
                           className="text-gray-300 hover:text-red-500 transition-colors"
@@ -610,7 +613,7 @@ export default function DossierDetailPage() {
                   </span>
                   {(d.uploaded_by === profile.id || isAdmin) && (
                     <button onClick={() => deleteDocument(d)}
-                      className="opacity-60 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all flex-shrink-0"
+                      className="[@media(hover:hover)]:opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all flex-shrink-0"
                       title="Verwijderen">
                       <Trash2 size={13} />
                     </button>
