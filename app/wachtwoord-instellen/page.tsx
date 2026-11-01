@@ -149,7 +149,7 @@ export default function WachtwoordInstellenPage() {
           </button>
 
           <p className="text-center text-xs text-gray-500">
-            Vergeet het niet. Ben je het toch kwijt, vraag dan je leerkracht om een nieuw wachtwoord.
+            Vergeet het niet. Ben je het toch kwijt, zeg het dan aan je leerkracht: het bestuur van de school kan je een nieuw wachtwoord geven.
           </p>
         </form>
       </div>

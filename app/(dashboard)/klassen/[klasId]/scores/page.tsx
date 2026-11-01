@@ -944,6 +944,8 @@ function StaffScoresPage() {
               <Link href={`/klassen/${klasId}/puntenverdeling`} className="underline font-medium">
                 Puntenverdeling instellen
               </Link>
+              {' · '}
+              <Link href="/hulp#examen" className="underline">Uitleg</Link>
             </p>
           )}
           <ScrollX>

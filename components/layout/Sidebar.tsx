@@ -6,7 +6,7 @@ import { MeemMark } from '@/components/ui/MeemMark'
 import { supabase } from '@/lib/supabase/singleton'
 import { cn, getInitials } from '@/lib/utils'
 import type { Profile, Tenant } from '@/lib/types'
-import { LayoutDashboard, BookOpen, FileText, GraduationCap, Settings, LogOut, Shield, ChevronRight, ExternalLink, CalendarDays, Clock, Lock, ClipboardCheck, FolderOpen, Euro, CalendarClock, ScrollText, KeyRound } from 'lucide-react'
+import { LayoutDashboard, BookOpen, FileText, GraduationCap, Settings, LogOut, Shield, ChevronRight, ExternalLink, CalendarDays, Clock, Lock, ClipboardCheck, FolderOpen, Euro, CalendarClock, ScrollText, KeyRound, HelpCircle } from 'lucide-react'
 
 interface Props {
   profile: Profile
@@ -29,6 +29,7 @@ const navItems = [
   { label: 'Betalingen',  href: '/betalingen',   icon: Euro,            roles: ['admin'] },
   { label: 'Beheer',      href: '/beheer',      icon: Settings,        roles: ['admin'] },
   { label: 'Super Admin', href: '/superadmin',  icon: Shield,          roles: ['super_admin'] },
+  { label: 'Hulp',        href: '/hulp',        icon: HelpCircle,      roles: ['super_admin','admin','teacher','student','leerlingenbegeleiding'] },
 ]
 
 const roleLabels: Record<string, string> = {
