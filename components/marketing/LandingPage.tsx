@@ -17,10 +17,12 @@ import {
     FolderOpen,
     GraduationCap,
     Layers,
+    LifeBuoy,
     Lock,
     Megaphone,
     Server,
     ShieldCheck,
+    StickyNote,
     Users,
     Wallet,
 } from 'lucide-react'
@@ -85,6 +87,9 @@ const FEATURES = [
     { id: 'mededelingen', icon: Megaphone, title: 'Mededelingen', body: 'Eén bericht naar de hele school, één groep, één klas of enkel het lerarenteam. Geen groepschats meer.' },
     { id: 'oudercontact', icon: Users, title: 'Oudercontact', body: 'Leerkrachten zetten tijdsloten open, de inschrijvingen lopen via het platform. Ouders hebben geen account nodig.' },
     { id: 'jaarovergang', icon: ArrowRight, title: 'Jaarovergang', body: 'Eén wizard aan het einde van het jaar: nieuw schooljaar, nieuwe structuur, leerlingen een groep hoger. Geen 200 namen hertypen.' },
+    { id: 'notas', icon: StickyNote, title: "Nota's naar het gezin", body: 'De leerkracht deelt een korte opmerking over een leerling. De leerling en het gezin zien ze thuis, op het startscherm.' },
+    { id: 'schooldocumenten', icon: FolderOpen, title: 'Schooldocumenten', body: 'Het schoolreglement en andere documenten op één plek, met per leerling wie bevestigde dat hij ze gelezen heeft.' },
+    { id: 'hulp', icon: LifeBuoy, title: 'Hulp in de app', body: 'Stap-voor-stap handleidingen voor bestuur, leerkracht en leerling, ook als PDF om uit te delen.' },
 ]
 
 // The hero chips. They used to be <span>s that looked exactly like buttons and
@@ -114,8 +119,8 @@ if (process.env.NODE_ENV !== 'production') {
 const TRUST = [
     {
         icon: Lock,
-        title: 'Elke moskee volledig afgeschermd',
-        body: 'De scheiding tussen scholen zit in de database zelf (Row Level Security), niet enkel in de app. Zelfs een fout in de software kan de gegevens van een andere school niet tonen.',
+        title: 'Elke school apart afgeschermd',
+        body: 'De scheiding tussen scholen zit in de database zelf (Row Level Security), niet enkel in de app. Een leerkracht ziet enkel zijn eigen klassen, een leerling enkel zijn eigen punten.',
     },
     {
         icon: Server,
@@ -252,7 +257,7 @@ export function LandingPage() {
                             {/* One flex child, not two: .btn is inline-flex gap-2, so a
                                 bare <span> sibling would space the label by 8px instead of
                                 a word space. */}
-                            <span>Demo<span className="hidden sm:inline"> aanvragen</span></span>
+                            <span>Demo<span className="hidden sm:inline"> van 15 min</span></span>
                         </a>
                     </div>
                 </nav>
@@ -270,22 +275,22 @@ export function LandingPage() {
                     <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
                         <div className="animate-slide-up">
                             <span className="badge bg-primary-50 text-primary-700">
-                                Voor Arabische en islamitische scholen in België
+                                Voor weekendscholen in België en Nederland
                             </span>
 
                             <h1 className="mt-5 text-4xl font-bold leading-[1.1] tracking-tight text-gray-900 sm:text-5xl">
-                                Alles voor uw weekendschool in één app.
+                                Minder Excel en WhatsApp. Meer overzicht in uw weekendschool.
                             </h1>
 
                             <p className="mt-5 max-w-xl text-lg leading-relaxed text-gray-600">
-                                Geen papieren puntenboekjes, geen WhatsApp-chaos, geen Excel-lijsten meer.
-                                MasjidConnect brengt lessen, huiswerk, punten, aanwezigheden en rapporten
-                                samen op één plek — in het Nederlands, met tweetalige rapporten.
+                                MasjidConnect zet aanwezigheden, huiswerk, punten en tweetalige rapporten
+                                (Arabisch/Nederlands) op één plek, voor bestuur, leerkrachten en leerlingen.
+                                Zo hangt uw school niet langer af van één vrijwilliger met een Excel-bestand.
                             </p>
 
                             <div className="mt-8 flex flex-wrap items-center gap-3">
                                 <a href="#demo" className="btn-primary h-11 px-5 text-base">
-                                    Demo aanvragen <ArrowRight size={17} />
+                                    Plan een demo van 15 minuten <ArrowRight size={17} />
                                 </a>
                                 {/* Outlined green rather than .btn-secondary: white
                                     on the warm ground gave this control a 1.07:1 fill
@@ -297,7 +302,7 @@ export function LandingPage() {
                             </div>
 
                             <ul className="mt-9 flex flex-wrap gap-x-6 gap-y-2.5 text-sm text-gray-500">
-                                {['Gegevens in de EU (Ierland)', 'Elke moskee volledig afgeschermd', 'Werkt op gsm, tablet en pc'].map(item => (
+                                {['Sinds september 2026 in gebruik bij een school met ruim 100 leerlingen', 'Gegevens in de EU (Ierland)', 'Werkt op gsm, tablet en pc'].map(item => (
                                     <li key={item} className="flex items-center gap-2">
                                         <CheckCircle2 size={15} className="flex-shrink-0 text-primary-500" />
                                         {item}
@@ -524,11 +529,12 @@ export function LandingPage() {
                     <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-white/5" />
                     <div className="relative z-10 mx-auto max-w-3xl px-5 py-20 text-center sm:px-8 sm:py-24">
                         <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                            Benieuwd hoe het er voor uw school uitziet?
+                            Plan een demo van 15 minuten
                         </h2>
                         <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-white/80">
-                            De schermen hierboven zijn een voorproefje. Laat uw gegevens achter en we
-                            lopen samen door het platform, met uw eigen klasstructuur erin.
+                            Laat uw gegevens achter en we spreken een moment af dat u past. In 15 minuten
+                            ziet u aanwezigheden, huiswerk, punten en het rapport, met een voorbeeldschool.
+                            Er zijn geen gegevens van uw school voor nodig.
                         </p>
                         {/* The page's single conversion point. Every "Demo aanvragen"
                             in the nav and the hero is an anchor to this section, so

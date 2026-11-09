@@ -119,7 +119,7 @@ export function DemoForm() {
                 className="btn-primary mt-5 h-11 w-full justify-center px-5 text-base">
                 {state === 'sending'
                     ? <><Loader2 size={17} className="animate-spin" /> Versturen…</>
-                    : <><Mail size={17} /> Demo aanvragen</>}
+                    : <><Mail size={17} /> Demo van 15 minuten aanvragen</>}
             </button>
 
             {/* Art. 13 AVG: for a demo request MasjidConnect is the controller, not

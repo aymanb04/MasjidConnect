@@ -95,3 +95,10 @@ SECURITY
 # Gearchiveerd materiaal: verouderde of vervangen bestanden, bewaard maar niet
 # meer in gebruik. Publieke repo -- dit mag er nooit in.
 /archief/
+
+# ─── Marketing (2026-11-10) ───────────────────────────────────────────
+# landing-review.md is an internal review with notes that are not for the
+# public repo. A filled-in lead tracker is a contact list (personal data):
+# keep working copies in leads/.
+/marketing/landing-review.md
+/marketing/leads/
