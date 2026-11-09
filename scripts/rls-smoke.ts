@@ -490,6 +490,185 @@ async function main() {
         }
     }
 
+    // ── migration 45 (red-team 2026-11-01: H1 / H2 / H3) ─────────────────────
+    // Every "denied" check has a CONTROL beside it that must succeed, so a
+    // probe that fails for an unrelated reason (unique key, RLS on the parent,
+    // a typo) can never pass as "denied". Probe rows are created here and
+    // deleted by id. Nothing pre-existing is ever modified: the one write
+    // against foreign data is an UPDATE that sets a value to itself.
+    console.log('\nmigration 45:')
+    if (!SERVICE) {
+        skipped += 1
+        console.log('  SKIP  migration 45 — no SUPABASE_SERVICE_ROLE_KEY')
+    } else {
+        const svc = createClient(URL_!, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } })
+        const { data: adminMe } = await svc.from('profiles').select('tenant_id').eq('id', admin.uid).single()
+        const myTenant = adminMe!.tenant_id as string
+
+        // ── H1: category_scores across schools ──
+        const { data: foreignCats } = await svc.from('grade_categories')
+            .select('id, class_id').neq('tenant_id', myTenant).limit(100)
+        if (!foreignCats?.length) {
+            skipped += 3
+            console.log('  SKIP  H1 category_scores — no grade categories in another school')
+        } else {
+            const foreignCatIds = foreignCats.map(c => c.id)
+
+            // control: the admin still reads its own school's scores without error
+            const { error: ownErr } = await admin.client.from('category_scores').select('id').limit(5)
+            check('H1 control: admin reads own category_scores', !ownErr, ownErr?.message)
+
+            const { data: seen, error: seenErr } = await admin.client
+                .from('category_scores').select('id').in('category_id', foreignCatIds).limit(5)
+            check('H1 admin cannot read another school\'s category_scores',
+                !!seenErr || (seen ?? []).length === 0, `saw ${seen?.length} rows`)
+
+            if (accounts.leerlingenbegeleiding) {
+                const couns = await signIn(accounts.leerlingenbegeleiding)
+                const { data: cSeen, error: cErr } = await couns.client
+                    .from('category_scores').select('id').in('category_id', foreignCatIds).limit(5)
+                check('H1 counselor cannot read another school\'s category_scores',
+                    !!cErr || (cSeen ?? []).length === 0, `saw ${cSeen?.length} rows`)
+            }
+
+            // UPDATE: set an existing foreign score to ITS OWN value. Harmless
+            // if the hole is open; the returned row count says whether RLS let it.
+            const { data: fScore } = await svc.from('category_scores')
+                .select('id, score').in('category_id', foreignCatIds).limit(1).maybeSingle()
+            if (!fScore) {
+                skipped += 1
+                console.log('  SKIP  H1 update — no category_scores rows in another school')
+            } else {
+                const { data: upd, error: updErr } = await admin.client.from('category_scores')
+                    .update({ score: fScore.score }).eq('id', fScore.id).select('id')
+                check('H1 admin cannot update another school\'s category_scores',
+                    !!updErr || (upd ?? []).length === 0, `updated ${upd?.length} rows`)
+            }
+
+            // INSERT: a foreign pupil in the category's class WITHOUT a score yet,
+            // so the unique key cannot be what refuses it.
+            let target: { category_id: string; student_id: string } | null = null
+            for (const c of foreignCats) {
+                const { data: kids } = await svc.from('class_students').select('student_id').eq('class_id', c.class_id)
+                const { data: scored } = await svc.from('category_scores').select('student_id').eq('category_id', c.id)
+                const done = new Set((scored ?? []).map(s => s.student_id))
+                const free = (kids ?? []).find(k => !done.has(k.student_id))
+                if (free) { target = { category_id: c.id, student_id: free.student_id }; break }
+            }
+            if (!target) {
+                skipped += 1
+                console.log('  SKIP  H1 insert — every foreign pupil already has a score')
+            } else {
+                const { data: ins, error: insErr } = await admin.client.from('category_scores')
+                    .insert({ ...target, score: 0, max_score: 10, note: 'rls-smoke probe' })
+                    .select('id').maybeSingle()
+                check('H1 admin cannot insert a score in another school', !!insErr,
+                    insErr ? '' : 'INSERT SUCCEEDED — migration 45 H1 not applied or regressed')
+                if (ins) await svc.from('category_scores').delete().eq('id', ins.id)
+            }
+        }
+
+        // ── H2: a note cannot be re-aimed ──
+        const { data: tTaught } = await svc.from('class_teachers').select('class_id').eq('teacher_id', teacher.uid)
+        const { data: tKids } = await svc.from('class_students').select('student_id')
+            .in('class_id', (tTaught ?? []).map(t => t.class_id))
+        const ownKids = [...new Set((tKids ?? []).map(k => k.student_id))]
+        const { data: foreignPupil } = await svc.from('profiles').select('id')
+            .eq('role', 'student').neq('tenant_id', myTenant).limit(1).maybeSingle()
+        if (ownKids.length < 2) {
+            skipped += 3
+            console.log('  SKIP  H2 student_notes — teacher needs at least two pupils')
+        } else {
+            // visible_to_student stays false: even if the hole is open, a
+            // re-aimed probe never shows on anyone's dashboard.
+            const { data: note, error: noteErr } = await teacher.client.from('student_notes')
+                .insert({ tenant_id: myTenant, student_id: ownKids[0], author_id: teacher.uid,
+                          body: 'rls-smoke probe', visible_to_student: false })
+                .select('id').maybeSingle()
+            check('H2 control: teacher writes a note on own pupil', !noteErr && !!note, noteErr?.message)
+            if (note) {
+                const { error: editErr } = await teacher.client.from('student_notes')
+                    .update({ body: 'rls-smoke probe (edited)' }).eq('id', note.id)
+                check('H2 control: teacher can still edit the text', !editErr, editErr?.message)
+
+                const { error: sameErr } = await teacher.client.from('student_notes')
+                    .update({ student_id: ownKids[1] }).eq('id', note.id)
+                if (foreignPupil) {
+                    const { error: farErr } = await teacher.client.from('student_notes')
+                        .update({ student_id: foreignPupil.id }).eq('id', note.id)
+                    check('H2 note cannot be moved to a pupil in another school', !!farErr,
+                        farErr ? '' : 'UPDATE accepted')
+                }
+                const { data: back } = await svc.from('student_notes').select('student_id').eq('id', note.id).single()
+                check('H2 note cannot be moved to another pupil',
+                    !!sameErr && back?.student_id === ownKids[0], `now on ${back?.student_id}`)
+                await svc.from('student_notes').delete().eq('id', note.id)
+            }
+        }
+
+        // ── H3: a pupil cannot erase, move or self-grade work ──
+        const { data: sEnr } = await svc.from('class_students').select('class_id')
+            .eq('student_id', student.uid).limit(1).maybeSingle()
+        if (!sEnr) {
+            skipped += 5
+            console.log('  SKIP  H3 submissions — pupil is in no class')
+        } else {
+            const mk = async (n: number) => (await svc.from('assignments').insert({
+                class_id: sEnr.class_id, created_by: admin.uid, title: `rls-smoke probe ${n}`,
+                is_published: true, due_date: '2099-01-01T00:00:00Z',
+            }).select('id').single()).data!.id as string
+            const madeA = [await mk(1), await mk(2), await mk(3)]
+            try {
+                // graded submission on A1, with feedback
+                const { data: g } = await svc.from('submissions').insert({
+                    assignment_id: madeA[0], student_id: student.uid, status: 'graded', text_content: 'probe',
+                }).select('id').single()
+                await svc.from('submission_feedback').insert({ submission_id: g!.id, teacher_id: admin.uid, score: 8 })
+
+                await student.client.from('submissions').delete().eq('id', g!.id)
+                const { data: still } = await svc.from('submissions').select('id').eq('id', g!.id)
+                check('H3 pupil cannot delete a graded submission', (still ?? []).length === 1,
+                    'DELETED — migration 45 H3 not applied or regressed')
+
+                const { error: edErr } = await student.client.from('submissions')
+                    .update({ text_content: 'changed after grading' }).eq('id', g!.id)
+                const { error: mvErr } = await student.client.from('submissions')
+                    .update({ assignment_id: madeA[1] }).eq('id', g!.id)
+                const { data: gBack } = await svc.from('submissions')
+                    .select('assignment_id, text_content').eq('id', g!.id).single()
+                check('H3 pupil cannot edit a graded submission', !!edErr && gBack?.text_content === 'probe',
+                    `text is now "${gBack?.text_content}"`)
+                check('H3 pupil cannot move a submission to another assignment',
+                    !!mvErr && gBack?.assignment_id === madeA[0], 'assignment changed')
+
+                // ungraded submission on A2: editing is allowed (control), self-grading is not
+                const { data: u } = await svc.from('submissions').insert({
+                    assignment_id: madeA[1], student_id: student.uid, status: 'submitted', text_content: 'probe',
+                }).select('id').single()
+                const { error: okErr } = await student.client.from('submissions')
+                    .update({ text_content: 'probe (edited)' }).eq('id', u!.id)
+                check('H3 control: pupil can still edit ungraded work', !okErr, okErr?.message)
+                const { error: sgErr } = await student.client.from('submissions')
+                    .update({ status: 'graded' }).eq('id', u!.id)
+                const { data: uBack } = await svc.from('submissions').select('status').eq('id', u!.id).single()
+                check('H3 pupil cannot mark own work as graded',
+                    !!sgErr && uBack?.status === 'submitted', `status is now ${uBack?.status}`)
+
+                // A3: inserting as 'graded' is refused, inserting as 'submitted' works (control)
+                const { error: insGErr } = await student.client.from('submissions')
+                    .insert({ assignment_id: madeA[2], student_id: student.uid, status: 'graded' })
+                const { error: insOkErr } = await student.client.from('submissions')
+                    .insert({ assignment_id: madeA[2], student_id: student.uid, status: 'submitted', text_content: 'probe' })
+                check('H3 control: pupil can hand in', !insOkErr, insOkErr?.message)
+                check('H3 pupil cannot insert a submission as graded', !!insGErr && !insOkErr,
+                    insGErr ? 'control failed, result inconclusive' : 'INSERT accepted')
+            } finally {
+                // cascades to the probe submissions + feedback; service role passes the guard
+                for (const id of madeA) await svc.from('assignments').delete().eq('id', id)
+            }
+        }
+    }
+
     console.log(`\n${passed} passed, ${failed} failed${skipped ? `, ${skipped} skipped` : ''}`)
     console.log('(Cross-tenant isolation is now asserted empirically against a real second tenant —')
     console.log(' keep the demo tenant: without it these two checks silently downgrade to a SKIP.)')
