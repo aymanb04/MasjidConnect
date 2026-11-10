@@ -23,6 +23,15 @@
 //   · Nothing was addressed to a child, though children are the main data
 //     subjects — Art. 12(1) asks for plain language in exactly that case.
 //
+// v2 amended 2026-11-10 — new section "Scholen en moskeeën die wij zelf
+// contacteren": MasjidConnect is controller for its own outreach to schools that
+// don't use the platform yet (Art. 14: source, basis, opt-out, retention). The
+// outreach mails link here, so this had to exist before the first one is sent.
+// Deliberately NOT a v3 bump: the section concerns prospects, not users. No
+// user's data, purposes, recipients, retention or rights changed, so sending
+// every pupil and teacher back through /akkoord would be an interruption for a
+// text that isn't about them. Bump when a change does affect users.
+//
 // v2 amended 2026-09-11 — schooldocumenten (migration 30) record who confirmed
 // reading which version of a school document and when. New personal data, so it
 // is disclosed here. The wording deliberately says it is the signed-in person's
@@ -41,7 +50,7 @@
 // (geboortedatum, geslacht) are now stated rather than assumed. Edited in place
 // rather than bumped to v3 because no profile had accepted v2 yet.
 
-import { Shield, Users, Clock, FileCheck, Mail, Building2, Scale, Server, Globe, Database } from 'lucide-react'
+import { Shield, Users, Clock, FileCheck, Mail, Building2, Scale, Server, Globe, Database, Send } from 'lucide-react'
 import { EntityFooter } from './EntityFooter'
 
 const PRIVACY_MAIL = (
@@ -58,8 +67,10 @@ const sections: { icon: typeof Shield; title: string; items: React.ReactNode[] }
       'Uw school (de moskee) is de verwerkingsverantwoordelijke: zij bepaalt welke gegevens worden verwerkt en waarvoor.',
       'MasjidConnect is de verwerker: wij verwerken die gegevens enkel in opdracht van uw school, onder een verwerkersovereenkomst.',
       <>Voor een beperkt aantal verwerkingen is MasjidConnect zélf verantwoordelijke: bezoekers van
-        deze website en demo-aanvragen, vragen die u rechtstreeks aan ons stelt, technische
-        ondersteuning en de beveiliging van het platform. Zie “Bezoekers van deze website”.</>,
+        deze website en demo-aanvragen, scholen en moskeeën die wij zelf contacteren, vragen
+        die u rechtstreeks aan ons stelt, technische ondersteuning en de beveiliging van het
+        platform. Zie “Bezoekers van deze website” en “Scholen en moskeeën die wij zelf
+        contacteren”.</>,
       <>Om uw rechten uit te oefenen richt u zich in de eerste plaats tot de beheerder van uw school.
         Krijgt u binnen een maand geen antwoord, mail dan {PRIVACY_MAIL} — wij bezorgen uw verzoek
         aan de school en volgen het op.</>,
@@ -168,6 +179,23 @@ const sections: { icon: typeof Shield; title: string; items: React.ReactNode[] }
       'Deze website gebruikt geen tracking-, analyse- of advertentiecookies, en wij meten uw bezoek niet. Na het inloggen bewaren wij enkel een technisch noodzakelijk sessietoken in uw browser, zodat u aangemeld blijft. Daarom is er ook geen cookiebanner: er valt niets te aanvaarden of te weigeren.',
       <>Wilt u weten welke gegevens wij over u als bezoeker hebben, of wilt u ze laten wissen?
         Mail {PRIVACY_MAIL}.</>,
+    ],
+  },
+  {
+    icon: Send,
+    title: 'Scholen en moskeeën die wij zelf contacteren',
+    items: [
+      'Wij stellen MasjidConnect soms zelf voor aan weekendscholen en moskeeën die het platform nog niet gebruiken. Daarvoor is MasjidConnect de verwerkingsverantwoordelijke.',
+      'Wij gebruiken alleen gegevens van de organisatie: haar naam, de gemeente, haar algemene e-mailadres of telefoonnummer, en de functie van wie wij spreken (bv. secretariaat of bestuur). Daarnaast noteren wij wanneer wij contact hadden, wat er werd geantwoord en wat de volgende stap is. Een persoonlijke naam noteren wij alleen als u ons die zelf geeft.',
+      'Die gegevens halen wij uit openbare bronnen: de website of de openbare sociale-mediapagina van de organisatie, of een openbaar register zoals de KBO. Soms komen ze van iemand die u kent en ons heeft voorgesteld. In onze eerste e-mail vermelden wij altijd waar wij uw adres vonden.',
+      'Wij doen dit op grond van ons gerechtvaardigd belang om ons platform voor te stellen aan de organisaties waarvoor het gemaakt is (art. 6.1.f AVG). U ontvangt hoogstens drie e-mails, en wij stoppen zodra u antwoordt, ook als dat antwoord “nee” is. In Nederland sturen wij pas een e-mail nadat u daar eerst mee hebt ingestemd.',
+      <>Wilt u niet meer gecontacteerd worden? Antwoord “stop” of mail {PRIVACY_MAIL}. Dan
+        contacteren wij u nooit meer, via geen enkel kanaal. Om dat te kunnen garanderen, bewaren
+        wij enkel de naam van de organisatie en het adres op een lijst “niet meer contacteren”.</>,
+      'Deze gegevens staan in onze mailbox en in een interne lijst. Wij delen ze met niemand en kopen of verkopen geen adressenlijsten.',
+      'Komt er geen samenwerking uit voort, dan wissen wij uw gegevens uiterlijk 12 maanden na het laatste contact. De lijst “niet meer contacteren” is de enige uitzondering.',
+      <>U kunt altijd vragen welke gegevens wij over uw organisatie hebben, of ze laten verbeteren
+        of wissen: mail {PRIVACY_MAIL}.</>,
     ],
   },
   {
