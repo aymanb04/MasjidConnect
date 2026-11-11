@@ -24,3 +24,29 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+  # Builds the schema from supabase/*.sql in an empty Postgres, seeds two fake
+  # schools, and proves the tenant wall (migration 46): it changes nothing a
+  # school can do to its own data, and no role of school A can read, change,
+  # delete, insert into or re-point school B's rows -- even with a USING(true)
+  # policy on every table. A new table without a wall fails the build.
+  # No secrets, no connection to the real Supabase project.
+  rls-bench:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: bench
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: bench
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tenant wall bench
+        run: bash scripts/rls-bench/run.sh

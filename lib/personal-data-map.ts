@@ -23,6 +23,9 @@ export const OWNED_TABLES = [
   // A staff member's current hourly rate. Not a bookkeeping record: every
   // payroll entry keeps its own rate_snapshot.
   { table: 'staff_pay',            key: 'staff_id'   },
+  // Grade/attendance change log (migration 47): old and new scores of one
+  // pupil. Erased with the pupil, exported on a subject access request.
+  { table: 'audit_logs',           key: 'subject_id' },
 ] as const
 
 /**
