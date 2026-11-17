@@ -19,6 +19,7 @@ scripts/auth-mail-resend.mjs
 # demo-dress.mjs also writes to the live demo tenant.
 scripts/make-screenshots.mjs
 scripts/demo-dress.mjs
+scripts/demo-reset-content.mjs
 supabase/seed.ts
 supabase/reset.sql
 onboard-credentials.csv
@@ -96,9 +97,8 @@ SECURITY
 # meer in gebruik. Publieke repo -- dit mag er nooit in.
 /archief/
 
-# ─── Marketing (2026-11-10) ───────────────────────────────────────────
-# landing-review.md is an internal review with notes that are not for the
-# public repo. A filled-in lead tracker is a contact list (personal data):
-# keep working copies in leads/.
-/marketing/landing-review.md
-/marketing/leads/
+# ─── Marketing (2026-11-10, widened 2026-11-14) ──────────────────────
+# The whole folder. One-pagers, case study and outreach mails carry a personal
+# mobile number and the client's internal status; leads/ is a contact list
+# (personal data). To publish one file on purpose: !/marketing/<file>
+/marketing/
