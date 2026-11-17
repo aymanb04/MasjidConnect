@@ -37,6 +37,18 @@ for n in $(seq 14 99); do
   for f in supabase/${n}_*.sql; do
     [ -e "$f" ] || continue
     case "$f" in *rollback*|*dryrun*) continue;; esac
+    # Reference for run.sh: every policy exactly as it was before 48, so it can
+    # prove 48_rollback.sql restores them (kept outside the public schema).
+    if [ "$n" = 48 ]; then
+      $PSQL -q -v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail=1
+CREATE SCHEMA IF NOT EXISTS bench_meta;
+CREATE TABLE IF NOT EXISTS bench_meta.policy_snapshot (label text PRIMARY KEY, md5 text);
+INSERT INTO bench_meta.policy_snapshot
+SELECT 'pre48', md5(string_agg(tablename||policyname||permissive||cmd||roles::text||coalesce(qual,'')||coalesce(with_check,''), '|' ORDER BY tablename, policyname))
+  FROM pg_policies WHERE schemaname = 'public'
+ON CONFLICT (label) DO UPDATE SET md5 = EXCLUDED.md5;
+SQL
+    fi
     run "$(basename "$f" .sql)" "$f"
   done
 done

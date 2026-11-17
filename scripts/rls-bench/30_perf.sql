@@ -41,6 +41,11 @@ DECLARE t0 timestamptz; best interval := '1 hour'; n bigint; i int;
 BEGIN
   FOR i IN 1..reps LOOP
     PERFORM bench.become(p);
+    -- PostgREST applies the impersonated role's ALTER ROLE ... SET settings to
+    -- every request (migration 48 sets jit = off there); SET ROLE alone does not.
+    PERFORM set_config(split_part(c, '=', 1), substr(c, strpos(c, '=') + 1), true)
+       FROM pg_roles r, unnest(r.rolconfig) c
+      WHERE r.rolname = 'authenticated' AND split_part(c, '=', 1) NOT LIKE '%timeout';
     t0 := clock_timestamp();
     EXECUTE stmt INTO n;
     best := least(best, clock_timestamp() - t0);

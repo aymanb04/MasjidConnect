@@ -23,6 +23,13 @@ echo "── seed";   q < scripts/rls-bench/10_seed.sql >/dev/null || exit 1
 q < scripts/rls-bench/20_tests.sql >/dev/null || exit 1
 
 echo "── with the wall (and the 47 audit triggers)";    echo "SELECT bench.census('wall');   SELECT bench.attack('wall');"   | q >/dev/null || exit 1
+# 48 (and anything later) first: the "nowall" census below must run on the
+# original permissive policies, so it also proves 48 changed no outcome.
+snap="SELECT md5(string_agg(tablename||policyname||permissive||cmd||roles::text||coalesce(qual,'')||coalesce(with_check,''), '|' ORDER BY tablename, policyname)) FROM pg_policies WHERE schemaname='public'"
+q < supabase/48_rollback.sql >/dev/null || { echo "FAIL  48_rollback.sql"; exit 1; }
+pre48=$(echo "SELECT md5 FROM bench_meta.policy_snapshot WHERE label = 'pre48'" | q)
+[ -n "$pre48" ] && [ "$(echo "$snap" | q)" = "$pre48" ] || { echo "FAIL  48_rollback.sql does not restore the policies load.sh recorded before 48"; exit 1; }
+echo "── 48_rollback restores the exact pre-48 policies: ok"
 if q < supabase/46_rollback.sql >/dev/null 2>&1; then echo "FAIL  46_rollback.sql ran while 47 is installed (its guard should refuse)"; exit 1; fi
 echo "── 46_rollback refuses while 47 is installed: ok"
 q < supabase/47_rollback.sql >/dev/null || { echo "FAIL  47_rollback.sql"; exit 1; }
@@ -32,6 +39,12 @@ echo "── rollback left $left walls (expect 0)"
 echo "── without the wall (46 and 47 rolled back)"; echo "SELECT bench.census('nowall'); SELECT bench.attack('nowall');" | q >/dev/null || exit 1
 ( echo "SET check_function_bodies = off;"; cat supabase/46_tenant_wall.sql ) | q >/dev/null || { echo "FAIL  re-applying 46"; exit 1; }
 ( echo "SET check_function_bodies = off;"; cat supabase/47_grade_audit_log.sql ) | q >/dev/null || { echo "FAIL  re-applying 47"; exit 1; }
+# Re-applying 46+47 must land exactly on the pre-48 policies; then 48 again.
+[ "$(echo "$snap" | q)" = "$pre48" ] || { echo "FAIL  re-applying 46+47 does not reproduce the pre-48 policies"; exit 1; }
+for f in $(ls supabase/[0-9]*_*.sql | grep -v -E 'rollback|dryrun' | sort -t/ -k2 -n); do
+  n=$(basename "$f" | cut -d_ -f1); [ "$n" -ge 48 ] 2>/dev/null || continue
+  ( echo "SET check_function_bodies = off;"; cat "$f" ) | q >/dev/null || { echo "FAIL  re-applying $f"; exit 1; }
+done
 echo "── audit log"
 audit=$(q < scripts/rls-bench/40_audit.sql) || { echo "FAIL  40_audit.sql"; exit 1; }
 echo "$audit"
