@@ -21,6 +21,7 @@ import {
     Code2,
     FileText,
     FolderOpen,
+    Github,
     GraduationCap,
     Layers,
     Lock,
@@ -321,6 +322,12 @@ export function LandingPageEn() {
                             Designed, built and run by one person, Ayman Boulayoune: product, database,
                             application code, deployment, support, and the GDPR paperwork with the school.
                         </p>
+                        {/* The repo is public; its README carries the long version of
+                            this section (incidents, numbers, architecture). */}
+                        <a href="https://github.com/aymanb04/MasjidConnect" target="_blank" rel="noopener noreferrer"
+                            className="btn mt-6 h-11 border border-primary-500 px-5 text-base font-medium text-primary-700 hover:bg-primary-50 active:scale-[0.98]">
+                            <Github size={17} /> Source code and write-up on GitHub
+                        </a>
                     </div>
 
                     <ul className="mt-8 flex flex-wrap gap-2" aria-label="Technology">
@@ -404,6 +411,7 @@ export function LandingPageEn() {
                     </p>
                     <div className="flex gap-5">
                         <Link href="/" hrefLang="nl" className="hover:text-primary-600">Nederlands</Link>
+                        <a href="https://github.com/aymanb04/MasjidConnect" target="_blank" rel="noopener noreferrer" className="hover:text-primary-600">GitHub</a>
                         <Link href="/legal/privacy" className="hover:text-primary-600">Privacy (NL)</Link>
                         <Link href="/login" className="hover:text-primary-600">Log in</Link>
                     </div>
