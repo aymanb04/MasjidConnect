@@ -69,10 +69,12 @@ export default function AssignmentAdminBar({ assignment, submissions, perStudent
     setPicked(new Set(perStudentRows.map(r => r.student_id)))
     setForm(p => ({ ...p, is_published: !!assignment.is_published }))
     async function loadClass() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('class_students')
         .select('profiles!class_students_student_id_fkey(id, first_name, last_name)')
         .eq('class_id', assignment.class_id)
+      // Not "Geen leerlingen in deze klas": the pupil list did not load.
+      if (error) { console.error(error); setError('De leerlingen van deze klas konden niet geladen worden. Sluit en open dit venster opnieuw.'); return }
       const coll = new Intl.Collator('nl', { sensitivity: 'base' })
       setClassStudents((data ?? []).map((d: any) => d.profiles).filter(Boolean)
         .sort((x: any, y: any) => coll.compare(x.last_name, y.last_name) || coll.compare(x.first_name, y.first_name)))

@@ -41,12 +41,13 @@ export default function KlassenPage() {
 
     if (profile!.role === 'student') {
       // Students always see only the active year — no year filter tabs
-      const { data: activeYear } = await supabase
+      const { data: activeYear, error: activeYearErr } = await supabase
         .from('school_years')
         .select('id')
         .eq('tenant_id', profile!.tenant_id)
         .eq('is_active', true)
         .maybeSingle()
+      if (activeYearErr) { console.error(activeYearErr); setLoadErr(activeYearErr); setLoading(false); return }
 
       const { data: d, error: e } = await supabase
         .from('class_students')
@@ -60,11 +61,12 @@ export default function KlassenPage() {
 
     } else if (profile!.role === 'teacher') {
       // Fetch school years first
-      const { data: years } = await supabase
+      const { data: years, error: yearsErr } = await supabase
         .from('school_years')
         .select('*')
         .eq('tenant_id', profile!.tenant_id)
         .order('start_date', { ascending: false })
+      if (yearsErr) { console.error(yearsErr); setLoadErr(yearsErr); setLoading(false); return }
       const fetchedYears = years ?? []
       const active = fetchedYears.find((y: any) => y.is_active) ?? null
       setSchoolYears(fetchedYears)
@@ -92,11 +94,12 @@ export default function KlassenPage() {
     // them they weren't assigned to a class, which they never are by design.
     } else if (profile!.role === 'admin' || profile!.role === 'leerlingenbegeleiding') {
       // Fetch school years first
-      const { data: years } = await supabase
+      const { data: years, error: yearsErr } = await supabase
         .from('school_years')
         .select('*')
         .eq('tenant_id', profile!.tenant_id)
         .order('start_date', { ascending: false })
+      if (yearsErr) { console.error(yearsErr); setLoadErr(yearsErr); setLoading(false); return }
       const fetchedYears = years ?? []
       const active = fetchedYears.find((y: any) => y.is_active) ?? null
       setSchoolYears(fetchedYears)
@@ -155,10 +158,11 @@ export default function KlassenPage() {
     }))))
 
     if (data.length > 0) {
-      const { data: sc } = await supabase
+      const { data: sc, error: scErr } = await supabase
         .from('class_students')
         .select('class_id')
         .in('class_id', data.map((c: any) => c.id))
+      if (scErr) console.error(scErr)   // pupil counts only; the classes still show
       const map: Record<string, number> = {}
       sc?.forEach((s: any) => { map[s.class_id] = (map[s.class_id] ?? 0) + 1 })
       setCountMap(map)

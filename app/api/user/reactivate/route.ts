@@ -20,12 +20,16 @@ export async function POST(request: Request) {
         const { userId } = await request.json()
         if (!userId) return NextResponse.json({ error: 'userId verplicht' }, { status: 400 })
 
-        const { data: target } = await supabaseAdmin
+        const { data: target, error: targetErr } = await supabaseAdmin
             .from('profiles')
             .select('id, tenant_id, is_anonymized')
             .eq('id', userId)
-            .single()
+            .maybeSingle()
 
+        if (targetErr) {
+            console.error('[/api/user/reactivate] target lookup:', targetErr.message)
+            return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
+        }
         if (!target) return NextResponse.json({ error: 'Gebruiker niet gevonden' }, { status: 404 })
 
         if (caller.role === 'admin' && target.tenant_id !== caller.tenant_id) {

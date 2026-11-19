@@ -134,12 +134,15 @@ export default function AgendaPage() {
     setEvents(ev ?? [])
 
     if (profile!.role === 'admin' || profile!.role === 'super_admin') {
-      const { data: years } = await supabase.from('school_years').select('id')
+      // Only feeds the group picker of the event form; a failure leaves it empty.
+      const { data: years, error: yearsErr } = await supabase.from('school_years').select('id')
         .eq('tenant_id', profile!.tenant_id).eq('is_active', true)
+      if (yearsErr) console.error(yearsErr)
       const yearIds = (years ?? []).map((y: any) => y.id)
-      const { data: gs } = yearIds.length
+      const { data: gs, error: gsErr } = yearIds.length
         ? await supabase.from('groups').select('id, name').in('school_year_id', yearIds)
-        : { data: [] as any[] }
+        : { data: [] as any[], error: null }
+      if (gsErr) console.error(gsErr)
       const coll = new Intl.Collator('nl', { numeric: true, sensitivity: 'base' })
       setAdminGroups((gs ?? []).sort((a: any, b: any) => coll.compare(a.name, b.name)))
     }
@@ -147,7 +150,8 @@ export default function AgendaPage() {
     // stilzwijgend niets terug.
     const ids = Array.from(new Set((ev ?? []).map((e: any) => e.group_id).filter(Boolean))) as string[]
     if (ids.length) {
-      const { data: g } = await supabase.from('groups').select('id, name').in('id', ids)
+      const { data: g, error: gErr } = await supabase.from('groups').select('id, name').in('id', ids)
+      if (gErr) console.error(gErr)   // labels only: the events still show
       setGroupNames(Object.fromEntries((g ?? []).map((x: any) => [x.id, x.name])))
     }
   }

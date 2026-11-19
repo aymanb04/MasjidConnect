@@ -36,44 +36,49 @@ export function AttendanceAlertsCard({ profile }: { profile: any }) {
     // 1. Which classes does this user oversee?
     let classIds: string[] = []
     if (profile.role === 'teacher') {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('class_teachers')
         .select('class_id')
         .eq('teacher_id', profile.id)
+      if (error) { console.error(error); setLoaded(true); return }   // hide the card: half the data raises false alarms
       classIds = (data ?? []).map((r: any) => r.class_id)
     } else {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('classes')
         .select('id')
         .eq('tenant_id', profile.tenant_id)
         .eq('is_archived', false)
+      if (error) { console.error(error); setLoaded(true); return }   // hide the card: half the data raises false alarms
       classIds = (data ?? []).map((r: any) => r.id)
     }
     if (classIds.length === 0) { setLoaded(true); return }
 
-    const { data: classRows } = await supabase
+    const { data: classRows, error: classRowsErr } = await supabase
       .from('classes')
       .select('id, name')
       .in('id', classIds)
       .eq('is_archived', false)
+    if (classRowsErr) { console.error(classRowsErr); setLoaded(true); return }   // hide the card: half the data raises false alarms
     const classNames = Object.fromEntries((classRows ?? []).map((c: any) => [c.id, c.name]))
     classIds = (classRows ?? []).map((c: any) => c.id)
     if (classIds.length === 0) { setLoaded(true); return }
 
     // 2. Marked sessions in the recent window (covers both checks)
     const cutoff = format(subDays(new Date(), 60), 'yyyy-MM-dd')
-    const { data: sessions } = await supabase
+    const { data: sessions, error: sessionsErr } = await supabase
       .from('attendance_sessions')
       .select('id, class_id, session_date')
       .in('class_id', classIds)
       .gte('session_date', cutoff)
       .order('session_date', { ascending: false })
+    if (sessionsErr) { console.error(sessionsErr); setLoaded(true); return }   // hide the card: half the data raises false alarms
 
     // 3. Missed rooster days, past 7 days (today only counts after the lesson ended)
-    const { data: rooster } = await supabase
+    const { data: rooster, error: roosterErr } = await supabase
       .from('class_sessions')
       .select('class_id, day_of_week, end_time')
       .in('class_id', classIds)
+    if (roosterErr) { console.error(roosterErr); setLoaded(true); return }   // hide the card: half the data raises false alarms
 
     const marked = new Set((sessions ?? []).map((s: any) => `${s.class_id}|${s.session_date}`))
     const nowTime = format(new Date(), 'HH:mm:ss')
@@ -102,11 +107,12 @@ export function AttendanceAlertsCard({ profile }: { profile: any }) {
     const streakItems: StreakItem[] = []
     if (pairs.length > 0) {
       const sessionIds = pairs.flatMap(([, v]) => v.map(s => s.id))
-      const { data: absents } = await supabase
+      const { data: absents, error: absentsErr } = await supabase
         .from('attendance_records')
         .select('session_id, student_id')
         .eq('status', 'absent')
         .in('session_id', sessionIds)
+      if (absentsErr) { console.error(absentsErr); setLoaded(true); return }   // hide the card: half the data raises false alarms
 
       const absentSet = new Set((absents ?? []).map((r: any) => `${r.session_id}|${r.student_id}`))
       const flagged: { classId: string; studentId: string }[] = []
@@ -120,10 +126,11 @@ export function AttendanceAlertsCard({ profile }: { profile: any }) {
       }
       if (flagged.length > 0) {
         const studentIds = Array.from(new Set(flagged.map(f => f.studentId)))
-        const { data: profiles } = await supabase
+        const { data: profiles, error: profilesErr } = await supabase
           .from('profiles')
           .select('id, first_name, last_name')
           .in('id', studentIds)
+        if (profilesErr) { console.error(profilesErr); setLoaded(true); return }   // hide the card: half the data raises false alarms
         const nameMap = Object.fromEntries(
           (profiles ?? []).map((p: any) => [p.id, `${p.first_name} ${p.last_name}`])
         )

@@ -1,6 +1,20 @@
 {
   "extends": "next/core-web-vitals",
   "rules": {
-    "react/no-unescaped-entities": ["error", { "forbid": [">", "}"] }]
+    "react/no-unescaped-entities": ["error", { "forbid": [">", "}"] }],
+    "no-restricted-syntax": ["error",
+      {
+        "selector": "VariableDeclarator:has(AwaitExpression):has(CallExpression[callee.property.name='from']) > ObjectPattern:not(:has(Property[key.name='error']))",
+        "message": "supabase-js never throws: destructure `error` and handle it. A failed read otherwise looks exactly like an empty result."
+      },
+      {
+        "selector": "VariableDeclarator:has(AwaitExpression):has(CallExpression[callee.property.name='from']) > ArrayPattern > ObjectPattern:not(:has(Property[key.name='error']))",
+        "message": "supabase-js never throws: destructure `error` from every Promise.all result and handle it."
+      },
+      {
+        "selector": "ExpressionStatement > AwaitExpression[argument.callee.type='MemberExpression']:has(CallExpression[callee.property.name=/^(insert|update|upsert|delete|remove|upload)$/]):has(CallExpression[callee.property.name='from'])",
+        "message": "supabase-js never throws: this write's result is discarded, so a failure looks like success. Check `error`."
+      }
+    ]
   }
 }

@@ -58,7 +58,8 @@ export default function RoosterPage() {
       const { data: s, error: sErr } = await supabase.from('class_sessions').select('*, classes(name, color)').eq('tenant_id', profile!.tenant_id).order('day_of_week').order('start_time')
       if (sErr) { console.error(sErr); setLoadErr(sErr); setLoading(false); return }
       data = s ?? []
-      const { data: c } = await supabase.from('classes').select('id, name, color, groups(name)').eq('tenant_id', profile!.tenant_id).eq('is_archived', false).order('name')
+      const { data: c, error: cErr } = await supabase.from('classes').select('id, name, color, groups(name)').eq('tenant_id', profile!.tenant_id).eq('is_archived', false).order('name')
+      if (cErr) console.error(cErr)   // only fills the "new lesson" class picker
       setClasses(c ?? [])
     } else {
       const { data: s, error: sErr } = await supabase.from('class_sessions').select('*, classes(name, color), tenants(name)').order('day_of_week').order('start_time')
@@ -71,7 +72,8 @@ export default function RoosterPage() {
   }
 
   async function deleteSession(id: string) {
-    await getSupabase().from('class_sessions').delete().eq('id', id)
+    const { error } = await getSupabase().from('class_sessions').delete().eq('id', id)
+    if (error) { console.error(error); alert('Lesmoment verwijderen mislukt. Probeer het opnieuw.'); return }
     setSessions(prev => prev.filter(s => s.id !== id))
   }
 

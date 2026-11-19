@@ -28,6 +28,7 @@ const AUDIENCE_LABELS: Record<Audience, string> = {
 export function AnnouncementsCard({ profile }: { profile: Profile }) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading,       setLoading]       = useState(true)
+  const [loadFailed,    setLoadFailed]    = useState(false)
   const [showForm,      setShowForm]      = useState(false)
   const [form,          setForm]          = useState<{ title: string; content: string; audience: Audience; class_id: string; group_id: string }>(
     { title: '', content: '', audience: 'school', class_id: '', group_id: '' })
@@ -52,12 +53,15 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
 
   async function loadAnnouncements() {
     if (!profile.tenant_id) { setLoading(false); return }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('announcements')
       .select('*, creator:profiles!created_by(id, first_name, last_name), class:classes(id, name, color), group:groups(id, name)')
       .eq('tenant_id', profile.tenant_id)
       .order('created_at', { ascending: false })
       .limit(30)
+    // "Nog geen aankondigingen" on a failed read hid every announcement.
+    setLoadFailed(!!error)
+    if (error) console.error(error)
     setAnnouncements((data ?? []) as Announcement[])
     setLoading(false)
   }
@@ -68,20 +72,22 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
     if (!profile.tenant_id) return
 
     if (profile.role === 'student') {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('class_students')
         .select('classes(id, name, color)')
         .eq('student_id', profile.id)
+      if (error) console.error(error)   // only the class filter / form picker
       setMyClasses(
         (data ?? [])
           .map((r: any) => r.classes)
           .filter(Boolean) as ClassOption[]
       )
     } else if (profile.role === 'teacher') {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('class_teachers')
         .select('classes(id, name, color, groups(name))')
         .eq('teacher_id', profile.id)
+      if (error) console.error(error)   // only the class filter / form picker
       setMyClasses(
         (data ?? [])
           .map((r: any) => r.classes)
@@ -89,10 +95,11 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
       )
     } else {
       // admin / super_admin — all classes + groups in their tenant
-      const [{ data: cls }, { data: grps }] = await Promise.all([
+      const [{ data: cls, error: clsErr }, { data: grps, error: grpsErr }] = await Promise.all([
         supabase.from('classes').select('id, name, color, groups(name)').eq('tenant_id', profile.tenant_id).eq('is_archived', false).order('name'),
         supabase.from('groups').select('id, name').eq('tenant_id', profile.tenant_id).order('name'),
       ])
+      if (clsErr || grpsErr) console.error(clsErr || grpsErr)   // only the pickers
       setMyClasses((cls ?? []) as ClassOption[])
       setMyGroups((grps ?? []) as GroupOption[])
     }
@@ -134,7 +141,8 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
   }
 
   async function handleDelete(id: string) {
-    await supabase.from('announcements').delete().eq('id', id)
+    const { error } = await supabase.from('announcements').delete().eq('id', id)
+    if (error) { console.error(error); alert('Verwijderen mislukt. Probeer het opnieuw.'); return }
     setAnnouncements(prev => prev.filter(a => a.id !== id))
   }
 
@@ -307,7 +315,14 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
       )}
 
       {/* Announcements list */}
-      {filtered.length === 0 ? (
+      {loadFailed ? (
+        <div className="text-center py-6">
+          <p className="text-sm text-gray-500 mb-2">Aankondigingen konden niet geladen worden.</p>
+          <button onClick={() => { setLoading(true); loadAnnouncements() }} className="text-sm text-primary-600 hover:underline">
+            Opnieuw proberen
+          </button>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="text-center py-6">
           <Megaphone size={24} className="mx-auto mb-2 text-gray-300" />
           <p className="text-sm text-gray-400">

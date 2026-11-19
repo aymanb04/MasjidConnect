@@ -37,7 +37,8 @@ export default function HuiswerkPage() {
         if (aErr) { console.error(aErr); setLoadErr(aErr); setLoading(false); return }
         data = a ?? []
         if (data.length > 0) {
-          const { data: subs } = await supabase.from('submissions').select('*').eq('student_id', profile!.id).in('assignment_id', data.map((a: any) => a.id))
+          const { data: subs, error: subsErr } = await supabase.from('submissions').select('*').eq('student_id', profile!.id).in('assignment_id', data.map((a: any) => a.id))
+          if (subsErr) { console.error(subsErr); setLoadErr(subsErr); setLoading(false); return }
           const map: Record<string, any> = {}
           subs?.forEach((s: any) => { map[s.assignment_id] = s })
           setMySubmissions(map)

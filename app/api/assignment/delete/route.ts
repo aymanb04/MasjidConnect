@@ -43,12 +43,16 @@ export async function POST(request: Request) {
         const { assignmentId } = await request.json()
         if (!assignmentId) return NextResponse.json({ error: 'assignmentId verplicht' }, { status: 400 })
 
-        const { data: assignment } = await supabaseAdmin
+        const { data: assignment, error: assignmentErr } = await supabaseAdmin
             .from('assignments')
             .select('id, title, class_id, classes(tenant_id)')
             .eq('id', assignmentId)
-            .single()
+            .maybeSingle()
 
+        if (assignmentErr) {
+            console.error('[/api/assignment/delete] lookup:', assignmentErr.message)
+            return NextResponse.json({ error: 'Er is een fout opgetreden. Er is niets verwijderd.' }, { status: 500 })
+        }
         if (!assignment) return NextResponse.json({ error: 'Huiswerk niet gevonden' }, { status: 404 })
 
         // The service role reads past RLS, so the check the database would have
@@ -59,12 +63,16 @@ export async function POST(request: Request) {
                 return NextResponse.json({ error: 'Geen toegang tot dit huiswerk' }, { status: 403 })
             }
             if (caller.role === 'teacher') {
-                const { data: teaches } = await supabaseAdmin
+                const { data: teaches, error: teachesErr } = await supabaseAdmin
                     .from('class_teachers')
                     .select('class_id')
                     .eq('class_id', assignment.class_id)
                     .eq('teacher_id', caller.id)
                     .maybeSingle()
+                if (teachesErr) {
+                    console.error('[/api/assignment/delete] teacher check:', teachesErr.message)
+                    return NextResponse.json({ error: 'Er is een fout opgetreden. Er is niets verwijderd.' }, { status: 500 })
+                }
                 if (!teaches) {
                     return NextResponse.json({ error: 'Je geeft deze klas geen les' }, { status: 403 })
                 }
@@ -72,10 +80,16 @@ export async function POST(request: Request) {
         }
 
         // ── 1. The uploaded files, out of the bucket ───────────────────────────
-        const { data: submissions } = await supabaseAdmin
+        // A failed read here used to look like "no submissions": the files were
+        // skipped, the rows cascaded away, and the uploads stayed in the bucket.
+        const { data: submissions, error: subsErr } = await supabaseAdmin
             .from('submissions')
             .select('id')
             .eq('assignment_id', assignmentId)
+        if (subsErr) {
+            console.error('[/api/assignment/delete] list submissions:', subsErr.message)
+            return NextResponse.json({ error: 'De inzendingen konden niet worden opgehaald. Er is niets verwijderd.' }, { status: 500 })
+        }
         const submissionIds = (submissions ?? []).map(s => s.id)
 
         let filesRemoved = 0

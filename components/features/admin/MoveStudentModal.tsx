@@ -30,6 +30,7 @@ export function MoveStudentModal({ student, tenantId, onClose, onSaved }: Props)
   const [saving,   setSaving]   = useState(false)
   const [done,     setDone]     = useState(false)
   const [error,    setError]    = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)   // the save diffs against what loaded
   const [addSelect, setAddSelect] = useState('')
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- load once when the modal opens
@@ -39,10 +40,15 @@ export function MoveStudentModal({ student, tenantId, onClose, onSaved }: Props)
     setLoading(true)
 
     // Current enrollments
-    const { data: enrolled } = await supabase
+    const { data: enrolled, error: enrolledErr } = await supabase
       .from('class_students')
       .select('classes(id, name, color, groups(name), school_years(name))')
       .eq('student_id', student.id)
+    if (enrolledErr) {
+      console.error(enrolledErr)
+      setError('De klassen van deze leerling konden niet geladen worden. Sluit dit venster en probeer opnieuw.')
+      setLoadFailed(true); setLoading(false); return
+    }
 
     const currentIds = new Set<string>()
     const current: ClassOption[] = []
@@ -61,12 +67,17 @@ export function MoveStudentModal({ student, tenantId, onClose, onSaved }: Props)
     setCurrentClasses(current)
 
     // All active classes in tenant (not yet enrolled)
-    const { data: all } = await supabase
+    const { data: all, error: allErr } = await supabase
       .from('classes')
       .select('id, name, color, groups(name), school_years(name)')
       .eq('tenant_id', tenantId)
       .eq('is_archived', false)
       .order('name')
+    if (allErr) {
+      console.error(allErr)
+      setError('De klassen konden niet geladen worden. Sluit dit venster en probeer opnieuw.')
+      setLoadFailed(true); setLoading(false); return
+    }
 
     setAvailableClasses(
       (all ?? [])
@@ -314,7 +325,7 @@ export function MoveStudentModal({ student, tenantId, onClose, onSaved }: Props)
             </button>
             <button
               onClick={handleSave}
-              disabled={saving || !hasChanges}
+              disabled={saving || !hasChanges || loadFailed}
               className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
             >
               {saving

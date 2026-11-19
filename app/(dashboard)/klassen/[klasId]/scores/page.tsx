@@ -116,17 +116,19 @@ function StaffScoresPage() {
     setAssignments(assignmentList)
     setExamScores(exams ?? [])
 
-    const { data: catRows } = await supabase
+    const { data: catRows, error: catRowsErr } = await supabase
       .from('grade_categories').select('id, name, source, weight, sort_order')
       .eq('class_id', klasId).order('sort_order')
+    if (catRowsErr) { console.error(catRowsErr); setLoadErr(catRowsErr); setLoading(false); return }
     const cats = (catRows ?? []).map((c: any) => ({ ...c, weight: Number(c.weight) }))
     setAllCats(cats)
     const manual = cats.filter((c: any) => c.source === 'handmatig')
     setManualCats(manual)
     if (manual.length) {
-      const { data: cs } = await supabase
+      const { data: cs, error: csErr } = await supabase
         .from('category_scores').select('category_id, student_id, score, max_score')
         .in('category_id', manual.map((c: any) => c.id))
+      if (csErr) { console.error(csErr); setLoadErr(csErr); setLoading(false); return }
       const cm: Record<string, Record<string, { score: number; max_score: number }>> = {}
       cs?.forEach((r: any) => {
         if (!cm[r.student_id]) cm[r.student_id] = {}
@@ -137,23 +139,26 @@ function StaffScoresPage() {
       setCatScoreMap({})
     }
 
-    const { data: goalRows } = await supabase
+    const { data: goalRows, error: goalRowsErr } = await supabase
       .from('student_goals')
       .select('id, student_id, start_point, target_point, current_point, progress, status')
       .eq('class_id', klasId).eq('status', 'actief')
+    if (goalRowsErr) { console.error(goalRowsErr); setLoadErr(goalRowsErr); setLoading(false); return }
     const gm: Record<string, any> = {}
     goalRows?.forEach((g: any) => { gm[g.student_id] = g })
     setGoals(gm)
 
-    const { data: testRows } = await supabase
+    const { data: testRows, error: testRowsErr } = await supabase
       .from('class_tests').select('*')
       .eq('class_id', klasId)
       .order('test_date', { ascending: true })
+    if (testRowsErr) { console.error(testRowsErr); setLoadErr(testRowsErr); setLoading(false); return }
     setTests(testRows ?? [])
     if (testRows?.length) {
-      const { data: ts } = await supabase
+      const { data: ts, error: tsErr } = await supabase
         .from('test_scores').select('id, test_id, student_id, score')
         .in('test_id', testRows.map((t: any) => t.id))
+      if (tsErr) { console.error(tsErr); setLoadErr(tsErr); setLoading(false); return }
       const m: Record<string, Record<string, { id: string; score: number }>> = {}
       ts?.forEach((r: any) => {
         if (!m[r.student_id]) m[r.student_id] = {}

@@ -53,19 +53,21 @@ export default function SchooldocumentenPage() {
     setLoading(true); setLoadErr(null)
     // Separate queries — a nested join across RLS-protected tables silently
     // returns nothing here.
-    const [{ data: d, error: dErr }, { data: a }] = await Promise.all([
+    const [{ data: d, error: dErr }, { data: a, error: aErr }] = await Promise.all([
       supabase.from('tenant_documents').select('*')
         .eq('tenant_id', profile!.tenant_id).order('created_at', { ascending: false }),
       supabase.from('tenant_document_acks').select('document_id, user_id, version, acked_at'),
     ])
-    if (dErr) { console.error(dErr); setLoadErr(dErr); setLoading(false); return }
+    // Acks too: a failed read showed every document as unread, to everyone.
+    if (dErr || aErr) { console.error(dErr || aErr); setLoadErr(dErr || aErr); setLoading(false); return }
     setDocs(d ?? [])
     setAcks(a ?? [])
 
     if (['admin', 'super_admin'].includes(profile!.role)) {
-      const { data: m } = await supabase.from('profiles')
+      const { data: m, error: mErr } = await supabase.from('profiles')
         .select('id, first_name, last_name, role')
         .eq('tenant_id', profile!.tenant_id).eq('is_active', true).order('last_name')
+      if (mErr) { console.error(mErr); setLoadErr(mErr); setLoading(false); return }
       setMembers(m ?? [])
     }
     setLoading(false)
@@ -114,7 +116,8 @@ export default function SchooldocumentenPage() {
 
     if (dbErr) {
       console.error(dbErr)
-      await supabase.storage.from('tenant-documents').remove([path])
+      const { error: rmErr } = await supabase.storage.from('tenant-documents').remove([path])
+      if (rmErr) console.error('[schooldocumenten] cleanup of unsaved upload failed, orphaned object:', path, rmErr.message)
       setError('Opslaan van het document is mislukt.')
     } else {
       await load()

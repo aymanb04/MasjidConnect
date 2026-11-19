@@ -71,12 +71,15 @@ export async function POST(request: Request) {
         const { userId } = await request.json()
         if (!userId) return NextResponse.json({ error: 'userId verplicht' }, { status: 400 })
 
-        const { data: target } = await supabaseAdmin
+        const { data: target, error: targetErr } = await supabaseAdmin
             .from('profiles')
             .select('id, role, tenant_id, is_active, is_anonymized')
             .eq('id', userId)
-            .single()
-
+            .maybeSingle()
+        if (targetErr) {
+            console.error('[/api/user/set-password] target lookup:', targetErr.message)
+            return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
+        }
         if (!target) return NextResponse.json({ error: 'Gebruiker niet gevonden' }, { status: 404 })
 
         // Own tenant only.

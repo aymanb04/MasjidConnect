@@ -131,11 +131,14 @@ export default function JaarovergangPage() {
       // which is a recoverable state (just call activateYear again).
       const { error } = await supabase.from('school_years').update({ is_active: true }).eq('id', year.id)
       if (error) throw error
-      await supabase.from('school_years')
+      const { error: offErr } = await supabase.from('school_years')
         .update({ is_active: false })
         .eq('tenant_id', profile!.tenant_id)
         .neq('id', year.id)
       await loadYears()
+      // Recoverable (see above), but it must be said: two active years show
+      // both years' classes everywhere until it is fixed.
+      if (offErr) alert(`${year.name} is actief, maar het vorige schooljaar kon niet worden uitgezet. Klik nogmaals op Activeren.`)
     } catch (e: any) {
       alert('Fout bij activeren: ' + e.message)
     } finally {
@@ -179,20 +182,32 @@ export default function JaarovergangPage() {
     const classIds = classRows.map((c: any) => c.id)
 
     // 2. Fetch teacher + student links (IDs only), then profiles separately
-    const [{ data: teacherLinks }, { data: studentLinks }] = await Promise.all([
+    const [{ data: teacherLinks, error: tlErr }, { data: studentLinks, error: slErr }] = await Promise.all([
       supabase.from('class_teachers').select('class_id, teacher_id').in('class_id', classIds),
       supabase.from('class_students').select('class_id, student_id').in('class_id', classIds),
     ])
 
+    // A failed read here would roll the year over with pupils or teachers missing.
+    if (tlErr || slErr) {
+      alert('Fout bij laden van leerkrachten/leerlingen: ' + (tlErr || slErr)!.message)
+      setLoadingClasses(false)
+      return
+    }
+
     const teacherIds = Array.from(new Set((teacherLinks ?? []).map((l: any) => l.teacher_id)))
     const studentIds = Array.from(new Set((studentLinks ?? []).map((l: any) => l.student_id)))
 
-    const [{ data: teacherProfiles }, { data: studentProfiles }] = await Promise.all([
-      teacherIds.length ? supabase.from('profiles').select('id, first_name, last_name').in('id', teacherIds) : Promise.resolve({ data: [] }),
+    const [{ data: teacherProfiles, error: tpErr }, { data: studentProfiles, error: spErr }] = await Promise.all([
+      teacherIds.length ? supabase.from('profiles').select('id, first_name, last_name').in('id', teacherIds) : Promise.resolve({ data: [], error: null }),
       // Filter by is_active=true so archived/departed students are excluded from
       // the rollover list automatically and not pre-selected by mistake.
-      studentIds.length ? supabase.from('profiles').select('id, first_name, last_name').in('id', studentIds).eq('is_active', true) : Promise.resolve({ data: [] }),
+      studentIds.length ? supabase.from('profiles').select('id, first_name, last_name').in('id', studentIds).eq('is_active', true) : Promise.resolve({ data: [], error: null }),
     ])
+    if (tpErr || spErr) {
+      alert('Fout bij laden van leerkrachten/leerlingen: ' + (tpErr || spErr)!.message)
+      setLoadingClasses(false)
+      return
+    }
 
     const tpMap = Object.fromEntries((teacherProfiles ?? []).map((p: any) => [p.id, p]))
     const spMap = Object.fromEntries((studentProfiles ?? []).map((p: any) => [p.id, p]))
@@ -289,13 +304,15 @@ export default function JaarovergangPage() {
         let newGroupId: string | null = null
         if (cls.groupName) {
           // Try to find existing group with same name in target year
-          const { data: existingGroup } = await supabase
+          const { data: existingGroup, error: existingErr } = await supabase
             .from('groups')
             .select('id')
             .eq('tenant_id', profile!.tenant_id)
             .eq('school_year_id', rolloverTarget.id)
             .eq('name', cls.groupName)
             .maybeSingle()
+          // A failed lookup is not "no such group": it would create a duplicate.
+          if (existingErr) throw existingErr
 
           if (existingGroup) {
             newGroupId = existingGroup.id
@@ -359,14 +376,20 @@ export default function JaarovergangPage() {
       // DB is not left in a half-migrated state. FK order: junction tables
       // (class_students, class_teachers) must be deleted before their parent
       // classes, and classes before their parent groups.
+      // supabase-js does not throw on a failed delete, so each one is checked:
+      // without that the admin was told "ongedaan gemaakt" even when it wasn't.
+      const undo = async (q: PromiseLike<{ error: { message: string } | null }>) => {
+        const { error } = await q
+        if (error) throw error
+      }
       try {
         if (createdClassIds.length) {
-          await supabase.from('class_students').delete().in('class_id', createdClassIds)
-          await supabase.from('class_teachers').delete().in('class_id', createdClassIds)
-          await supabase.from('classes').delete().in('id', createdClassIds)
+          await undo(supabase.from('class_students').delete().in('class_id', createdClassIds))
+          await undo(supabase.from('class_teachers').delete().in('class_id', createdClassIds))
+          await undo(supabase.from('classes').delete().in('id', createdClassIds))
         }
         if (createdGroupIds.length) {
-          await supabase.from('groups').delete().in('id', createdGroupIds)
+          await undo(supabase.from('groups').delete().in('id', createdGroupIds))
         }
         alert('Fout bij jaarovergang — aanmaak ongedaan gemaakt: ' + err.message)
       } catch (cleanupErr: any) {

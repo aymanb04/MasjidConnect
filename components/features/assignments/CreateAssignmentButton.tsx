@@ -33,10 +33,12 @@ export default function CreateAssignmentButton({ onCreated }: { onCreated?: () =
     if (!open || !profile) return
     async function load() {
       if (profile!.role === 'admin') {
-        const { data } = await supabase.from('classes').select('id, name, groups(name)').eq('tenant_id', profile!.tenant_id).eq('is_archived', false)
+        const { data, error } = await supabase.from('classes').select('id, name, groups(name)').eq('tenant_id', profile!.tenant_id).eq('is_archived', false)
+        if (error) { console.error(error); setError('De klassen konden niet geladen worden. Sluit en open dit venster opnieuw.'); return }
         setClasses([...(data ?? [])].sort(byClassLabel))
       } else {
-        const { data } = await supabase.from('class_teachers').select('classes(id, name, groups(name))').eq('teacher_id', profile!.id)
+        const { data, error } = await supabase.from('class_teachers').select('classes(id, name, groups(name))').eq('teacher_id', profile!.id)
+        if (error) { console.error(error); setError('De klassen konden niet geladen worden. Sluit en open dit venster opnieuw.'); return }
         setClasses((data?.map((d: any) => d.classes).filter(Boolean) ?? []).sort(byClassLabel))
       }
     }
@@ -47,10 +49,11 @@ export default function CreateAssignmentButton({ onCreated }: { onCreated?: () =
   useEffect(() => {
     if (!perStudent || !form.class_id) { setStudents([]); return }
     async function loadStudents() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('class_students')
         .select('profiles!class_students_student_id_fkey(id, first_name, last_name)')
         .eq('class_id', form.class_id)
+      if (error) { console.error(error); setError('De leerlingen van deze klas konden niet geladen worden. Kies de klas opnieuw.'); return }
       const list = (data ?? []).map((d: any) => d.profiles).filter(Boolean)
         .sort((a: any, b: any) => a.last_name.localeCompare(b.last_name))
       setStudents(list)
@@ -88,9 +91,17 @@ export default function CreateAssignmentButton({ onCreated }: { onCreated?: () =
           student_id: s.id,
           task_text: picked[s.id]?.task.trim() || null,
         }))
+        // If taking the assignment back out fails, it is LIVE for the whole class:
+        // the teacher must be told that, not "er is niets aangemaakt".
+        const takeBack = async (msg: string) => {
+          const { error: delErr } = await supabase.from('assignments').delete().eq('id', created.id)
+          if (delErr) {
+            console.error(delErr)
+            setError('Opgelet: het huiswerk is aangemaakt voor de HELE klas. Verwijder het in de huiswerklijst en probeer opnieuw.')
+          } else setError(msg)
+        }
         if (rows.length === 0) {
-          setError('Kies minstens één leerling, of zet het huiswerk op "hele klas".')
-          await supabase.from('assignments').delete().eq('id', created.id)
+          await takeBack('Kies minstens één leerling, of zet het huiswerk op "hele klas".')
           return
         }
         const { error: rowErr } = await supabase.from('assignment_students').insert(rows)
@@ -98,8 +109,7 @@ export default function CreateAssignmentButton({ onCreated }: { onCreated?: () =
           console.error(rowErr)
           // Leaving the assignment behind would publish it to the WHOLE class —
           // the opposite of what the teacher asked for. Remove it.
-          await supabase.from('assignments').delete().eq('id', created.id)
-          setError('De opdrachten per leerling konden niet worden opgeslagen. Er is niets aangemaakt.')
+          await takeBack('De opdrachten per leerling konden niet worden opgeslagen. Er is niets aangemaakt.')
           return
         }
       }

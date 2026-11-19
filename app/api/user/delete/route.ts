@@ -24,11 +24,15 @@ export async function DELETE(request: Request) {
         // Read the profile BEFORE anything is destroyed: the erasure needs the
         // tenant (storage path prefix) and the e-mail (pending invitations key
         // on the address, not the user id).
-        const { data: target } = await supabaseAdmin
+        const { data: target, error: targetErr } = await supabaseAdmin
             .from('profiles')
             .select('id, tenant_id, email')
             .eq('id', userId)
-            .single()
+            .maybeSingle()
+        if (targetErr) {
+            console.error('[/api/user/delete] target lookup:', targetErr.message)
+            return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
+        }
         if (!target) return NextResponse.json({ error: 'Gebruiker niet gevonden' }, { status: 404 })
 
         // Close and anonymise FIRST. The auth delete at the end fails for

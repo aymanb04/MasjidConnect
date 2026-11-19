@@ -46,6 +46,9 @@ export default function HuiswerkDetailPage() {
     const isTeacher = ['teacher','admin','super_admin'].includes(profile!.role)
     if (!quiet) setLoading(true)
     setLoadErr(null)
+    // Every read is checked: a failed one used to look like "nothing there" --
+    // a pupil saw their own hand-in as missing, a teacher saw an empty class.
+    const fail = (e: unknown) => { console.error(e); setLoadErr(e); setLoading(false) }
 
     const { data: a, error: aErr } = await supabase.from('assignments').select('*, classes(name, color), profiles!assignments_created_by_fkey(first_name, last_name)').eq('id', id).single()
     if (aErr) { console.error(aErr); setLoadErr(aErr); setLoading(false); return }
@@ -55,35 +58,39 @@ export default function HuiswerkDetailPage() {
     // silently returns nothing here.
     let staffPerRows: any[] = []
     if (profile!.role === 'student') {
-      const { data: mine } = await supabase
+      const { data: mine, error: mineErr } = await supabase
         .from('assignment_students')
         .select('task_text')
         .eq('assignment_id', id)
         .eq('student_id', profile!.id)
         .maybeSingle()
+      if (mineErr) return fail(mineErr)
       setMyTask(mine?.task_text ?? null)
     } else {
-      const { data: rows } = await supabase
+      const { data: rows, error: rowsErr } = await supabase
         .from('assignment_students')
         .select('student_id, task_text')
         .eq('assignment_id', id)
+      if (rowsErr) return fail(rowsErr)
       staffPerRows = rows ?? []
       setPerStudentRows(staffPerRows)
     }
 
     if (profile!.role === 'student') {
-      const { data: sub } = await supabase
+      const { data: sub, error: subErr } = await supabase
         .from('submissions')
         .select('*, submission_files(*)')
         .eq('assignment_id', id)
         .eq('student_id', profile!.id)
         .maybeSingle()
+      if (subErr) return fail(subErr)
       if (sub) {
-        const { data: fb } = await supabase
+        const { data: fb, error: fbErr } = await supabase
           .from('submission_feedback')
           .select('score, comment, teacher_id')
           .eq('submission_id', sub.id)
           .maybeSingle()
+        if (fbErr) return fail(fbErr)
         setMySubmission({ ...sub, submission_feedback: fb ? [fb] : [] })
       } else {
         setMySubmission(null)
@@ -91,16 +98,18 @@ export default function HuiswerkDetailPage() {
     }
 
     if (isTeacher && a) {
-      const { data: subs } = await supabase
+      const { data: subs, error: subsErr } = await supabase
         .from('submissions')
         .select('*, profiles!submissions_student_id_fkey(first_name, last_name), submission_files(*)')
         .eq('assignment_id', id)
+      if (subsErr) return fail(subsErr)
       let withFb: any[] = []
       if (subs?.length) {
-        const { data: feedbacks } = await supabase
+        const { data: feedbacks, error: feedbacksErr } = await supabase
           .from('submission_feedback')
           .select('*')
           .in('submission_id', subs.map((s: any) => s.id))
+        if (feedbacksErr) return fail(feedbacksErr)
         const fbMap: Record<string, any> = {}
         feedbacks?.forEach((f: any) => { fbMap[f.submission_id] = f })
         withFb = subs.map((s: any) => ({ ...s, submission_feedback: fbMap[s.id] ? [fbMap[s.id]] : [] }))
@@ -113,14 +122,16 @@ export default function HuiswerkDetailPage() {
       // upload -- and it is the only place the per-pupil task can be shown next
       // to the pupil it belongs to.
       const assignedIds = staffPerRows.map((r: any) => r.student_id)
-      const { data: cs } = await supabase
+      const { data: cs, error: csErr } = await supabase
         .from('class_students').select('student_id').eq('class_id', a.class_id)
+      if (csErr) return fail(csErr)
       const classIds = (cs ?? []).map((r: any) => r.student_id)
       setClassSize(classIds.length)
       const rosterIds = assignedIds.length ? assignedIds : classIds
-      const { data: profs } = rosterIds.length
+      const { data: profs, error: profsErr } = rosterIds.length
         ? await supabase.from('profiles').select('id, first_name, last_name').in('id', rosterIds)
-        : { data: [] as any[] }
+        : { data: [] as any[], error: null }
+      if (profsErr) return fail(profsErr)
       const taskOf = Object.fromEntries(staffPerRows.map((r: any) => [r.student_id, r.task_text]))
       const subOf  = Object.fromEntries(withFb.map((s: any) => [s.student_id, s]))
       const coll = new Intl.Collator('nl', { sensitivity: 'base' })

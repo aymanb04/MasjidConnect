@@ -55,7 +55,7 @@ export default function BeheerPage() {
     setLoading(true)
     setLoadErr(null)
 
-    const [{ data: u, error: uErr }, { data: c, error: cErr }, { data: inv }] = await Promise.all([
+    const [{ data: u, error: uErr }, { data: c, error: cErr }, { data: inv, error: invErr }] = await Promise.all([
       supabase.from('profiles').select('*').eq('tenant_id', tid).eq('is_active', true).order('last_name'),
       supabase.from('classes')
         .select('*, school_years(name), groups(name, created_at), class_students(id), class_teachers(profiles(first_name, last_name))')
@@ -64,7 +64,8 @@ export default function BeheerPage() {
         .order('created_at', { ascending: false }),
     ])
 
-    if (uErr || cErr) { console.error(uErr || cErr); setLoadErr(uErr || cErr); setLoading(false); return }
+    const firstErr = uErr || cErr || invErr
+    if (firstErr) { console.error(firstErr); setLoadErr(firstErr); setLoading(false); return }
     setUsers(u ?? [])
     setClasses(sortClasses((c ?? []).map((x: any) => ({
       ...x, group_name: x.groups?.name, group_created_at: x.groups?.created_at,
@@ -78,8 +79,9 @@ export default function BeheerPage() {
     setShowArchived(true)
     if (archivedUsers.length) return
     setArchivedLoading(true)
-    const { data } = await supabase.from('profiles').select('*')
+    const { data, error } = await supabase.from('profiles').select('*')
       .eq('tenant_id', profile!.tenant_id).eq('is_active', false).order('last_name')
+    if (error) { console.error(error); alert('Gearchiveerde gebruikers laden mislukt. Probeer het opnieuw.'); setShowArchived(false) }
     setArchivedUsers(data ?? [])
     setArchivedLoading(false)
   }
@@ -89,24 +91,31 @@ export default function BeheerPage() {
     setExpandedClass(classId)
     if (classStudents[classId]) return
     setStudentsLoading(prev => ({ ...prev, [classId]: true }))
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('class_students')
       .select('profiles!class_students_student_id_fkey(id, first_name, last_name)')
       .eq('class_id', classId)
+    if (error) {
+      // Not cached, so opening the class again retries.
+      console.error(error); alert('Leerlingen van deze klas laden mislukt. Probeer het opnieuw.')
+      setExpandedClass(null); setStudentsLoading(prev => ({ ...prev, [classId]: false })); return
+    }
     setClassStudents(prev => ({ ...prev, [classId]: data?.map((d: any) => d.profiles).filter(Boolean) ?? [] }))
     setStudentsLoading(prev => ({ ...prev, [classId]: false }))
   }
 
   async function archiveClass(classId: string, name: string) {
     if (!window.confirm(`'${name}' archiveren? Leerlingen verliezen geen toegang tot ingediend werk.`)) return
-    await supabase.from('classes').update({ is_archived: true }).eq('id', classId)
+    const { error } = await supabase.from('classes').update({ is_archived: true }).eq('id', classId)
+    if (error) { console.error(error); alert('Archiveren mislukt. Probeer het opnieuw.'); return }
     if (expandedClass === classId) setExpandedClass(null)
     setClassStudents(prev => { const n = { ...prev }; delete n[classId]; return n })
     loadData()
   }
 
   async function removeStudentFromClass(classId: string, studentId: string) {
-    await supabase.from('class_students').delete().eq('class_id', classId).eq('student_id', studentId)
+    const { error } = await supabase.from('class_students').delete().eq('class_id', classId).eq('student_id', studentId)
+    if (error) { console.error(error); alert('Uit de klas halen mislukt. Probeer het opnieuw.'); return }
     setClassStudents(prev => ({ ...prev, [classId]: (prev[classId] ?? []).filter((s: any) => s.id !== studentId) }))
     loadData()
   }

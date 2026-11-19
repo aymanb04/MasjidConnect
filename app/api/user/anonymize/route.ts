@@ -23,12 +23,15 @@ export async function POST(request: Request) {
 
         // The e-mail is captured here, before step 2 overwrites it: pending
         // invitations key on the address rather than the user id.
-        const { data: target } = await supabaseAdmin
+        const { data: target, error: targetErr } = await supabaseAdmin
             .from('profiles')
             .select('id, tenant_id, email')
             .eq('id', userId)
-            .single()
-
+            .maybeSingle()
+        if (targetErr) {
+            console.error('[/api/user/anonymize] target lookup:', targetErr.message)
+            return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
+        }
         if (!target) return NextResponse.json({ error: 'Gebruiker niet gevonden' }, { status: 404 })
 
         if (caller.role === 'admin' && target.tenant_id !== caller.tenant_id) {
