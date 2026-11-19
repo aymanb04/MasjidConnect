@@ -237,7 +237,10 @@ export function LandingPage() {
                         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500">
                             <MeemMark className="text-white" size={22} />
                         </span>
-                        <span className="font-semibold text-gray-900">MasjidConnect</span>
+                        {/* Below 360px the wordmark plus both buttons are ~45px too
+                            wide (sideways scroll at 320px). The badge stays as the
+                            brand mark; the name is in the hero and the footer. */}
+                        <span className="font-semibold text-gray-900 [@media(max-width:359px)]:sr-only">MasjidConnect</span>
                     </div>
 
                     <div className="hidden items-center gap-7 text-sm text-gray-600 md:flex">
