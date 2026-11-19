@@ -1,115 +1,114 @@
 # MasjidConnect
 
-School administration platform for mosque weekend schools. Coordinators manage classes and enrolment, teachers set homework, share course material and mark attendance, and students submit work and see their grades. It runs in production at [masjidconnect.be](https://www.masjidconnect.be) and is in daily use by a paying client.
+A school platform for mosque weekend schools: the volunteer-run schools that teach Arabic and Qur'an to children on Saturdays and Sundays. The board manages classes, enrolment, fees and the school year; teachers set homework, keep a gradebook and take attendance; pupils (and the parents looking over their shoulder) see their homework, grades and report cards.
 
-Built and operated solo: product, schema, application code, deployment and support.
+It has been in production at [masjidconnect.be](https://www.masjidconnect.be) ([English page](https://www.masjidconnect.be/en)) since September 2026, used by a paying school with over 100 pupils. I designed, built and run it alone: product, database, application code, deployment, support, and the GDPR paperwork with the school.
 
 ## Screenshots
 
-> Replace these three with real images. Dashboard, attendance marking, class detail. Put the files in `docs/img/`.
+The interface is in Dutch, the language of the schools it serves. Every name shown belongs to a demo school, stored as first name plus initial.
 
-![Dashboard](docs/img/dashboard.png)
-![Attendance](docs/img/attendance.png)
-![Class detail](docs/img/class-detail.png)
+| Gradebook | Report card (Arabic / Dutch) |
+| --- | --- |
+| ![A class gradebook with each pupil's score per assignment and a weighted average](public/screens/puntenlijst.png) | ![A bilingual report card with results and teacher comments](public/screens/rapport.png) |
+| **Attendance** | **Homework** |
+| ![Marking attendance for a class](public/screens/aanwezigheid.png) | ![A teacher's homework overview per class](public/screens/huiswerk.png) |
 
-## Multi tenancy
+<p align="center"><img src="public/screens/mobiel-dashboard.png" width="260" alt="A pupil's home screen on a phone"></p>
 
-Every mosque is a tenant. Tenant isolation is enforced in Postgres through row level security rather than in application code, so a missing filter in a query cannot leak another school's data. Policies live in `supabase/schema.sql`.
+## What it does
 
-Four roles:
+- **Classes and groups.** One group per level, one class per subject. A pupil placed in a group is enrolled in all its subjects.
+- **Homework.** For the whole class or per pupil, handed in as text or files, or done on paper; graded with a score and feedback.
+- **Gradebook.** Homework, paper tests and exams in one grid, with a weighting each class can set. One function (`lib/grading.ts`) computes the average for every screen that shows one.
+- **Attendance.** A class in under a minute, a yearly overview per pupil, and an alert when a pupil misses two lessons in a row.
+- **Report cards.** Generated from the gradebook twice a year, printed with Arabic and Dutch side by side.
+- **Board tools.** Pupil records, membership fees per pupil and per family, teacher payroll, announcements, parent-teacher meeting slots, a school document shelf, and a year-transition wizard.
+
+## Architecture
+
+**Multi-tenancy.** Every school is a tenant. Isolation is enforced in Postgres, not in application code. Every table has row-level security, and on top of the per-role policies each table carries one `RESTRICTIVE` policy, the *tenant wall*, which no permissive policy can widen. A query that forgets to filter by school still cannot return another school's rows. A migration guard refuses to finish if any table lacks its wall.
+
+**Five roles.**
 
 | Role | Scope |
 | --- | --- |
-| `super_admin` | Platform operator. Sees all tenants, creates new ones. |
-| `admin` | Mosque coordinator. Manages classes and users inside one tenant. |
-| `teacher` | Sets homework, shares modules, marks attendance. |
-| `student` | Submits work, reads material, sees grades. |
+| `super_admin` | Platform operator. Creates schools. |
+| `admin` | The school board. Users, classes, fees, the school year. |
+| `teacher` | Their own classes: homework, grades, attendance, report card comments. |
+| `leerlingenbegeleiding` | Pupil counsellor. Reads pupil records and attendance, manages no classes. |
+| `student` | Their own homework, grades and report cards. |
 
-Storage follows the same rule. Submission files, module documents and student reports sit in private buckets behind signed access. Avatars and tenant logos are public.
+**Where privileged code runs.** The dashboard pages talk to Postgres directly through supabase-js, as the signed-in user, so row-level security is the boundary for all normal reads and writes. Operations that need more go through API routes (invites, archiving, erasure, export, deleting homework with its files). Each route verifies the caller's token and role, then uses one shared service-role client (`lib/supabase/admin.ts`), which never leaves the server.
 
-The school year is the other axis. A year transition rolls classes forward, archives the previous year's grades and attendance, and keeps historical records readable without leaving them editable.
+**Storage.** Submitted work, course material, pupil documents, report PDFs and school documents sit in private buckets, readable only through short-lived signed URLs. Only school logos are public.
 
-> Add two or three sentences on how the year transition actually works. It is one of the few operations that touches every table at once and it is worth explaining.
+**The school year.** Classes belong to a school year. The transition wizard creates next year's groups and classes, copies the teacher assignments and moves the selected pupils up, leaving last year's classes, grades and attendance in place as history. If a step fails, it removes what it created.
 
 ## What broke against real data
 
-Most of the interesting work happened after the first school started using it. These are the problems that only appear once there are real rows, real files and real concurrent users.
+Most of the interesting work happened after the first school started using it.
 
-**Row level security cost.** Policies that read correctly turned out to be expensive, because a policy expression is evaluated per row and a subquery inside one runs per row as well.
+**A row-level security policy that never finished planning.** Pupils reported that a PDF "wouldn't open": signing a storage URL took 6 to 30 seconds for a user and 115 ms for the service role. `EXPLAIN` showed 813 ms of *planning* and every subplan "never executed". Each policy's `EXISTS` subquery pulled in other tables' policies, which pulled in more, recursively. The fix was to move those subqueries into `SECURITY DEFINER` functions, which the planner cannot see into. The same pattern later caused statement timeouts when grading. With the same fix applied, grading went from 1.9–6.7 s (plus timeouts) to 87 ms on average.
 
-> Say what you changed. Hoisting the tenant lookup, an index that made the policy sargable, whatever it was, plus a before and after timing if you have one.
+**Policies that were correct but slow.** A full-year attendance read cost an admin about 1.8 s on a benchmark. Rewriting the tenant wall on the two largest tables as a set-based lookup (`session_id IN (SELECT my_tenant_attendance_session_ids())` instead of a per-row check on each record) took it to 14 ms, and made reads 10–100× faster across the benchmark. CI proves that nobody can see anything they could not see before.
 
-**N plus one queries.** Listing a class with its students, assignments and submissions fanned out into one query per child record.
+**Proving the tenant wall in CI.** Per-policy tenant checks kept being the weak spot as tables were added, which is why the wall exists. The CI job `rls-bench` builds the schema in an empty Postgres and seeds two schools. It replaces every policy with `USING (true)` and checks that the wall alone still blocks reads and writes across schools. It also checks that each school sees exactly the same rows of its own with and without the wall, and that every migration's rollback restores the exact previous policies. Its first run found a real bug: a profile update check that would have let a user move themselves to another school.
 
-> Name the pages this hit and how you fixed it, embedded selects, a view, batching.
+**The silent 1000-row cap.** PostgREST returns at most 1000 rows per select and says nothing. A school's exit export came back with exactly 1000 of its 1215 attendance records. Large reads now page with `.range()` on a stable order, and long `.in()` filters are split into chunks of 200 ids, because past roughly 300 ids the URL itself fails.
 
-**Bulk CSV import timeouts.** Importing a full school's student list exceeded the serverless function limit on the first attempt.
+**Errors that looked like empty data.** supabase-js never throws. A call that ignores `error` turns a failed read into an empty list and a failed write into apparent success. Here, a failed read could show a pupil a wrong average, or open an empty form that would overwrite a parent's contact details when saved. All 123 such calls were fixed, and a lint rule now rejects any new one.
 
-> Batch size, chunking, background processing, whichever it was, and what the ceiling is now.
+**An auth deadlock.** Users of the installed app had to log in again every day. Awaiting a database call inside supabase-js's `onAuthStateChange` callback deadlocks on the SDK's own auth lock after a silent token refresh, which froze the app on its loading screen. Callbacks now stay synchronous.
 
-**Connection pooling.** Serverless functions open a connection per invocation, and Postgres runs out long before traffic looks heavy. Routed through Supavisor in transaction mode.
+**Erasure has to reach Storage.** Deleting a user cascades through the tables but leaves the uploaded files in their buckets, and the rows that pointed at them are gone. All erasure goes through `lib/gdpr-erasure.ts`. It deletes the files first, deletes what is wholly about the person, clears free text from rows kept for statistics, and reports a partial erasure as a failure. `lib/personal-data-map.ts` lists, per table, what is deleted, cleared or kept, and the data export reads the same map.
 
-> Add the failure symptom you actually saw, so the reader knows this was a real incident and not a precaution.
+## Tests and CI
 
-**GDPR endpoints.** The platform holds minors' names, attendance and grades, so data subject access and erasure had to be real operations rather than a policy document.
-
-> One or two sentences on what these endpoints do and how erasure interacts with tenant data you are legally required to keep.
+GitHub Actions runs a typecheck, lint (including the unchecked-Supabase-error rule) and the `rls-bench` job described above on every pull request and every push to `master`. `scripts/rls-smoke.ts` signs in as each demo role against a live project and checks the role and school boundaries, including two writes that must be refused. There are no unit tests yet; tests for the grading function come first.
 
 ## Stack
 
-Next.js 14 with the App Router, doing both frontend and API routes. Supabase for Postgres, auth and storage. Tailwind for styling. Hosted on Vercel.
+Next.js 15 (App Router) and React 19, in TypeScript. Supabase for Postgres, auth and storage, hosted in the EU (Ireland). Tailwind CSS. Deployed on Vercel. Resend for e-mail, Upstash Redis for rate limiting the API routes.
 
 ## Project structure
 
 ```
 app/
-  login/                  Login
-  (dashboard)/
-    dashboard/            Role specific home
-    klassen/              Classes, grades, reports
-    huiswerk/             Assignments and submissions
-    lesmodules/           Course modules and documents
-    aanwezigheid/         Attendance
-    rooster/              Weekly schedule
-    agenda/               Calendar
-    beheer/               Admin, user management, year transition
-    superadmin/           Cross tenant overview
-components/
-  layout/                 Sidebar
-  features/               Assignments, modules, admin, announcements, feedback
+  (dashboard)/        The signed-in app: dashboard, klassen, huiswerk, aanwezigheid,
+                      rapporten, dossiers, betalingen, beheer, superadmin, ...
+  api/                Privileged routes: invite, export, user archive/erase, ...
+  afdrukken/          Print layouts (report cards)
+  page.tsx, en/       Public landing pages (Dutch, English)
+components/           UI, grouped by feature
 lib/
-  supabase/               Client helpers
-  hooks/                  useProfile and others
-  types.ts                Shared interfaces
-  utils.ts
+  grading.ts          The only place an average is computed
+  gdpr-erasure.ts     Erasure, including Storage
+  personal-data-map.ts  What happens to each table on erasure and export
+  supabase/           Browser client and the server-only service-role client
 supabase/
-  schema.sql              Schema and RLS policies
+  schema.sql          Base schema snapshot
+  NN_*.sql            Numbered migrations, most with a matching rollback
+scripts/
+  rls-bench/          The tenant-wall test bench run in CI
+  rls-smoke.ts        Role-by-role access checks
 ```
-
-## Roadmap
-
-Schedule export to ICS and Google Calendar, a parent portal linked to a child account, and Quran memorisation tracking.
 
 ## Running locally
 
 ```bash
-git clone <repo>
-cd masjidconnect
 npm install
-cp .env.example .env.local
+cp .env.example .env.local   # fill in a Supabase project's URL and keys
 npm run dev
 ```
 
-Then create a Supabase project, run `supabase/schema.sql` in the SQL editor, and create the storage buckets listed above with the privacy settings shown.
+The database is the base snapshot in `supabase/schema.sql` followed by the numbered migrations from 14 on, in order (the snapshot predates several of them). `scripts/rls-bench/load.sh` builds it exactly that way in an empty Postgres and is the reference. There is no one-command local Supabase setup yet.
 
-Environment variables:
-
-| Variable | Description |
+| Variable | Purpose |
 | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | Project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role key, server only, never sent to the client |
-| `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` in development |
-| `DISCORD_FEEDBACK_WEBHOOK_URL` | Optional, posts in app feedback to Discord |
-
-Operator setup, production DNS and deployment notes are kept out of this repo.
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase project |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server only; used by the API routes |
+| `NEXT_PUBLIC_SITE_URL` | Base URL for links in invitation e-mails |
+| `RESEND_KEY` | Sends the landing page's contact form |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Optional rate limiting |
+| `DISCORD_FEEDBACK_WEBHOOK_URL` | Optional: forwards in-app feedback |
