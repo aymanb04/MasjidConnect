@@ -16,7 +16,7 @@ export const metadata: Metadata = {
         'Alles voor uw weekendschool in één app: klassen, huiswerk, punten, aanwezigheden, ' +
         'tweetalige rapporten, dossiers en lidgeld. Gebouwd voor Arabische en islamitische ' +
         'scholen in België. Gegevens in de EU.',
-    alternates: { canonical: SITE_URL },
+    alternates: { canonical: SITE_URL, languages: { 'nl-BE': SITE_URL, en: `${SITE_URL}/en` } },
     openGraph: {
         type: 'website',
         locale: 'nl_BE',
