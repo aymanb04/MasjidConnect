@@ -79,6 +79,7 @@ export default function AanwezigheidPage() {
 
   useEffect(() => {
     if (profile) loadClasses()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile])
 
   async function loadClasses() {
@@ -238,6 +239,7 @@ function ClassListView({
       .then(({ data }) => {
         setDoneTodayIds(new Set((data ?? []).map((r: any) => r.class_id)))
       })
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [classes])
 
   // With the group in a heading, the school year was the only thing left on
@@ -387,6 +389,7 @@ function MarkAttendanceView({ cls, siblings, profile, onBack }: {
     setLoading(true)
     setPrevDismissed(false)
     loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [date, activeKey])
 
   // Every query here is checked. This loader used to destructure `{ data }` only
@@ -440,7 +443,8 @@ function MarkAttendanceView({ cls, siblings, profile, onBack }: {
     const studs = Object.values(byId).sort((a, b) => a.last_name.localeCompare(b.last_name))
 
     // Who was absent in the most recent session of THIS class before this date?
-    const { data: prevSess } = await supabase
+    // Optional hint banner: on a failed read it is hidden, the register still loads.
+    const { data: prevSess, error: prevSessErr } = await supabase
       .from('attendance_sessions')
       .select('id, session_date')
       .eq('class_id', cls.id)
@@ -448,13 +452,15 @@ function MarkAttendanceView({ cls, siblings, profile, onBack }: {
       .order('session_date', { ascending: false })
       .limit(1)
       .maybeSingle()
+    if (prevSessErr) console.error(prevSessErr)
 
     if (prevSess) {
-      const { data: prevRecs } = await supabase
+      const { data: prevRecs, error: prevRecsErr } = await supabase
         .from('attendance_records')
         .select('status, profiles!attendance_records_student_id_fkey(first_name, last_name)')
         .eq('session_id', prevSess.id)
         .eq('status', 'absent')
+      if (prevRecsErr) console.error(prevRecsErr)
       const names = (prevRecs ?? [])
         .map((r: any) => r.profiles ? `${r.profiles.first_name} ${r.profiles.last_name}` : null)
         .filter(Boolean) as string[]
@@ -767,6 +773,7 @@ function HistoryView({
   const [loadErr,  setLoadErr]  = useState<unknown>(null)
   const [tab,      setTab]      = useState<'sessions' | 'students'>('sessions')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   useEffect(() => { loadSessions() }, [])
 
   async function loadSessions() {
@@ -913,25 +920,33 @@ function StudentStatsView({ cls }: { cls: ClassItem }) {
   const [rows,         setRows]         = useState<StudentStat[]>([])
   const [sessionCount, setSessionCount] = useState(0)
   const [loading,      setLoading]      = useState(true)
+  const [loadErr,      setLoadErr]      = useState<unknown>(null)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   useEffect(() => { load() }, [])
 
+  // A failed read used to count as "no records": every pupil 0 absences.
   async function load() {
+    setLoading(true)
+    setLoadErr(null)
+    const fail = (e: unknown) => { console.error(e); setLoadErr(e); setLoading(false) }
     // All sessions of this class (the class itself is bound to one school year)
-    const { data: sessions } = await supabase
+    const { data: sessions, error: sessErr } = await supabase
       .from('attendance_sessions')
       .select('id, session_date')
       .eq('class_id', cls.id)
       .order('session_date', { ascending: false })
+    if (sessErr) return fail(sessErr)
 
     const sessionIds = (sessions ?? []).map((s: any) => s.id)
     setSessionCount(sessionIds.length)
 
     // Roster
-    const { data: links } = await supabase
+    const { data: links, error: linksErr } = await supabase
       .from('class_students')
       .select('profiles(id, first_name, last_name)')
       .eq('class_id', cls.id)
+    if (linksErr) return fail(linksErr)
     const students = (links ?? [])
       .map((l: any) => l.profiles)
       .filter(Boolean)
@@ -940,10 +955,11 @@ function StudentStatsView({ cls }: { cls: ClassItem }) {
     // Records — chunked so a full year × full class stays under PostgREST's row cap
     const records: { session_id: string; student_id: string; status: AttendanceStatus }[] = []
     for (let i = 0; i < sessionIds.length; i += 20) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('attendance_records')
         .select('session_id, student_id, status')
         .in('session_id', sessionIds.slice(i, i + 20))
+      if (error) return fail(error)
       records.push(...((data ?? []) as any))
     }
 
@@ -971,6 +987,8 @@ function StudentStatsView({ cls }: { cls: ClassItem }) {
       </div>
     )
   }
+
+  if (loadErr) return <LoadError error={loadErr} onRetry={load} retrying={loading} />
 
   if (sessionCount === 0 || rows.length === 0) {
     return (
@@ -1034,15 +1052,20 @@ function SessionDetailView({
 }) {
   const [records, setRecords] = useState<RecordItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<unknown>(null)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   useEffect(() => { loadRecords() }, [])
 
   async function loadRecords() {
-    const { data } = await supabase
+    setLoading(true)
+    setLoadErr(null)
+    const { data, error } = await supabase
       .from('attendance_records')
       .select('student_id, status, profiles!attendance_records_student_id_fkey(first_name, last_name)')
       .eq('session_id', session.id)
       .order('status')
+    if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
 
     setRecords(
       (data ?? []).map((r: any) => ({
@@ -1090,7 +1113,9 @@ function SessionDetailView({
         ))}
       </div>
 
-      {loading ? (
+      {loadErr ? (
+        <LoadError error={loadErr} onRetry={loadRecords} retrying={loading} />
+      ) : loading ? (
         <div className="flex items-center justify-center gap-2 py-8 text-gray-400">
           <Loader2 size={16} className="animate-spin" /> Laden…
         </div>
@@ -1130,6 +1155,7 @@ function MyRecordsView({
   const [loadErr,  setLoadErr]  = useState<unknown>(null)
   const [classFilter, setClassFilter] = useState<string>('all')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   useEffect(() => { loadMyRecords() }, [])
 
   async function loadMyRecords() {

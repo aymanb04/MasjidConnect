@@ -82,15 +82,6 @@ export function getFileIcon(fileType: string | undefined): string {
   return '📄'
 }
 
-export function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^\w-]/g, '')
-    .replace(/-+/g, '-')
-    .trim()
-}
-
 /**
  * How to name a class in a list: "Koran — Groep 2 — 9 tot 11 jaar". A class is
  * one subject for one group, so the subject alone is ambiguous: a teacher of

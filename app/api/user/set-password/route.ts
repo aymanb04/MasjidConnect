@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/api-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
@@ -14,11 +14,6 @@ import { checkRateLimit } from '@/lib/rate-limit'
 //
 // The password is generated here rather than chosen by the admin: a room full
 // of pupils otherwise ends up sharing one password an admin liked typing.
-
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 // No 0/O, 1/l/I: these are read off paper by children and copied by hand.
 const LOWER  = 'abcdefghijkmnopqrstuvwxyz'
@@ -76,12 +71,15 @@ export async function POST(request: Request) {
         const { userId } = await request.json()
         if (!userId) return NextResponse.json({ error: 'userId verplicht' }, { status: 400 })
 
-        const { data: target } = await supabaseAdmin
+        const { data: target, error: targetErr } = await supabaseAdmin
             .from('profiles')
             .select('id, role, tenant_id, is_active, is_anonymized')
             .eq('id', userId)
-            .single()
-
+            .maybeSingle()
+        if (targetErr) {
+            console.error('[/api/user/set-password] target lookup:', targetErr.message)
+            return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
+        }
         if (!target) return NextResponse.json({ error: 'Gebruiker niet gevonden' }, { status: 404 })
 
         // Own tenant only.

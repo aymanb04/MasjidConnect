@@ -43,6 +43,7 @@ export default function RapportCardPage() {
   useEffect(() => {
     if (!profile || !cardId) return
     loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile, cardId])
 
   async function loadData() {
@@ -57,13 +58,16 @@ export default function RapportCardPage() {
     if (!c) { setNotFound(true); setLoading(false); return }
     setCard(c as Card)
 
-    const [{ data: ln }, { data: st }, { data: tn }, { data: yr }] = await Promise.all([
+    const [{ data: ln, error: lnErr }, { data: st, error: stErr }, { data: tn, error: tnErr }, { data: yr, error: yrErr }] = await Promise.all([
       supabase.from('rapport_lines').select('id, class_id, subject_snapshot, result, comment')
         .eq('rapport_card_id', c.id).order('subject_snapshot'),
       supabase.from('profiles').select('first_name, last_name').eq('id', c.student_id).maybeSingle(),
       supabase.from('tenants').select('name, address, city, email, logo_url').eq('id', c.tenant_id).maybeSingle(),
       supabase.from('school_years').select('name').eq('id', c.school_year_id).maybeSingle(),
     ])
+    // A failed lines read showed (and printed) a report card with no subjects.
+    const firstErr = lnErr || stErr || tnErr || yrErr
+    if (firstErr) { console.error(firstErr); setLoadErr(firstErr); setLoading(false); return }
     setLines((ln ?? []) as Line[])
     setStudent(st ?? null)
     setTenant(tn ?? null)
@@ -74,9 +78,10 @@ export default function RapportCardPage() {
       setEditable(new Set((ln ?? []).map((l: any) => l.class_id)))
     } else if (profile!.role === 'teacher') {
       const classIds = (ln ?? []).map((l: any) => l.class_id)
-      const { data: ct } = classIds.length
+      const { data: ct, error: ctErr } = classIds.length
         ? await supabase.from('class_teachers').select('class_id').eq('teacher_id', profile!.id).in('class_id', classIds)
-        : { data: [] as any[] }
+        : { data: [] as any[], error: null }
+      if (ctErr) { console.error(ctErr); setLoadErr(ctErr); setLoading(false); return }
       setEditable(new Set((ct ?? []).map((r: any) => r.class_id)))
     } else {
       setEditable(new Set())

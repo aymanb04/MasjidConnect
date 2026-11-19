@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/api-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
@@ -28,11 +28,6 @@ import {
 // sense. The manifest is the machine-readable part; the URLs are how you fetch
 // the bytes.
 
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
 const SIGNED_URL_TTL = 60 * 60   // one hour
 
 // A tenant export is ~60 sequential reads. De Kroon took 3-11 s in October 2026
@@ -43,7 +38,8 @@ type FileEntry = { bucket: string; path: string; name: string; url: string | nul
 
 async function signAll(bucket: string, paths: string[]): Promise<FileEntry[]> {
     if (!paths.length) return []
-    const { data } = await supabaseAdmin.storage.from(bucket).createSignedUrls(paths, SIGNED_URL_TTL)
+    const { data, error } = await supabaseAdmin.storage.from(bucket).createSignedUrls(paths, SIGNED_URL_TTL)
+    if (error) throw error   // same rule as fetchAll: an incomplete export must not look whole
     return (data ?? []).map(d => ({
         bucket,
         path: d.path ?? '',
@@ -54,11 +50,12 @@ async function signAll(bucket: string, paths: string[]): Promise<FileEntry[]> {
 
 /** Everything held about one person. */
 async function exportUser(userId: string) {
-    const { data: profile } = await supabaseAdmin
+    const { data: profile, error: profileErr } = await supabaseAdmin
         .from('profiles')
         .select('id, tenant_id, role, first_name, last_name, email, phone, is_active, archived_at, terms_accepted_at, terms_version, created_at')
         .eq('id', userId)
-        .single()
+        .maybeSingle()
+    if (profileErr) throw profileErr
     if (!profile) return null
 
     const data: Record<string, unknown> = { profiel: profile }
@@ -207,8 +204,9 @@ export async function POST(request: Request) {
         if (scope === 'user') {
             if (!userId) return NextResponse.json({ error: 'userId verplicht' }, { status: 400 })
 
-            const { data: target } = await supabaseAdmin
-                .from('profiles').select('id, tenant_id').eq('id', userId).single()
+            const { data: target, error: targetErr } = await supabaseAdmin
+                .from('profiles').select('id, tenant_id').eq('id', userId).maybeSingle()
+            if (targetErr) throw targetErr
             if (!target) return NextResponse.json({ error: 'Gebruiker niet gevonden' }, { status: 404 })
             // Own tenant only — an export is a complete dossier, so the tenant
             // check matters at least as much here as on a write route.
@@ -238,8 +236,9 @@ export async function POST(request: Request) {
                 if (typeof body.tenantId !== 'string' || !body.tenantId) {
                     return NextResponse.json({ error: 'tenantId verplicht' }, { status: 400 })
                 }
-                const { data: t } = await supabaseAdmin
+                const { data: t, error: tErr } = await supabaseAdmin
                     .from('tenants').select('id').eq('id', body.tenantId).maybeSingle()
+                if (tErr) throw tErr
                 if (!t) return NextResponse.json({ error: 'School niet gevonden' }, { status: 404 })
                 tenantId = body.tenantId
             }

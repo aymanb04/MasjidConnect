@@ -161,17 +161,20 @@ export async function eraseUserData(
   }
 
   // ── Submissions: files, text, and the teacher's feedback on them ───────────
-  const { data: submissions } = await admin
+  const { data: submissions, error: subsErr } = await admin
     .from('submissions')
     .select('id')
     .eq('student_id', userId)
+  // A failed read must not look like "no submissions": the files would stay.
+  if (subsErr) report.errors.push(`submissions read: ${subsErr.message}`)
   const submissionIds = submissions?.map(s => s.id) ?? []
 
   if (submissionIds.length) {
-    const { data: files } = await admin
+    const { data: files, error: filesErr } = await admin
       .from('submission_files')
       .select('id, file_url')
       .in('submission_id', submissionIds)
+    if (filesErr) report.errors.push(`submission_files read: ${filesErr.message}`)
 
     if (files?.length) {
       await removeObjects(admin, 'submission-files',

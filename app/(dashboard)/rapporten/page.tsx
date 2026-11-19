@@ -39,6 +39,7 @@ export default function RapportenPage() {
   useEffect(() => {
     if (!profile) return
     loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile, semester])
 
   async function loadData() {
@@ -73,19 +74,23 @@ export default function RapportenPage() {
       studentList = data ?? []
     } else {
       // teacher: students in classes they teach (active year)
-      const { data: ct } = await supabase.from('class_teachers').select('class_id').eq('teacher_id', profile!.id)
+      const { data: ct, error: ctErr } = await supabase.from('class_teachers').select('class_id').eq('teacher_id', profile!.id)
+      if (ctErr) { console.error(ctErr); setLoadErr(ctErr); setLoading(false); return }
       const classIds = ct?.map(r => r.class_id) ?? []
-      const { data: cls } = classIds.length
+      const { data: cls, error: clsErr } = classIds.length
         ? await supabase.from('classes').select('id').in('id', classIds).eq('school_year_id', yr.id).eq('is_archived', false)
-        : { data: [] as any[] }
+        : { data: [] as any[], error: null }
+      if (clsErr) { console.error(clsErr); setLoadErr(clsErr); setLoading(false); return }
       const yearClassIds = cls?.map((c: any) => c.id) ?? []
-      const { data: cs } = yearClassIds.length
+      const { data: cs, error: csErr } = yearClassIds.length
         ? await supabase.from('class_students').select('student_id').in('class_id', yearClassIds)
-        : { data: [] as any[] }
+        : { data: [] as any[], error: null }
+      if (csErr) { console.error(csErr); setLoadErr(csErr); setLoading(false); return }
       const studentIds = Array.from(new Set((cs ?? []).map((r: any) => r.student_id)))
-      const { data: profs } = studentIds.length
+      const { data: profs, error: profsErr } = studentIds.length
         ? await supabase.from('profiles').select('id, first_name, last_name').in('id', studentIds).eq('is_active', true).order('last_name')
-        : { data: [] as any[] }
+        : { data: [] as any[], error: null }
+      if (profsErr) { console.error(profsErr); setLoadErr(profsErr); setLoading(false); return }
       studentList = profs ?? []
     }
     setStudents(studentList)
@@ -121,8 +126,8 @@ export default function RapportenPage() {
     if (lerr) {
       // The card and its lines are two inserts. An empty card would block a
       // retry (one card per pupil per semester), so take it back out.
-      const { data: gone } = await supabase.from('rapport_cards').delete().eq('id', card.id).select('id')
-      if (!gone?.length) {
+      const { data: gone, error: goneErr } = await supabase.from('rapport_cards').delete().eq('id', card.id).select('id')
+      if (goneErr || !gone?.length) {
         throw new Error(`vakken opslaan mislukt (${lerr.message}); er staat nu een leeg rapport, verwijder het en probeer opnieuw`)
       }
       throw new Error(`vakken opslaan mislukt: ${lerr.message}`)
@@ -170,11 +175,14 @@ export default function RapportenPage() {
 
   async function handlePublishAll() {
     // Say how many still have an empty score: publishing is when families see it.
-    const { data: empty } = await getSupabase().from('rapport_lines')
+    const { data: empty, error: emptyErr } = await getSupabase().from('rapport_lines')
       .select('rapport_card_id').in('rapport_card_id', drafts.map(s => cards[s.id].id)).is('result', null)
+    if (emptyErr) console.error(emptyErr)
     const emptyCards = new Set((empty ?? []).map((r: any) => r.rapport_card_id)).size
     if (!confirm(
       `${drafts.length} ${drafts.length === 1 ? 'rapport' : 'rapporten'} publiceren? Leerlingen en ouders zien ze dan meteen.` +
+      // Without this the warning below silently vanished on a failed check.
+      (emptyErr ? `\n\nLet op: kon niet controleren of er vakken zonder score zijn.` : '') +
       (emptyCards ? `
 
 Let op: ${emptyCards} ${emptyCards === 1 ? 'rapport heeft' : 'rapporten hebben'} nog een vak zonder score.` : '')

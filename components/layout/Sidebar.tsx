@@ -61,6 +61,7 @@ export default function Sidebar({ profile, tenant, onClose }: Props) {
             {/* Prefer the square icon in this small slot; fall back to containing
                 the full (often wide) logo, then the glyph. object-contain so a
                 wide logo fits whole instead of being cropped. */}
+            {/* eslint-disable @next/next/no-img-element -- tenant logos live on arbitrary hosts; next/image would need every host whitelisted */}
             {tenant?.logo_icon_url ? (
               <img src={tenant.logo_icon_url} alt="" className="w-full h-full object-contain p-0.5" />
             ) : tenant?.logo_url ? (
@@ -68,6 +69,7 @@ export default function Sidebar({ profile, tenant, onClose }: Props) {
             ) : (
               <MeemMark className="text-white" />
             )}
+            {/* eslint-enable @next/next/no-img-element */}
           </div>
           <div className="min-w-0 flex-1">
             <div className="font-semibold text-gray-900 text-sm leading-tight truncate">

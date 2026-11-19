@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 
 // Clear the caller's own must_change_password flag (migration 37).
@@ -10,11 +10,6 @@ import { NextResponse } from 'next/server'
 // It only ever touches the CALLER's own row. The user id comes from verifying
 // the bearer token with Supabase, never from the request body, so this cannot be
 // pointed at somebody else's profile.
-
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 export async function POST(req: Request) {
     const auth = req.headers.get('authorization') ?? ''

@@ -46,10 +46,12 @@ export default function BetalingenPage() {
     if (!profile) return
     if (!['admin', 'super_admin'].includes(profile.role)) { router.replace('/dashboard'); return }
     load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile])
 
   useEffect(() => {
     if (profile && isAdmin && year) loadPayroll()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [month, year])
 
   async function load() {
@@ -64,7 +66,7 @@ export default function BetalingenPage() {
     if (!yr) { setLoading(false); return }
     setYear(yr)
 
-    const [{ data: cfg }, { data: studs, error: studsErr }, { data: fams }, { data: details }, { data: pays, error: paysErr }, { data: staff }, { data: staffRates }] =
+    const [{ data: cfg, error: cfgErr }, { data: studs, error: studsErr }, { data: fams, error: famsErr }, { data: details, error: detailsErr }, { data: pays, error: paysErr }, { data: staff, error: staffErr }, { data: staffRates, error: ratesErr }] =
       await Promise.all([
         supabase.from('fee_config').select('*').eq('school_year_id', yr.id).eq('tenant_id', tid).maybeSingle(),
         supabase.from('profiles').select('id, first_name, last_name').eq('tenant_id', tid).eq('role', 'student').eq('is_active', true).order('last_name'),
@@ -75,7 +77,10 @@ export default function BetalingenPage() {
         supabase.from('staff_pay').select('staff_id, hourly_rate').eq('tenant_id', tid),
       ])
 
-    if (studsErr || paysErr) { console.error(studsErr || paysErr); setLoadErr(studsErr || paysErr); setLoading(false); return }
+    // All of them: a failed fee_config read showed empty amounts, and saving that
+    // form then overwrote the real ones with 0.
+    const firstErr = cfgErr || studsErr || famsErr || detailsErr || paysErr || staffErr || ratesErr
+    if (firstErr) { console.error(firstErr); setLoadErr(firstErr); setLoading(false); return }
     setConfig(cfg)
     setConfigForm({
       membership_amount: cfg?.membership_amount?.toString() ?? '',
@@ -98,9 +103,10 @@ export default function BetalingenPage() {
   }
 
   async function loadPayroll() {
-    const { data } = await supabase
+    const { data, error: payrollErr } = await supabase
       .from('payroll_entries').select('*')
       .eq('tenant_id', profile!.tenant_id).eq('period_month', month)
+    if (payrollErr) { console.error(payrollErr); setError('Loongegevens laden mislukt. Kies de maand opnieuw.'); return }
     setPayroll(data ?? [])
     setHours(Object.fromEntries((data ?? []).map((e: any) => [e.staff_id, e.hours.toString()])))
   }
@@ -118,9 +124,10 @@ export default function BetalingenPage() {
     }, { onConflict: 'tenant_id,school_year_id' })
     if (err) setError('Instellingen opslaan mislukt.')
     else {
-      const { data: cfg } = await supabase.from('fee_config').select('*')
+      const { data: cfg, error: cfgErr } = await supabase.from('fee_config').select('*')
         .eq('school_year_id', year.id).eq('tenant_id', profile!.tenant_id).maybeSingle()
-      setConfig(cfg)
+      if (cfgErr) console.error(cfgErr)   // saved; only the refresh failed
+      else setConfig(cfg)
     }
     setSavingConfig(false)
   }
@@ -146,9 +153,11 @@ export default function BetalingenPage() {
         paid_at: format(new Date(), 'yyyy-MM-dd'),
       })
       if (err) { console.error(err); setError('Betaling registreren mislukt.'); return }
-      const { data: pays } = await supabase.from('fee_payments').select('*')
+      const { data: pays, error: paysErr } = await supabase.from('fee_payments').select('*')
         .eq('school_year_id', year.id).eq('tenant_id', profile!.tenant_id)
-      setPayments(pays ?? [])
+      // Recorded; only the refresh failed. Never replace the list with [].
+      if (paysErr) { console.error(paysErr); setError('Betaling geregistreerd, maar de lijst kon niet vernieuwd worden. Herlaad de pagina.') }
+      else setPayments(pays ?? [])
     } finally { setPayingId(null) }
   }
 

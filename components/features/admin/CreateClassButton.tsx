@@ -35,11 +35,18 @@ export function CreateClassButton({ tenantId, onCreated }: Props) {
       .eq('tenant_id', tenantId)
       .eq('is_active', true)
       .order('start_date', { ascending: false })
-      .then(async ({ data }) => {
+      .then(async ({ data, error: yearsErr }) => {
+        // A failed read is not "no active year": that would create a second one.
+        if (yearsErr) {
+          console.error(yearsErr)
+          setError('Schooljaren laden mislukt. Sluit dit venster en probeer opnieuw.')
+          setLoadingYears(false)
+          return
+        }
         let years = data ?? []
         if (!years.length) {
           const year = new Date().getFullYear()
-          const { data: newYear } = await supabase
+          const { data: newYear, error: newYearErr } = await supabase
             .from('school_years')
             .insert({
               tenant_id: tenantId,
@@ -50,6 +57,7 @@ export function CreateClassButton({ tenantId, onCreated }: Props) {
             })
             .select()
             .single()
+          if (newYearErr) { console.error(newYearErr); setError('Er is geen actief schooljaar en het aanmaken ervan is mislukt.') }
           if (newYear) years = [newYear]
         }
         setSchoolYears(years)

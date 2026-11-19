@@ -26,10 +26,12 @@ export default function CreateModuleButton({ onCreated }: { onCreated?: () => vo
     if (!open || !profile) return
     async function load() {
       if (profile!.role === 'admin') {
-        const { data } = await supabase.from('classes').select('id, name, groups(name)').eq('tenant_id', profile!.tenant_id).eq('is_archived', false)
+        const { data, error } = await supabase.from('classes').select('id, name, groups(name)').eq('tenant_id', profile!.tenant_id).eq('is_archived', false)
+        if (error) { console.error(error); setError('De klassen konden niet geladen worden. Sluit en open dit venster opnieuw.'); return }
         setClasses([...(data ?? [])].sort(byClassLabel))
       } else {
-        const { data } = await supabase.from('class_teachers').select('classes(id, name, groups(name))').eq('teacher_id', profile!.id)
+        const { data, error } = await supabase.from('class_teachers').select('classes(id, name, groups(name))').eq('teacher_id', profile!.id)
+        if (error) { console.error(error); setError('De klassen konden niet geladen worden. Sluit en open dit venster opnieuw.'); return }
         setClasses((data?.map((d: any) => d.classes).filter(Boolean) ?? []).sort(byClassLabel))
       }
     }

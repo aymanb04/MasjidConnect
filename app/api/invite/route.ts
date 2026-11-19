@@ -1,12 +1,7 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/api-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
-
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 const VALID_ROLES = ['student', 'teacher', 'admin', 'leerlingenbegeleiding']
 const EMAIL_RE   = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -60,15 +55,17 @@ export async function POST(request: Request) {
         // RLS), so verify they belong to the target tenant — otherwise an admin
         // could enroll users into another mosque's classes.
         if (group_id) {
-            const { data: group } = await supabaseAdmin
-                .from('groups').select('tenant_id').eq('id', group_id).single()
+            const { data: group, error: groupErr } = await supabaseAdmin
+                .from('groups').select('tenant_id').eq('id', group_id).maybeSingle()
+            if (groupErr) throw groupErr
             if (!group || group.tenant_id !== tenant_id) {
                 return NextResponse.json({ error: 'Geen toegang tot deze groep' }, { status: 403 })
             }
         }
         if (class_id) {
-            const { data: klas } = await supabaseAdmin
-                .from('classes').select('tenant_id').eq('id', class_id).single()
+            const { data: klas, error: klasErr } = await supabaseAdmin
+                .from('classes').select('tenant_id').eq('id', class_id).maybeSingle()
+            if (klasErr) throw klasErr
             if (!klas || klas.tenant_id !== tenant_id) {
                 return NextResponse.json({ error: 'Geen toegang tot deze klas' }, { status: 403 })
             }
@@ -103,11 +100,22 @@ export async function POST(request: Request) {
             )
         }
 
-        await supabaseAdmin.from('invitations').insert({
+        // From here on the account EXISTS, so a failure below must not turn into
+        // an error response: the admin would retry and hit "heeft al een account".
+        // Each failed step is logged and named in a `warning` the form shows.
+        const failed: string[] = []
+        const note = (step: string, err: { message: string } | null) => {
+            if (!err) return
+            console.error(`[/api/invite] ${step}:`, err.message)
+            failed.push(step)
+        }
+
+        const { error: invErr } = await supabaseAdmin.from('invitations').insert({
             tenant_id, email, role,
             class_id: class_id || null,
             invited_by,
         })
+        note('invitations insert', invErr)   // audit trail only; the user is not affected
 
         if (data.user) {
             // Enrollment writes use upsert with ignoreDuplicates so concurrent CSV
@@ -117,54 +125,62 @@ export async function POST(request: Request) {
 
             // Student: enroll in every class that belongs to the selected group
             if (group_id && role === 'student') {
-                const { data: groupClasses } = await supabaseAdmin
+                const { data: groupClasses, error: gcErr } = await supabaseAdmin
                     .from('classes')
                     .select('id')
                     .eq('group_id', group_id)
                     .eq('is_archived', false)
+                note('klassen van de groep lezen', gcErr)
 
                 if (groupClasses?.length) {
-                    await supabaseAdmin.from('class_students').upsert(
+                    note('inschrijven in klas', (await supabaseAdmin.from('class_students').upsert(
                         groupClasses.map(c => ({ class_id: c.id, student_id: data.user!.id })),
                         { onConflict: 'class_id,student_id', ignoreDuplicates: true }
-                    )
+                    )).error)
                 }
             }
 
             // Teacher: assign to all classes in a group
             if (group_id && role === 'teacher') {
-                const { data: groupClasses } = await supabaseAdmin
+                const { data: groupClasses, error: gcErr } = await supabaseAdmin
                     .from('classes')
                     .select('id')
                     .eq('group_id', group_id)
                     .eq('is_archived', false)
+                note('klassen van de groep lezen', gcErr)
 
                 if (groupClasses?.length) {
-                    await supabaseAdmin.from('class_teachers').upsert(
+                    note('inschrijven in klas', (await supabaseAdmin.from('class_teachers').upsert(
                         groupClasses.map(c => ({ class_id: c.id, teacher_id: data.user!.id })),
                         { onConflict: 'class_id,teacher_id', ignoreDuplicates: true }
-                    )
+                    )).error)
                 }
             }
 
             // Teacher: assign to a specific class (no group selected)
             if (class_id && !group_id && class_role === 'teacher') {
-                await supabaseAdmin.from('class_teachers').upsert(
+                note('inschrijven in klas', (await supabaseAdmin.from('class_teachers').upsert(
                     { class_id, teacher_id: data.user.id },
                     { onConflict: 'class_id,teacher_id', ignoreDuplicates: true }
-                )
+                )).error)
             }
 
             // Fallback: student assigned to a single class (no group)
             if (class_id && !group_id && class_role === 'student') {
-                await supabaseAdmin.from('class_students').upsert(
+                note('inschrijven in klas', (await supabaseAdmin.from('class_students').upsert(
                     { class_id, student_id: data.user.id },
                     { onConflict: 'class_id,student_id', ignoreDuplicates: true }
-                )
+                )).error)
             }
         }
 
-        return NextResponse.json({ success: true, user: data.user })
+        return NextResponse.json({
+            success: true,
+            user: data.user,
+            ...(failed.some(f => f !== 'invitations insert') && {
+                warning: 'Het account is aangemaakt, maar het inschrijven in de klas(sen) is mislukt. Voeg de klassen toe via Beheer → het potloodje bij deze persoon.',
+            }),
+        })
     } catch (e: any) {
         console.error('[/api/invite]', e.message)
         return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })

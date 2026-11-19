@@ -59,6 +59,7 @@ export default function PuntenverdelingPage() {
 
   const canEdit = ['admin', 'super_admin', 'teacher'].includes(profile?.role ?? '')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   useEffect(() => { if (!profileLoading && profile) load() }, [profileLoading, profile, klasId])
 
   async function load() {
@@ -91,11 +92,12 @@ export default function PuntenverdelingPage() {
     // Other classes in the same school year, to copy this split to. A school
     // grades Qur'an the same way in every group; retyping it seven times is how
     // mistakes get in.
-    const { data: sib } = await supabase
+    const { data: sib, error: sibErr } = await supabase
       .from('classes').select('id, name, groups(name)')
       .eq('tenant_id', (k as any).tenant_id)
       .eq('school_year_id', (k as any).school_year_id)
       .eq('is_archived', false).neq('id', klasId)
+    if (sibErr) console.error(sibErr)   // only the "copy to other classes" list
     setSiblings(sib ?? [])
     setLoading(false)
   }
@@ -145,8 +147,9 @@ export default function PuntenverdelingPage() {
 
   async function clearAll() {
     if (!confirm('Puntenverdeling verwijderen? Deze klas gebruikt dan weer het gewone gemiddelde over huiswerk en toetsen.')) return
-    setSaving(true)
-    await supabase.from('grade_categories').delete().eq('class_id', klasId)
+    setSaving(true); setErr(null)
+    const { error } = await supabase.from('grade_categories').delete().eq('class_id', klasId)
+    if (error) { setErr('Verwijderen mislukt: ' + error.message); setSaving(false); return }
     setRows([]); setSaving(false); setSaved(false)
   }
 

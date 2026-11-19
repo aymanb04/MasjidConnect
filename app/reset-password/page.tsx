@@ -92,10 +92,13 @@ export default function ResetPasswordPage() {
         // Mark invitation as accepted
         const { data: { user: currentUser } } = await supabase.auth.getUser()
         if (currentUser?.email) {
-          await supabase.from('invitations')
+          // Bookkeeping only (Beheer's "openstaande uitnodigingen"); the
+          // password is already set, so a failure must not block the user.
+          const { error: invErr } = await supabase.from('invitations')
             .update({ accepted_at: new Date().toISOString() })
             .eq('email', currentUser.email)
             .is('accepted_at', null)
+          if (invErr) console.error('[reset-password] marking invitation accepted:', invErr.message)
         }
 
         setDone(true)

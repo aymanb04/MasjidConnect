@@ -50,6 +50,7 @@ export default function StudentScores() {
   useEffect(() => {
     if (!profile || !klasId) return
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the pupil or class changes
   }, [profile, klasId])
 
   async function load() {
@@ -71,15 +72,17 @@ export default function StudentScores() {
 
     let hwItems: Item[] = []
     if (assignments?.length) {
-      const { data: subs } = await supabase
+      const { data: subs, error: subsErr } = await supabase
         .from('submissions').select('id, assignment_id, status')
         .eq('student_id', sid).in('assignment_id', assignments.map((a: any) => a.id))
+      if (subsErr) { console.error(subsErr); setLoadErr(subsErr); setLoading(false); return }
       const subByAssign: Record<string, any> = {}
       ;(subs ?? []).forEach((s: any) => { subByAssign[s.assignment_id] = s })
       const subIds = (subs ?? []).map((s: any) => s.id)
-      const { data: fbs } = subIds.length
+      const { data: fbs, error: fbsErr } = subIds.length
         ? await supabase.from('submission_feedback').select('submission_id, score').in('submission_id', subIds)
-        : { data: [] as any[] }
+        : { data: [] as any[], error: null }
+      if (fbsErr) { console.error(fbsErr); setLoadErr(fbsErr); setLoading(false); return }
       const scoreBySub: Record<string, number | null> = {}
       ;(fbs ?? []).forEach((f: any) => { scoreBySub[f.submission_id] = f.score ?? null })
       hwItems = assignments.map((a: any) => {
@@ -93,14 +96,16 @@ export default function StudentScores() {
     }
 
     // Manual tests → my test_scores
-    const { data: tests } = await supabase
+    const { data: tests, error: testsErr } = await supabase
       .from('class_tests').select('id, title, max_score, test_date')
       .eq('class_id', klasId).order('test_date', { ascending: true })
+    if (testsErr) { console.error(testsErr); setLoadErr(testsErr); setLoading(false); return }
     let testItems: Item[] = []
     if (tests?.length) {
-      const { data: ts } = await supabase
+      const { data: ts, error: tsErr } = await supabase
         .from('test_scores').select('test_id, score')
         .eq('student_id', sid).in('test_id', tests.map((t: any) => t.id))
+      if (tsErr) { console.error(tsErr); setLoadErr(tsErr); setLoading(false); return }
       const byTest: Record<string, number> = Object.fromEntries((ts ?? []).map((r: any) => [r.test_id, Number(r.score)]))
       testItems = tests.map((t: any) => ({
         key: 't' + t.id, title: t.title, max: Number(t.max_score),
@@ -112,31 +117,35 @@ export default function StudentScores() {
     const all = [...hwItems, ...testItems]
     setItems(all)
 
-    const { data: ex } = await supabase.from('exam_scores').select('*')
+    const { data: ex, error: exErr } = await supabase.from('exam_scores').select('*')
       .eq('class_id', klasId).eq('student_id', sid)
+    if (exErr) { console.error(exErr); setLoadErr(exErr); setLoading(false); return }
     setExams(ex ?? [])
 
     // Mijn doel voor dit vak (migratie 38). RLS geeft alleen het eigen doel terug.
-    const { data: g } = await supabase
+    const { data: g, error: gErr } = await supabase
       .from('student_goals')
       .select('start_point, target_point, current_point, progress, status')
       .eq('class_id', klasId).eq('student_id', sid).eq('status', 'actief')
       .maybeSingle()
+    if (gErr) { console.error(gErr); setLoadErr(gErr); setLoading(false); return }
     setGoal(g ?? null)
 
     // The class weighting, if it has one. A pupil may read the categories of a
     // class they are in (grade_categories_read), and only their own marks.
-    const { data: catRows } = await supabase
+    const { data: catRows, error: catRowsErr } = await supabase
       .from('grade_categories').select('id, name, source, weight, sort_order')
       .eq('class_id', klasId).order('sort_order')
+    if (catRowsErr) { console.error(catRowsErr); setLoadErr(catRowsErr); setLoading(false); return }
     const cats: GradeCategory[] = (catRows ?? []).map((c: any) => ({ ...c, weight: Number(c.weight) }))
 
     const handmatig: Record<string, { earned: number; max: number }> = {}
     const manualIds = cats.filter(c => c.source === 'handmatig').map(c => c.id)
     if (manualIds.length) {
-      const { data: cs } = await supabase
+      const { data: cs, error: csErr } = await supabase
         .from('category_scores').select('category_id, score, max_score')
         .eq('student_id', sid).in('category_id', manualIds)
+      if (csErr) { console.error(csErr); setLoadErr(csErr); setLoading(false); return }
       ;(cs ?? []).forEach((r: any) => {
         handmatig[r.category_id] = { earned: Number(r.score), max: Number(r.max_score) }
       })

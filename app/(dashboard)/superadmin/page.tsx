@@ -41,17 +41,19 @@ export default function SuperAdminPage() {
       return
     }
     loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile])
 
   async function loadData() {
     setLoading(true)
     setLoadErr(null)
-    const [{ data: t, error: tErr }, { count }, { data: classRows }] = await Promise.all([
+    const [{ data: t, error: tErr }, { count, error: countErr }, { data: classRows, error: classErr }] = await Promise.all([
       supabase.from('tenants').select('*').order('created_at', { ascending: false }),
       supabase.from('profiles').select('*', { count: 'estimated', head: true }),
       supabase.from('classes').select('tenant_id').eq('is_archived', false),
     ])
     if (tErr) { console.error(tErr); setLoadErr(tErr); setLoading(false); return }
+    if (countErr || classErr) console.error(countErr || classErr)   // header counts only
     const map: Record<string, number> = {}
     classRows?.forEach((c: any) => { map[c.tenant_id] = (map[c.tenant_id] ?? 0) + 1 })
     setTenants(t ?? [])
@@ -63,22 +65,25 @@ export default function SuperAdminPage() {
 
   async function loadFeedback() {
     setFeedbackLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('feedback')
       .select('*')
       .order('created_at', { ascending: false })
+    if (error) console.error(error)
     setFeedback(data ?? [])
     setFeedbackLoading(false)
   }
 
   async function markRead(id: string) {
     setFeedback(prev => prev.map(f => f.id === id ? { ...f, is_read: true } : f))
-    await supabase.from('feedback').update({ is_read: true }).eq('id', id)
+    const { error } = await supabase.from('feedback').update({ is_read: true }).eq('id', id)
+    if (error) { console.error(error); alert('Markeren als gelezen mislukt.'); loadFeedback() }
   }
 
   async function deleteFeedback(id: string) {
     setFeedback(prev => prev.filter(f => f.id !== id))
-    await supabase.from('feedback').delete().eq('id', id)
+    const { error } = await supabase.from('feedback').delete().eq('id', id)
+    if (error) { console.error(error); alert('Verwijderen mislukt.'); loadFeedback() }
   }
 
   // The school's exit export (DPA art. 11.2). Until 2026-10-22 this had no
@@ -118,17 +123,19 @@ export default function SuperAdminPage() {
     setExpandedTenant(tenantId)
     if (tenantUsers[tenantId]) return
     setUsersLoading(prev => ({ ...prev, [tenantId]: true }))
-    const { data } = await supabase.from('profiles').select('*').eq('tenant_id', tenantId).eq('is_active', true).order('last_name')
-    setTenantUsers(prev => ({ ...prev, [tenantId]: data ?? [] }))
+    const { data, error } = await supabase.from('profiles').select('*').eq('tenant_id', tenantId).eq('is_active', true).order('last_name')
     setUsersLoading(prev => ({ ...prev, [tenantId]: false }))
+    if (error) { console.error(error); alert('Gebruikers laden mislukt.'); setExpandedTenant(null); return }
+    setTenantUsers(prev => ({ ...prev, [tenantId]: data ?? [] }))
   }
 
   function reloadTenantUsers(tenantId: string) {
     setTenantUsers(prev => { const next = { ...prev }; delete next[tenantId]; return next })
     setUsersLoading(prev => ({ ...prev, [tenantId]: true }))
     supabase.from('profiles').select('*').eq('tenant_id', tenantId).eq('is_active', true).order('last_name')
-      .then(({ data }) => {
-        setTenantUsers(prev => ({ ...prev, [tenantId]: data ?? [] }))
+      .then(({ data, error }) => {
+        if (error) console.error(error)
+        else setTenantUsers(prev => ({ ...prev, [tenantId]: data ?? [] }))
         setUsersLoading(prev => ({ ...prev, [tenantId]: false }))
         loadData()
       })
@@ -139,10 +146,11 @@ export default function SuperAdminPage() {
     setShowArchivedFor(prev => ({ ...prev, [tenantId]: next }))
     if (!next || archivedUsers[tenantId]) return
     setArchivedLoading(prev => ({ ...prev, [tenantId]: true }))
-    const { data } = await supabase.from('profiles').select('*')
+    const { data, error } = await supabase.from('profiles').select('*')
       .eq('tenant_id', tenantId).eq('is_active', false).order('last_name')
-    setArchivedUsers(prev => ({ ...prev, [tenantId]: data ?? [] }))
     setArchivedLoading(prev => ({ ...prev, [tenantId]: false }))
+    if (error) { console.error(error); alert('Gearchiveerde gebruikers laden mislukt.'); setShowArchivedFor(prev => ({ ...prev, [tenantId]: false })); return }
+    setArchivedUsers(prev => ({ ...prev, [tenantId]: data ?? [] }))
   }
 
   if (profileLoading || loading) return <PageLoader />
@@ -218,6 +226,7 @@ export default function SuperAdminPage() {
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center font-semibold text-sm flex-shrink-0 overflow-hidden"
                   style={{ backgroundColor: (t.logo_icon_url || t.logo_url) ? '#fff' : '#EEF6F1', color: '#1B6B4A' }}>
                   {(t.logo_icon_url || t.logo_url) ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- tenant logos live on arbitrary hosts
                     <img src={t.logo_icon_url || t.logo_url} alt="" className="w-full h-full object-contain p-0.5 rounded-xl"/>
                   ) : (
                     t.name[0]
@@ -518,17 +527,19 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
       }
 
       const year = new Date().getFullYear()
-      await supabase.from('school_years').insert({
+      const { error: yearErr } = await supabase.from('school_years').insert({
         tenant_id: tenant!.id,
         name: `${year}-${year + 1}`,
         start_date: `${year}-09-01`,
         end_date: `${year + 1}-06-30`,
         is_active: true,
       })
+      // The school exists from here on: say what is missing, don't invite a retry.
+      if (yearErr) throw new Error(`School aangemaakt, maar het schooljaar niet (${yearErr.message}). Maak het aan via Jaarovergang.`)
 
       if (form.admin_email) {
         const { data: { session } } = await supabase.auth.getSession()
-        await fetch('/api/invite', {
+        const res = await fetch('/api/invite', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -542,6 +553,10 @@ function AddMoskeeModal({ onClose, onCreated }: { onClose: () => void; onCreated
             tenant_id:  tenant!.id,
           }),
         })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(`School aangemaakt, maar de beheerder is niet uitgenodigd: ${body.error ?? res.status}. Nodig de beheerder uit via Beheer.`)
+        }
       }
 
       onCreated()

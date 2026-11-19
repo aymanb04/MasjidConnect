@@ -107,7 +107,8 @@ export default function SubmitAssignmentForm({ assignmentId, assignment, existin
         // to the teacher and orphaned in storage. Roll the object back so the
         // two never disagree.
         if (rowErr) {
-          await supabase.storage.from('submission-files').remove([path])
+          const { error: rmErr } = await supabase.storage.from('submission-files').remove([path])
+          if (rmErr) console.error('[submit] cleanup failed, orphaned object:', path, rmErr.message)
           throw rowErr
         }
       }

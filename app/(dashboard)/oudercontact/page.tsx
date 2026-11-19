@@ -46,6 +46,7 @@ export default function OudercontactPage() {
   useEffect(() => {
     if (!profile) return
     load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile])
 
   async function load() {
@@ -63,23 +64,27 @@ export default function OudercontactPage() {
     const teacherIds = Array.from(new Set((slotRows ?? []).map((s: any) => s.teacher_id)))
     const classIds = Array.from(new Set((slotRows ?? []).map((s: any) => s.class_id).filter(Boolean)))
 
-    const [{ data: bookings }, { data: teachers }, { data: classRows }] = await Promise.all([
+    const [{ data: bookings, error: bookErr }, { data: teachers, error: teachErr }, { data: classRows, error: classErr }] = await Promise.all([
       slotIds.length
         ? supabase.from('oudercontact_bookings').select('id, slot_id, student_id').in('slot_id', slotIds)
-        : Promise.resolve({ data: [] as any[] }),
+        : Promise.resolve({ data: [] as any[], error: null }),
       teacherIds.length
         ? supabase.from('profiles').select('id, first_name, last_name').in('id', teacherIds)
-        : Promise.resolve({ data: [] as any[] }),
+        : Promise.resolve({ data: [] as any[], error: null }),
       classIds.length
         ? supabase.from('classes').select('id, name').in('id', classIds)
-        : Promise.resolve({ data: [] as any[] }),
+        : Promise.resolve({ data: [] as any[], error: null }),
     ])
+    // A failed bookings read showed every slot as free.
+    const firstErr = bookErr || teachErr || classErr
+    if (firstErr) { console.error(firstErr); setLoadErr(firstErr); setLoading(false); return }
 
     // Resolve booking student names (separate query, RLS-safe)
     const studentIds = Array.from(new Set((bookings ?? []).map((b: any) => b.student_id)))
-    const { data: bookStudents } = studentIds.length
+    const { data: bookStudents, error: bsErr } = studentIds.length
       ? await supabase.from('profiles').select('id, first_name, last_name').in('id', studentIds)
-      : { data: [] as any[] }
+      : { data: [] as any[], error: null }
+    if (bsErr) console.error(bsErr)   // names only: bookings still show, as '—'
 
     const teacherMap = Object.fromEntries((teachers ?? []).map((t: any) => [t.id, `${t.first_name} ${t.last_name}`]))
     const classMap = Object.fromEntries((classRows ?? []).map((c: any) => [c.id, c.name]))
@@ -101,17 +106,20 @@ export default function OudercontactPage() {
     // Staff: load classes for the create form (teachers → own, admin → tenant)
     if (isStaff) {
       if (role === 'teacher') {
-        const { data } = await supabase.from('class_teachers').select('classes(id, name, groups(name))').eq('teacher_id', profile!.id)
+        const { data, error } = await supabase.from('class_teachers').select('classes(id, name, groups(name))').eq('teacher_id', profile!.id)
+        if (error) console.error(error)   // fills a picker only
         setMyClasses((data ?? []).map((r: any) => r.classes).filter(Boolean).sort(byClassLabel))
       } else {
-        const { data } = await supabase.from('classes').select('id, name, groups(name)').eq('tenant_id', tid).eq('is_archived', false)
+        const { data, error } = await supabase.from('classes').select('id, name, groups(name)').eq('tenant_id', tid).eq('is_archived', false)
+        if (error) console.error(error)   // fills a picker only
         setMyClasses([...(data ?? [])].sort(byClassLabel))
       }
     }
     // Admin: students for booking-on-behalf
     if (isAdmin) {
-      const { data } = await supabase.from('profiles').select('id, first_name, last_name')
+      const { data, error } = await supabase.from('profiles').select('id, first_name, last_name')
         .eq('tenant_id', tid).eq('role', 'student').eq('is_active', true).order('last_name')
+      if (error) console.error(error)   // fills a picker only
       setStudents(data ?? [])
     }
 
@@ -145,7 +153,8 @@ export default function OudercontactPage() {
 
   async function deleteSlot(id: string) {
     if (!confirm('Dit slot en alle boekingen verwijderen?')) return
-    await supabase.from('oudercontact_slots').delete().eq('id', id)
+    const { error: err } = await supabase.from('oudercontact_slots').delete().eq('id', id)
+    if (err) { console.error(err); setError('Slot verwijderen mislukt.'); return }
     setSlots(prev => prev.filter(s => s.id !== id))
   }
 
@@ -164,7 +173,9 @@ export default function OudercontactPage() {
   }
 
   async function cancelBooking(bookingId: string) {
-    await supabase.from('oudercontact_bookings').delete().eq('id', bookingId)
+    setError('')
+    const { error: err } = await supabase.from('oudercontact_bookings').delete().eq('id', bookingId)
+    if (err) { console.error(err); setError('Uitschrijven mislukt.'); return }
     load()
   }
 

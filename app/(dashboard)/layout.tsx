@@ -26,6 +26,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             // Still on a password the school handed out on paper (migration 37).
             router.push('/wachtwoord-instellen')
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
     }, [loading, profile])
 
     useEffect(() => {

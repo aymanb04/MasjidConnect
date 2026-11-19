@@ -86,6 +86,9 @@ export function InviteUserButton({ tenantId, onInvited }: Props) {
 
       const data = await res.json()
       if (!res.ok) { setError('Fout: ' + data.error); setLoading(false); return }
+      // The account exists but a class enrolment failed: say so and keep the
+      // form open, rather than flash "verstuurd" and hide it.
+      if (data.warning) { setError(data.warning); onInvited?.(); return }
 
       setSuccess(true)
       setTimeout(() => {

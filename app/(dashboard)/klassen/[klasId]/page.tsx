@@ -30,6 +30,7 @@ export default function KlasDetailPage() {
   useEffect(() => {
     if (!profile || !klasId) return
     loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile, klasId])
 
   async function loadData() {
@@ -38,7 +39,7 @@ export default function KlasDetailPage() {
     setLoading(true)
     setLoadErr(null)
 
-    const [{ data: k, error: kErr }, { data: a, error: aErr }, { data: m }, { data: tc }] = await Promise.all([
+    const [{ data: k, error: kErr }, { data: a, error: aErr }, { data: m, error: mErr }, { data: tc, error: tcErr }] = await Promise.all([
       supabase.from('classes').select('*, school_years(name), groups(name)').eq('id', klasId).single(),
       // Staff see drafts too, labelled; hiding them here left a teacher no way to
       // find homework they had not published yet.
@@ -50,30 +51,36 @@ export default function KlasDetailPage() {
       supabase.from('class_teachers').select('profiles(id, first_name, last_name, email)').eq('class_id', klasId),
     ])
 
-    if (kErr || aErr) { console.error(kErr || aErr); setLoadErr(kErr || aErr); setLoading(false); return }
+    const firstErr = kErr || aErr || mErr || tcErr
+    if (firstErr) { console.error(firstErr); setLoadErr(firstErr); setLoading(false); return }
     setKlas(k)
     setAssignments(a ?? [])
     setModules(m ?? [])
     setTeachers(tc?.map((x: any) => x.profiles).filter(Boolean) ?? [])
 
     if (isTeacher) {
-      const { data: s } = await supabase.from('class_students').select('profiles(id, first_name, last_name, email)').eq('class_id', klasId)
+      const { data: s, error: sErr } = await supabase.from('class_students').select('profiles(id, first_name, last_name, email)').eq('class_id', klasId)
+      if (sErr) { console.error(sErr); setLoadErr(sErr); setLoading(false); return }
       setStudents(s?.map((x: any) => x.profiles).filter(Boolean) ?? [])
     }
 
     if (['admin', 'super_admin'].includes(profile!.role)) {
-      const { data: at } = await supabase.from('profiles').select('id, first_name, last_name').eq('tenant_id', profile!.tenant_id).eq('role', 'teacher').eq('is_active', true).order('last_name')
+      const { data: at, error: atErr } = await supabase.from('profiles').select('id, first_name, last_name').eq('tenant_id', profile!.tenant_id).eq('role', 'teacher').eq('is_active', true).order('last_name')
+      if (atErr) console.error(atErr)   // only fills the "add teacher" picker
       setAllTeachers(at ?? [])
     }
 
     if (profile!.role === 'student') {
-      const [{ data: subs }, { data: exams }, { data: classTests }] = await Promise.all([
+      const [{ data: subs, error: subsErr }, { data: exams, error: examsErr }, { data: classTests, error: testsErr }] = await Promise.all([
         a?.length
           ? supabase.from('submissions').select('*').eq('student_id', profile!.id).in('assignment_id', a.map((x: any) => x.id))
-          : Promise.resolve({ data: [] as any[] }),
+          : Promise.resolve({ data: [] as any[], error: null }),
         supabase.from('exam_scores').select('*').eq('class_id', klasId as string).eq('student_id', profile!.id),
         supabase.from('class_tests').select('id, title, max_score, test_date').eq('class_id', klasId as string).order('test_date', { ascending: true }),
       ])
+      // A pupil's own results: a failed read must not read as "geen punten".
+      const pupilErr = subsErr || examsErr || testsErr
+      if (pupilErr) { console.error(pupilErr); setLoadErr(pupilErr); setLoading(false); return }
       const map: Record<string, any> = {}
       subs?.forEach((s: any) => { map[s.assignment_id] = s })
       setMySubmissions(map)
@@ -81,10 +88,11 @@ export default function KlasDetailPage() {
 
       // Merge the student's test scores onto the class tests
       if (classTests?.length) {
-        const { data: ts } = await supabase
+        const { data: ts, error: tsErr } = await supabase
           .from('test_scores').select('test_id, score')
           .eq('student_id', profile!.id)
           .in('test_id', classTests.map((t: any) => t.id))
+        if (tsErr) { console.error(tsErr); setLoadErr(tsErr); setLoading(false); return }
         const scoreByTest = Object.fromEntries((ts ?? []).map((r: any) => [r.test_id, Number(r.score)]))
         setMyTestScores(
           classTests
@@ -100,15 +108,17 @@ export default function KlasDetailPage() {
   async function assignTeacher() {
     if (!selectedTeacherId) return
     setSavingTeacher(true)
-    await getSupabase().from('class_teachers').insert({ class_id: klasId as string, teacher_id: selectedTeacherId })
+    const { error } = await getSupabase().from('class_teachers').insert({ class_id: klasId as string, teacher_id: selectedTeacherId })
     setSavingTeacher(false)
+    if (error) { console.error(error); alert('Leerkracht toevoegen mislukt. Probeer het opnieuw.'); return }
     setAddingTeacher(false)
     setSelectedTeacherId('')
     loadData()
   }
 
   async function removeTeacher(teacherId: string) {
-    await getSupabase().from('class_teachers').delete().eq('class_id', klasId as string).eq('teacher_id', teacherId)
+    const { error } = await getSupabase().from('class_teachers').delete().eq('class_id', klasId as string).eq('teacher_id', teacherId)
+    if (error) { console.error(error); alert('Leerkracht verwijderen mislukt. Probeer het opnieuw.'); return }
     setTeachers(prev => prev.filter(t => t.id !== teacherId))
   }
 

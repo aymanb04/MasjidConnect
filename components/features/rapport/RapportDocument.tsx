@@ -85,6 +85,7 @@ export default function RapportDocument({
         <div className="rp-head">
           <div className="rp-brand">
             {logoUrl
+              // eslint-disable-next-line @next/next/no-img-element -- tenant logos live on arbitrary hosts; next/image would need every host whitelisted
               ? <img src={logoUrl} alt="" className="rp-logo-img" />
               : <span className="rp-logo-txt">{schoolName}</span>}
           </div>

@@ -81,6 +81,7 @@ export default function DossierDetailPage() {
     if (!profile) return
     if (!STAFF_ROLES.includes(profile.role)) { router.replace('/dashboard'); return }
     load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile])
 
   async function load() {
@@ -96,8 +97,9 @@ export default function DossierDetailPage() {
     if (!stud || stud.role !== 'student') { setStudent(null); setLoading(false); return }
     setStudent(stud)
 
-    const [{ data: det }, { data: fams }, { data: links }, { data: examScores },
-           { data: noteRows }, { data: docRows }] = await Promise.all([
+    const [{ data: det, error: detErr }, { data: fams, error: famsErr }, { data: links, error: linksErr },
+           { data: examScores, error: scoresErr }, { data: noteRows, error: notesErr },
+           { data: docRows, error: docsErr }] = await Promise.all([
       supabase.from('student_details').select('*').eq('student_id', studentId).maybeSingle(),
       supabase.from('families').select('id, label').eq('tenant_id', stud.tenant_id).order('label'),
       supabase.from('class_students').select('class_id').eq('student_id', studentId),
@@ -105,6 +107,10 @@ export default function DossierDetailPage() {
       supabase.from('student_notes').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
       supabase.from('student_documents').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
     ])
+    // All of them: a failed student_details read opened an EMPTY form, and
+    // saving it wiped the parent's e-mail and phone number.
+    const firstErr = detErr || famsErr || linksErr || scoresErr || notesErr || docsErr
+    if (firstErr) { console.error(firstErr); setLoadErr(firstErr); setLoading(false); return }
 
     if (det) {
       const loaded: DetailsForm = {
@@ -125,17 +131,19 @@ export default function DossierDetailPage() {
     setFamilies(fams ?? [])
 
     const classIds = (links ?? []).map((l: any) => l.class_id)
-    const { data: classRows } = classIds.length
+    const { data: classRows, error: classErr } = classIds.length
       ? await supabase.from('classes').select('id, name, color').in('id', classIds).order('name')
-      : { data: [] }
+      : { data: [], error: null }
+    if (classErr) { console.error(classErr); setLoadErr(classErr); setLoading(false); return }
     setClasses(classRows ?? [])
     setScores(examScores ?? [])
 
     // Author names for notes (separate query — same RLS gotcha)
     const authorIds = Array.from(new Set((noteRows ?? []).map((n: any) => n.author_id)))
-    const { data: authors } = authorIds.length
+    const { data: authors, error: authorsErr } = authorIds.length
       ? await supabase.from('profiles').select('id, first_name, last_name').in('id', authorIds)
-      : { data: [] }
+      : { data: [], error: null }
+    if (authorsErr) console.error(authorsErr)   // names only: notes still show, as '—'
     const authorMap = Object.fromEntries((authors ?? []).map((a: any) => [a.id, `${a.first_name} ${a.last_name}`]))
     setNotes((noteRows ?? []).map((n: any) => ({ ...n, author_name: authorMap[n.author_id] ?? '—' })))
 
@@ -195,10 +203,11 @@ export default function DossierDetailPage() {
     if (!err) {
       setNewNote('')
       setNewNoteVisible(false)
-      const { data: noteRows } = await supabase
+      const { data: noteRows, error: notesErr } = await supabase
         .from('student_notes').select('*').eq('student_id', studentId)
         .order('created_at', { ascending: false })
-      setNotes((noteRows ?? []).map((n: any) => ({
+      if (notesErr) { console.error(notesErr); setError('Nota opgeslagen, maar de lijst kon niet vernieuwd worden. Herlaad de pagina.') }
+      else setNotes((noteRows ?? []).map((n: any) => ({
         ...n,
         author_name: n.author_id === profile!.id
           ? `${profile!.first_name} ${profile!.last_name}`
@@ -267,13 +276,15 @@ export default function DossierDetailPage() {
       uploaded_by: profile!.id,
     })
     if (insErr) {
-      await supabase.storage.from('student-documents').remove([path])
+      const { error: rmErr } = await supabase.storage.from('student-documents').remove([path])
+      if (rmErr) console.error('[dossier] cleanup of unsaved upload failed, orphaned object:', path, rmErr.message)
       setError('Opslaan van document mislukt.')
     } else {
-      const { data: docRows } = await supabase
+      const { data: docRows, error: docsErr } = await supabase
         .from('student_documents').select('*').eq('student_id', studentId)
         .order('created_at', { ascending: false })
-      setDocuments(docRows ?? [])
+      if (docsErr) { console.error(docsErr); setError('Document opgeslagen, maar de lijst kon niet vernieuwd worden. Herlaad de pagina.') }
+      else setDocuments(docRows ?? [])
     }
     setUploading(false)
   }

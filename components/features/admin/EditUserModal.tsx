@@ -65,18 +65,26 @@ export function EditUserModal({ user, tenantId, onClose, onSaved }: Props) {
   const [saving,  setSaving]  = useState(false)
   const [done,    setDone]    = useState(false)
   const [error,   setError]   = useState('')
+  // Saving diffs against what loaded; after a failed load that diff is wrong.
+  const [loadFailed, setLoadFailed] = useState(false)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load once when the modal opens
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
     setLoading(true)
-    const [{ data: cls }, { data: ct }] = await Promise.all([
+    const [{ data: cls, error: clsErr }, { data: ct, error: ctErr }] = await Promise.all([
       supabase.from('classes')
         .select('id, name, school_years(name), groups(name)')
         .eq('tenant_id', tenantId)
         .order('name'),
       supabase.from('class_teachers').select('class_id').eq('teacher_id', user.id),
     ])
+    if (clsErr || ctErr) {
+      console.error(clsErr || ctErr)
+      setError('De klassen konden niet geladen worden. Sluit dit venster en probeer opnieuw.')
+      setLoadFailed(true); setLoading(false); return
+    }
     setClasses((cls ?? []).map((c: any) => ({
       id: c.id,
       name: c.name,
@@ -264,7 +272,7 @@ export function EditUserModal({ user, tenantId, onClose, onSaved }: Props) {
 
             <div className="mt-6 flex items-center justify-end gap-2">
               <button onClick={onClose} className="btn-secondary">Annuleren</button>
-              <button onClick={save} disabled={saving} className="btn-primary min-w-28 justify-center">
+              <button onClick={save} disabled={saving || loadFailed} className="btn-primary min-w-28 justify-center">
                 {saving ? <><Loader2 size={15} className="animate-spin" /> Opslaan…</> : 'Opslaan'}
               </button>
             </div>

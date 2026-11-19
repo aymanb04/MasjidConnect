@@ -61,7 +61,8 @@ export default function RapportenAfdrukkenPage() {
     if (profileLoading) return
     if (!profile) { router.push('/login'); return }
     load().catch(e => { console.error(e); setErr('Rapporten laden mislukt. Probeer het opnieuw.'); setLoading(false) })
-  }, [profileLoading, profile])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once the profile is known
+  }, [profileLoading, profile, router])
 
   async function load() {
     const supabase = getSupabase()
@@ -94,10 +95,12 @@ export default function RapportenAfdrukkenPage() {
         .select('id, first_name, last_name').in('id', c)),
     ])
     const yearIds = Array.from(new Set(list.map(c => c.school_year_id)))
-    const [{ data: tn }, { data: yrs }] = await Promise.all([
+    const [{ data: tn, error: tnErr }, { data: yrs, error: yrsErr }] = await Promise.all([
       supabase.from('tenants').select('name, address, city, email, logo_url').eq('id', profile!.tenant_id).maybeSingle(),
-      yearIds.length ? supabase.from('school_years').select('id, name').in('id', yearIds) : Promise.resolve({ data: [] as any[] }),
+      yearIds.length ? supabase.from('school_years').select('id, name').in('id', yearIds) : Promise.resolve({ data: [] as any[], error: null }),
     ])
+    // Caught by the caller: better no print than report cards without the school's name.
+    if (tnErr || yrsErr) throw tnErr || yrsErr
 
     setCards(list)
     setLines(ln)

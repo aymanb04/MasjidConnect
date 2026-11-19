@@ -56,7 +56,8 @@ export default function ModuleDocumentUpload({ moduleId, onUploaded }: Props) {
       // success — leaving an orphaned object nothing references. Roll it back.
       if (rowErr) {
         console.error(rowErr)
-        await supabase.storage.from('module-documents').remove([path])
+        const { error: rmErr } = await supabase.storage.from('module-documents').remove([path])
+        if (rmErr) console.error('[module upload] cleanup failed, orphaned object:', path, rmErr.message)
         setError('Document kon niet worden opgeslagen. Probeer het opnieuw.')
         setLoading(false)
         return

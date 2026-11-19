@@ -1,10 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
-
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 export type CallerProfile = {
     id: string
@@ -29,12 +24,16 @@ export async function requireRole(
         return { error: NextResponse.json({ error: 'Ongeldige sessie' }, { status: 401 }) }
     }
 
-    const { data: profile } = await supabaseAdmin
+    const { data: profile, error: profileErr } = await supabaseAdmin
         .from('profiles')
         .select('id, role, tenant_id, is_active')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
 
+    if (profileErr) {
+        console.error('[api-auth] profile lookup:', profileErr.message)
+        return { error: NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 }) }
+    }
     if (!profile) {
         return { error: NextResponse.json({ error: 'Profiel niet gevonden' }, { status: 403 }) }
     }

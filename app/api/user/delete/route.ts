@@ -1,13 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/api-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { closeAccount, eraseUserData } from '@/lib/gdpr-erasure'
-
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 export async function DELETE(request: Request) {
     const auth = await requireRole(request, ['super_admin'])
@@ -29,11 +24,15 @@ export async function DELETE(request: Request) {
         // Read the profile BEFORE anything is destroyed: the erasure needs the
         // tenant (storage path prefix) and the e-mail (pending invitations key
         // on the address, not the user id).
-        const { data: target } = await supabaseAdmin
+        const { data: target, error: targetErr } = await supabaseAdmin
             .from('profiles')
             .select('id, tenant_id, email')
             .eq('id', userId)
-            .single()
+            .maybeSingle()
+        if (targetErr) {
+            console.error('[/api/user/delete] target lookup:', targetErr.message)
+            return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })
+        }
         if (!target) return NextResponse.json({ error: 'Gebruiker niet gevonden' }, { status: 404 })
 
         // Close and anonymise FIRST. The auth delete at the end fails for
