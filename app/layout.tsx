@@ -53,7 +53,14 @@ export const viewport: Viewport = {
 // genuinely stale is bounced to /login there. Crawlers have no localStorage, so
 // they always get the full marketing page and SEO is untouched.
 const SUPABASE_REF = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname.split('.')[0]
+//
+// The same script also marks the English page as English. The root layout is
+// shared, so the server HTML always says lang="nl"; per-route root layouts
+// would mean moving the whole app into route groups for one attribute. Setting
+// it before paint is what screen readers and the browser's translate prompt
+// see, and the /en content also carries its own lang="en" wrapper.
 const BOUNCE_IF_AUTHED = `(function(){try{
+if(location.pathname==='/en'||location.pathname.indexOf('/en/')===0)document.documentElement.lang='en';
 if(location.pathname!=='/')return;
 if(!localStorage.getItem('sb-${SUPABASE_REF}-auth-token'))return;
 location.replace('/dashboard');
@@ -61,7 +68,8 @@ location.replace('/dashboard');
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="nl" className={inter.variable}>
+    // suppressHydrationWarning: the inline script may have changed `lang` before React hydrates.
+    <html lang="nl" className={inter.variable} suppressHydrationWarning>
       <body>
         {/* Must stay the first thing in <body> — it only beats the paint if the
             browser runs it before parsing the markup below. */}

@@ -20,7 +20,14 @@ export const metadata: Metadata = {
         siteName: 'MasjidConnect',
         title: 'MasjidConnect — a school platform for mosque weekend schools',
         description: 'Attendance, homework, grades and bilingual report cards in one app.',
-        images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'MasjidConnect' }],
+        images: [{ url: '/og-image-en.png', width: 1200, height: 630, alt: 'MasjidConnect' }],
+    },
+    // Read by LinkedIn and some WhatsApp versions too (see app/page.tsx).
+    twitter: {
+        card: 'summary_large_image',
+        title: 'MasjidConnect — a school platform for mosque weekend schools',
+        description: 'Attendance, homework, grades and bilingual report cards in one app.',
+        images: ['/og-image-en.png'],
     },
 }
 

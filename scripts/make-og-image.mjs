@@ -2,6 +2,7 @@
 // iMessage, LinkedIn and the search engines show when masjidconnect.be is shared.
 //
 //   node scripts/make-og-image.mjs        (from the repo root)
+//   node scripts/make-og-image.mjs en     → public/og-image-en.png, the card for /en
 //
 // Re-run it whenever the landing-page positioning copy changes, and commit the
 // resulting PNG. It is a build-time asset on purpose:
@@ -32,16 +33,31 @@ if (!entry) {
 }
 const { chromium } = await import(pathToFileURL(entry).href)
 
-const OUT = path.resolve('public/og-image.png')
+const LANG = process.argv[2] === 'en' ? 'en' : 'nl'
+const OUT = path.resolve(LANG === 'en' ? 'public/og-image-en.png' : 'public/og-image.png')
+
+// The /en card mirrors that page's hero, not a translation of the Dutch card.
+const COPY = {
+    nl: {
+        h1: 'Alles voor uw weekendschool in &eacute;&eacute;n app.',
+        sub: 'Klassen, huiswerk, punten, aanwezigheden en tweetalige rapporten &mdash; voor Arabische en islamitische scholen in Belgi&euml;.',
+        pills: ['Huiswerk', 'Puntenlijst', 'Aanwezigheden', 'Rapporten', 'Lidgeld'],
+        domain: 'masjidconnect.be',
+    },
+    en: {
+        h1: 'One place to run a weekend school.',
+        sub: 'Homework, grades, attendance and bilingual report cards &mdash; for mosque weekend schools in Belgium.',
+        pills: ['Homework', 'Grades', 'Attendance', 'Report cards', 'Fees'],
+        domain: 'masjidconnect.be/en',
+    },
+}[LANG]
 
 // The same islamic geometric tile as the .pattern-bg utility in app/globals.css.
 const PATTERN =
     "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.06'%3E%3Cpath d='M30 0l8.66 5v10L30 20l-8.66-5V5L30 0zm0 40l8.66 5v10L30 60l-8.66-5V45L30 40zM0 20l8.66 5v10L0 40l-8.66-5V25L0 20zm60 0l8.66 5v10L60 40l-8.66-5V25L60 20zM15 10l8.66 5v10L15 30l-8.66-5V15L15 10zm30 0l8.66 5v10L45 30l-8.66-5V15L45 10zm-30 30l8.66 5v10L15 60l-8.66-5V45L15 40zm30 0l8.66 5v10L45 60l-8.66-5V45L45 40z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")"
 
-const PILLS = ['Huiswerk', 'Puntenlijst', 'Aanwezigheden', 'Rapporten', 'Lidgeld']
-
 const html = `<!doctype html>
-<html lang="nl"><head><meta charset="utf-8">
+<html lang="${LANG}"><head><meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -89,14 +105,13 @@ const html = `<!doctype html>
     </div>
 
     <div class="z">
-      <h1>Alles voor uw weekendschool in &eacute;&eacute;n app.</h1>
-      <p class="sub">Klassen, huiswerk, punten, aanwezigheden en tweetalige rapporten &mdash;
-      voor Arabische en islamitische scholen in Belgi&euml;.</p>
+      <h1>${COPY.h1}</h1>
+      <p class="sub">${COPY.sub}</p>
     </div>
 
     <div class="z pills">
-      ${PILLS.map(p => `<div class="pill">${p}</div>`).join('')}
-      <div class="domain">masjidconnect.be</div>
+      ${COPY.pills.map(p => `<div class="pill">${p}</div>`).join('')}
+      <div class="domain">${COPY.domain}</div>
     </div>
   </div>
 </body></html>`

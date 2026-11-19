@@ -11,6 +11,7 @@
 // Every claim here must stay true. The numbers ("100+ pupils", "since September
 // 2026") are the same ones the Dutch page uses; update both together.
 
+import { useEffect } from 'react'
 import Link from 'next/link'
 import {
     ArrowRight,
@@ -95,7 +96,7 @@ const BUILT = [
     },
     {
         title: 'Making those policies fast',
-        body: 'Correct policies turned out to be slow on real data. Profiling them and rewriting the hot ones as set-based checks made reads 10–100× faster without changing who can see what.',
+        body: 'Correct policies turned out to be slow on real data. Profiling them and rewriting the hot ones as set-based checks made reads 10–100× faster on a benchmark, without changing who can see what.',
     },
     {
         title: 'GDPR built in, not bolted on',
@@ -114,6 +115,14 @@ const TRUST = [
 ]
 
 export function LandingPageEn() {
+    // The root layout is shared and says lang="nl". On a full load its inline
+    // script already switched it; this covers the client-side hop from the
+    // Dutch page's EN link, and puts it back when the visitor leaves.
+    useEffect(() => {
+        document.documentElement.lang = 'en'
+        return () => { document.documentElement.lang = 'nl' }
+    }, [])
+
     return (
         <div lang="en" className="min-h-dvh bg-surface-warm">
             {/* ---------------------------------------------------------------- nav */}
