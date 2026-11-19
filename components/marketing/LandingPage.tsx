@@ -148,7 +148,7 @@ const TRUST = [
 // markup and buy nothing. width/height are the intrinsic pixel sizes and exist
 // to reserve the right aspect ratio before the file lands (no layout shift).
 
-function Shot({
+export function Shot({
     src, width, height, alt, caption, priority = false, chrome = true,
 }: {
     src: string
@@ -199,7 +199,7 @@ function Shot({
     )
 }
 
-function PhoneShot({ src, alt, caption }: { src: string; alt: string; caption?: string }) {
+export function PhoneShot({ src, alt, caption }: { src: string; alt: string; caption?: string }) {
     return (
         <figure className="flex flex-col items-center">
             <div className="relative w-full max-w-[248px] overflow-hidden rounded-[2.25rem] border-[7px] border-gray-900 bg-gray-900 shadow-modal">
@@ -252,6 +252,9 @@ export function LandingPage() {
                             bookmark of / had no door at all here — the only login
                             link sat ~10 000px down in the footer. The CTA label
                             drops its second word instead, so both still fit 390px. */}
+                        {/* For international visitors (and recruiters): the app is
+                            Dutch-only, the /en page explains it in English. */}
+                        <Link href="/en" hrefLang="en" lang="en" className="btn-ghost hidden px-2.5 sm:inline-flex" title="English">EN</Link>
                         <Link href="/login" className="btn-ghost">Inloggen</Link>
                         <a href="#demo" className="btn-primary">
                             {/* One flex child, not two: .btn is inline-flex gap-2, so a
@@ -587,6 +590,7 @@ export function LandingPage() {
                                     <li><a href="#functies" className="hover:text-primary-600">Functies</a></li>
                                     <li><a href="#veilig" className="hover:text-primary-600">Veilig &amp; GDPR</a></li>
                                     <li><Link href="/login" className="hover:text-primary-600">Inloggen</Link></li>
+                                    <li><Link href="/en" hrefLang="en" lang="en" className="hover:text-primary-600">English</Link></li>
                                 </ul>
                             </div>
                             <div>
