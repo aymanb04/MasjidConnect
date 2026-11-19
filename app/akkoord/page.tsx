@@ -26,7 +26,7 @@ export default function AkkoordPage() {
         if (loading) return
         if (!profile) { router.replace('/login'); return }
         if (!needsTermsAcceptance(profile)) { router.replace('/dashboard') }
-    }, [loading, profile])
+    }, [loading, profile, router])
 
     async function accept() {
         if (!profile || !checked) return

@@ -14,15 +14,10 @@
 // told "verwijderd" while 29 uploads survive has been told something false. The
 // other order -- row gone, files orphaned -- cannot be retried, since nothing
 // points at those files any more.
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/api-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
-
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 /** Storage paths are stored as plain paths now; legacy rows kept a full public URL. */
 function toStoragePath(bucket: string, fileUrl: string): string {

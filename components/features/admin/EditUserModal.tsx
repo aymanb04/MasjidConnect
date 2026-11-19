@@ -66,6 +66,7 @@ export function EditUserModal({ user, tenantId, onClose, onSaved }: Props) {
   const [done,    setDone]    = useState(false)
   const [error,   setError]   = useState('')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load once when the modal opens
   useEffect(() => { loadData() }, [])
 
   async function loadData() {

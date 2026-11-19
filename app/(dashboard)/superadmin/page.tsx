@@ -41,6 +41,7 @@ export default function SuperAdminPage() {
       return
     }
     loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile])
 
   async function loadData() {
@@ -218,6 +219,7 @@ export default function SuperAdminPage() {
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center font-semibold text-sm flex-shrink-0 overflow-hidden"
                   style={{ backgroundColor: (t.logo_icon_url || t.logo_url) ? '#fff' : '#EEF6F1', color: '#1B6B4A' }}>
                   {(t.logo_icon_url || t.logo_url) ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- tenant logos live on arbitrary hosts
                     <img src={t.logo_icon_url || t.logo_url} alt="" className="w-full h-full object-contain p-0.5 rounded-xl"/>
                   ) : (
                     t.name[0]

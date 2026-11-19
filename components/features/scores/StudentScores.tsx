@@ -50,6 +50,7 @@ export default function StudentScores() {
   useEffect(() => {
     if (!profile || !klasId) return
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the pupil or class changes
   }, [profile, klasId])
 
   async function load() {

@@ -46,10 +46,12 @@ export default function BetalingenPage() {
     if (!profile) return
     if (!['admin', 'super_admin'].includes(profile.role)) { router.replace('/dashboard'); return }
     load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile])
 
   useEffect(() => {
     if (profile && isAdmin && year) loadPayroll()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [month, year])
 
   async function load() {

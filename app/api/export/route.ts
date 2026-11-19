@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/api-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
@@ -27,11 +27,6 @@ import {
 // JSON document with base64 blobs in it is not "commonly used" in any useful
 // sense. The manifest is the machine-readable part; the URLs are how you fetch
 // the bytes.
-
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 const SIGNED_URL_TTL = 60 * 60   // one hour
 

@@ -33,6 +33,7 @@ export default function HuiswerkDetailPage() {
   useEffect(() => {
     if (!profile || !id) return
     loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile, id])
 
   // `quiet` refreshes the data WITHOUT flipping `loading`. Marking a pupil used

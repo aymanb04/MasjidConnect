@@ -61,7 +61,8 @@ export default function RapportenAfdrukkenPage() {
     if (profileLoading) return
     if (!profile) { router.push('/login'); return }
     load().catch(e => { console.error(e); setErr('Rapporten laden mislukt. Probeer het opnieuw.'); setLoading(false) })
-  }, [profileLoading, profile])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once the profile is known
+  }, [profileLoading, profile, router])
 
   async function load() {
     const supabase = getSupabase()

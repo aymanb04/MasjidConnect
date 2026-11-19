@@ -1,13 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/api-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { closeAccount, eraseUserData } from '@/lib/gdpr-erasure'
-
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 export async function POST(request: Request) {
     const auth = await requireRole(request, ['admin', 'super_admin'])

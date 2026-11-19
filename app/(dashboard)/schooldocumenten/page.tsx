@@ -46,6 +46,7 @@ export default function SchooldocumentenPage() {
 
   const isAdmin = ['admin', 'super_admin'].includes(profile?.role ?? '')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   useEffect(() => { if (profile) load() }, [profile])
 
   async function load() {

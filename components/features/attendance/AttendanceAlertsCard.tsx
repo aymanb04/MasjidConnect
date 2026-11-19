@@ -29,6 +29,7 @@ export function AttendanceAlertsCard({ profile }: { profile: any }) {
 
   useEffect(() => {
     if (profile) load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the profile changes
   }, [profile])
 
   async function load() {

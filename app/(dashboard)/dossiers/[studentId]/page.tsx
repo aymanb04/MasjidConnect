@@ -81,6 +81,7 @@ export default function DossierDetailPage() {
     if (!profile) return
     if (!STAFF_ROLES.includes(profile.role)) { router.replace('/dashboard'); return }
     load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile])
 
   async function load() {

@@ -1,12 +1,7 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/api-auth'
 import { CURRENT_TERMS_VERSION } from '@/lib/terms'
-
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 // Records that the caller accepted the current Voorwaarden.
 // Uses the service role on purpose: the update_own_profile RLS policy subqueries

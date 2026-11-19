@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { Jimp, JimpMime } from 'jimp'
 import { requireRole } from '@/lib/api-auth'
@@ -6,11 +6,6 @@ import { checkRateLimit } from '@/lib/rate-limit'
 
 // jimp needs the Node runtime (not edge).
 export const runtime = 'nodejs'
-
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 // Basic SSRF guard: the server fetches a super_admin-supplied URL, so only allow
 // https and block loopback / private ranges reachable from the server.

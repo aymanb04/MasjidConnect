@@ -701,7 +701,7 @@ export function normalize(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
-export function articleText(a: HelpArticle): string {
+function articleText(a: HelpArticle): string {
   return normalize([a.title, a.category, a.intro, ...(a.steps ?? []), ...(a.letOp ?? []), ...(a.lukt ?? []), a.keywords]
     .filter(Boolean).join(' '))
 }

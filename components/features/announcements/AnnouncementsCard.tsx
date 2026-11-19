@@ -45,6 +45,7 @@ export function AnnouncementsCard({ profile }: { profile: Profile }) {
   useEffect(() => {
     loadAnnouncements()
     loadMyClasses()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
   }, [])
 
   // ── Load announcements (with class info) ──────────────────────────────────

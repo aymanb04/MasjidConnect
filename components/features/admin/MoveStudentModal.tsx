@@ -32,6 +32,7 @@ export function MoveStudentModal({ student, tenantId, onClose, onSaved }: Props)
   const [error,    setError]    = useState('')
   const [addSelect, setAddSelect] = useState('')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load once when the modal opens
   useEffect(() => { loadData() }, [])
 
   async function loadData() {

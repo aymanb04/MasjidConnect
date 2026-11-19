@@ -46,6 +46,7 @@ export default function OudercontactPage() {
   useEffect(() => {
     if (!profile) return
     load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile])
 
   async function load() {

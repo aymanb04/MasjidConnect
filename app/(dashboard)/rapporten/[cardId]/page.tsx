@@ -43,6 +43,7 @@ export default function RapportCardPage() {
   useEffect(() => {
     if (!profile || !cardId) return
     loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile, cardId])
 
   async function loadData() {

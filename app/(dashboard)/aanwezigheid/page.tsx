@@ -79,6 +79,7 @@ export default function AanwezigheidPage() {
 
   useEffect(() => {
     if (profile) loadClasses()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile])
 
   async function loadClasses() {
@@ -238,6 +239,7 @@ function ClassListView({
       .then(({ data }) => {
         setDoneTodayIds(new Set((data ?? []).map((r: any) => r.class_id)))
       })
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [classes])
 
   // With the group in a heading, the school year was the only thing left on
@@ -387,6 +389,7 @@ function MarkAttendanceView({ cls, siblings, profile, onBack }: {
     setLoading(true)
     setPrevDismissed(false)
     loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [date, activeKey])
 
   // Every query here is checked. This loader used to destructure `{ data }` only
@@ -767,6 +770,7 @@ function HistoryView({
   const [loadErr,  setLoadErr]  = useState<unknown>(null)
   const [tab,      setTab]      = useState<'sessions' | 'students'>('sessions')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   useEffect(() => { loadSessions() }, [])
 
   async function loadSessions() {
@@ -914,6 +918,7 @@ function StudentStatsView({ cls }: { cls: ClassItem }) {
   const [sessionCount, setSessionCount] = useState(0)
   const [loading,      setLoading]      = useState(true)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   useEffect(() => { load() }, [])
 
   async function load() {
@@ -1035,6 +1040,7 @@ function SessionDetailView({
   const [records, setRecords] = useState<RecordItem[]>([])
   const [loading, setLoading] = useState(true)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   useEffect(() => { loadRecords() }, [])
 
   async function loadRecords() {
@@ -1130,6 +1136,7 @@ function MyRecordsView({
   const [loadErr,  setLoadErr]  = useState<unknown>(null)
   const [classFilter, setClassFilter] = useState<string>('all')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   useEffect(() => { loadMyRecords() }, [])
 
   async function loadMyRecords() {

@@ -47,6 +47,7 @@ export default function BeheerPage() {
       return
     }
     loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the listed deps; the loader is not memoised
   }, [profile])
 
   async function loadData() {
