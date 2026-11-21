@@ -124,9 +124,12 @@ export function LandingPageEn() {
     }, [])
 
     return (
-        <div lang="en" className="min-h-dvh bg-surface-warm">
+        <div lang="en" className="min-h-dvh bg-surface-warm"
+            // viewport-fit=cover: iPhone Safari in landscape draws the page under the
+            // notch, so keep everything clear of the side insets (0 everywhere else).
+            style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)' }}>
             {/* ---------------------------------------------------------------- nav */}
-            <header className="sticky top-0 z-40 border-b border-border/70 bg-surface-warm/85 backdrop-blur">
+            <header className="sticky top-0 z-40 border-b border-border/70 bg-surface-warm/85 backdrop-blur" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
                 <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
                     <Link href="/en" className="flex items-center gap-2.5">
                         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500">

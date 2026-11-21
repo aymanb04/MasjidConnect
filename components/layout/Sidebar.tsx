@@ -50,7 +50,10 @@ export default function Sidebar({ profile, tenant, onClose }: Props) {
   return (
     <aside
       className="w-[240px] bg-white border-r border-border flex flex-col h-full"
-      style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      // paddingTop: in the installed app (black-translucent status bar) the page runs
+      // under the clock and the notch / Dynamic Island. Without it the school name
+      // printed straight through the clock when the drawer opened (2026-11-21).
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingLeft: 'env(safe-area-inset-left, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       <div className="px-5 py-5 border-b border-border">
         <div className="flex items-center gap-2.5">

@@ -229,9 +229,12 @@ export function PhoneShot({ src, alt, caption }: { src: string; alt: string; cap
 
 export function LandingPage() {
     return (
-        <div className="min-h-dvh bg-surface-warm">
+        <div className="min-h-dvh bg-surface-warm"
+            // viewport-fit=cover: iPhone Safari in landscape draws the page under the
+            // notch, so keep everything clear of the side insets (0 everywhere else).
+            style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)' }}>
             {/* ---------------------------------------------------------------- nav */}
-            <header className="sticky top-0 z-40 border-b border-border/70 bg-surface-warm/85 backdrop-blur">
+            <header className="sticky top-0 z-40 border-b border-border/70 bg-surface-warm/85 backdrop-blur" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
                 <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
                     <div className="flex items-center gap-2.5">
                         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500">
@@ -243,7 +246,10 @@ export function LandingPage() {
                         <span className="font-semibold text-gray-900 [@media(max-width:359px)]:sr-only">MasjidConnect</span>
                     </div>
 
-                    <div className="hidden items-center gap-7 text-sm text-gray-600 md:flex">
+                    {/* lg, not md: between 768 and ~1000px the four links wrapped to two lines and
+                        squeezed "Demo van 15 min" into a two-line button taller than the header
+                        (iPad portrait, found 2026-11-21). */}
+                    <div className="hidden items-center gap-7 text-sm text-gray-600 lg:flex">
                         <a href="#voor-wie" className="transition-colors hover:text-primary-600">Voor wie</a>
                         <a href="#beeld" className="transition-colors hover:text-primary-600">In beeld</a>
                         <a href="#functies" className="transition-colors hover:text-primary-600">Functies</a>
@@ -259,7 +265,7 @@ export function LandingPage() {
                             Dutch-only, the /en page explains it in English. */}
                         <Link href="/en" hrefLang="en" lang="en" className="btn-ghost hidden px-2.5 sm:inline-flex" title="English">EN</Link>
                         <Link href="/login" className="btn-ghost">Inloggen</Link>
-                        <a href="#demo" className="btn-primary">
+                        <a href="#demo" className="btn-primary whitespace-nowrap">
                             {/* One flex child, not two: .btn is inline-flex gap-2, so a
                                 bare <span> sibling would space the label by 8px instead of
                                 a word space. */}

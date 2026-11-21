@@ -75,6 +75,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             browser runs it before parsing the markup below. */}
         <script dangerouslySetInnerHTML={{ __html: BOUNCE_IF_AUTHED }} />
         {children}
+        {/* Status-bar strip. The installed app uses a see-through status bar
+            (black-translucent), so any page that scrolls without a sticky header
+            of its own (every page on an iPad, the legal pages, …) ran behind the
+            clock and battery. Its height is the safe-area inset: 0 in a normal
+            browser tab and on desktop. z-35: above sticky page headers (z-30),
+            below the drawer overlay (z-40) and dialogs (z-50). It takes taps on
+            purpose: nothing hidden under the clock should be tappable. */}
+        <div
+          aria-hidden="true"
+          className="fixed inset-x-0 top-0 z-[35] bg-white"
+          style={{ height: 'env(safe-area-inset-top, 0px)' }}
+        />
       </body>
     </html>
   )
