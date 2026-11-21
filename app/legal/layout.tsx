@@ -8,8 +8,10 @@ import { MeemMark } from '@/components/ui/MeemMark'
 // components, so the two versions can never drift apart.
 export default function LegalLayout({ children }: { children: React.ReactNode }) {
     return (
-        <div className="min-h-dvh bg-surface-warm">
-            <header className="border-b border-border bg-surface-warm/85 backdrop-blur">
+        // Safe areas: under the clock in the installed app (reachable from the login
+        // screen), under the notch in landscape Safari. 0 everywhere else.
+        <div className="min-h-dvh bg-surface-warm" style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)' }}>
+            <header className="border-b border-border bg-surface-warm/85 backdrop-blur" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
                 <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-5 sm:px-8">
                     <Link href="/" className="flex items-center gap-2.5">
                         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500">

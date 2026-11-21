@@ -252,7 +252,7 @@ export default function CsvImportButton({ tenantId, onImported }: Props) {
             </button>
 
             {open && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="modal-overlay z-50">
                     <div className="absolute inset-0 bg-black/40 backdrop-blur-sm"
                          onClick={() => { if (!loading) { setOpen(false); reset() } }}/>
                     <div className="relative bg-white rounded-2xl shadow-modal w-full max-w-2xl animate-slide-up">

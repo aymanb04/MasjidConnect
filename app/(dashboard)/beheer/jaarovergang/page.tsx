@@ -690,7 +690,7 @@ export default function JaarovergangPage() {
 
       {/* Create year modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div className="modal-overlay z-50 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-slide-up">
             <h2 className="font-semibold text-gray-900 text-lg mb-5 flex items-center gap-2">
               <Plus size={18} className="text-primary-600"/> Nieuw schooljaar aanmaken

@@ -111,9 +111,9 @@ export default function EventModal({ tenantId, userId, event, defaultDate, group
     : 'border-border text-gray-600 hover:bg-gray-50'}`
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="modal-overlay z-50">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative flex max-h-[92dvh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-modal animate-slide-up">
+      <div className="relative flex max-h-full w-full max-w-lg flex-col rounded-2xl bg-white shadow-modal animate-slide-up">
         <div className="flex flex-shrink-0 items-center justify-between border-b border-border p-6">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-primary-50 rounded-lg flex items-center justify-center">
