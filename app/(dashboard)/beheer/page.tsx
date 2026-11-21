@@ -202,15 +202,17 @@ export default function BeheerPage() {
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
                       style={{ backgroundColor: klas.color }}>{klas.name[0]}</div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm text-gray-800">{klas.name}</span>
+                      {/* min-w-0 + truncate: on a phone the group label used to keep its full
+                          width and run under the school year next to it (2026-11-21). */}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-medium text-sm text-gray-800 flex-shrink-0">{klas.name}</span>
                         {klas.groups?.name && (
-                          <span className="text-xs text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                          <span className="text-xs text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-full min-w-0 truncate">
                             {klas.groups.name}
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-gray-400 truncate">
                         {klas.class_students?.length ?? 0} leerlingen ·{' '}
                         {klas.class_teachers?.map((t: any) =>
                           `${t.profiles?.first_name} ${t.profiles?.last_name}`
@@ -218,7 +220,8 @@ export default function BeheerPage() {
                       </div>
                     </div>
                   </button>
-                  <span className="text-xs text-gray-400 flex-shrink-0">{klas.school_years?.name}</span>
+                  {/* The year is always the active one here; on a phone it only took space. */}
+                  <span className="hidden sm:inline text-xs text-gray-400 flex-shrink-0">{klas.school_years?.name}</span>
                   <button
                     onClick={() => archiveClass(klas.id, klas.name)}
                     className="p-1.5 text-gray-300 hover:text-red-400 transition-colors flex-shrink-0"

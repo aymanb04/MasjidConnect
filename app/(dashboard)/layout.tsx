@@ -79,7 +79,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 }}
             >
                 {/* Mobile top bar */}
-                <div className="sticky top-0 z-30 flex items-center justify-between px-4 bg-white border-b border-gray-200 sidenav:hidden" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: '0.75rem' }}>
+                {/* Full-bleed: <main> is indented by the side insets (landscape notch), so
+                    the bar pulls itself back out with negative margins and pads its
+                    contents in again. Otherwise it stopped short of both edges. */}
+                <div className="sticky top-0 z-30 flex items-center justify-between bg-white border-b border-gray-200 sidenav:hidden" style={{
+                    paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: '0.75rem',
+                    marginLeft: 'calc(-1 * env(safe-area-inset-left, 0px))', marginRight: 'calc(-1 * env(safe-area-inset-right, 0px))',
+                    paddingLeft: 'calc(1rem + env(safe-area-inset-left, 0px))', paddingRight: 'calc(1rem + env(safe-area-inset-right, 0px))',
+                }}>
                     <button
                         onClick={() => setSidebarOpen(true)}
                         className="p-1 -ml-1 text-gray-600 hover:text-gray-900"

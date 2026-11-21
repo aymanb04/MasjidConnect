@@ -211,3 +211,29 @@
     padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
   }
 }
+
+/*
+ * Datum- en tijdvelden op een iPhone/iPad.
+ *
+ * Gemeld op 2026-11-21 (iPhone, Agenda → Activiteit toevoegen): de velden
+ * "Van" en "Tot en met" liepen in elkaar en het tweede stak buiten het venster.
+ * iOS geeft een datum/tijdveld een eigen minimumbreedte die width:100% negeert,
+ * dus twee naast elkaar in een raster passen niet. Op de computer klopte het.
+ * Alleen op iOS (-webkit-touch-callout bestaat nergens anders), en alleen voor
+ * de volle-breedte .input-velden: de losse datumkiezers in een rij (Aanwezigheid,
+ * Betalingen) houden hun natuurlijke breedte. appearance:none laat de iOS-kiezer
+ * werken maar laat de minimumbreedte los; een leeg veld valt dan niet samen
+ * dankzij de min-height (= hoogte van een gewoon .input-veld op een telefoon).
+ */
+@supports (-webkit-touch-callout: none) {
+  .input:not(.w-auto):is([type="date"], [type="time"], [type="datetime-local"], [type="month"]) {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 2.625rem;
+  }
+  .input:not(.w-auto):is([type="date"], [type="time"], [type="datetime-local"], [type="month"])::-webkit-date-and-time-value {
+    text-align: left;
+  }
+}
