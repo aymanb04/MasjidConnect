@@ -140,7 +140,7 @@ export function CreateClassButton({ tenantId, onCreated }: Props) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="modal-overlay z-50">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setOpen(false)}/>
           <div className="relative bg-white rounded-2xl shadow-modal w-full max-w-md animate-slide-up">
             <div className="flex items-center justify-between p-6 border-b border-border">

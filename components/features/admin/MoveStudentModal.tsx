@@ -162,7 +162,7 @@ export function MoveStudentModal({ student, tenantId, onClose, onSaved }: Props)
   const hasChanges = toAdd.length > 0 || toRemove.size > 0
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+    <div className="modal-overlay z-50 bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-slide-up overflow-hidden">
 
         {/* Header */}

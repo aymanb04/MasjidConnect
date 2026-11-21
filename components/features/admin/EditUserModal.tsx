@@ -181,9 +181,9 @@ export function EditUserModal({ user, tenantId, onClose, onSaved }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
+    <div className="modal-overlay modal-sheet z-50 bg-black/40"
          role="dialog" aria-modal="true" aria-labelledby="edit-user-title">
-      <div className="w-full sm:max-w-lg max-h-[92dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white p-5 sm:p-6">
+      <div className="w-full sm:max-w-lg max-h-full overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white p-5 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 id="edit-user-title" className="font-semibold text-gray-900">Gebruiker bewerken</h2>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600" aria-label="Sluiten">

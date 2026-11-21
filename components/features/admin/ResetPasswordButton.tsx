@@ -65,7 +65,7 @@ export function ResetPasswordButton({
   // the only place we can state that this is shown once.
   if (state === 'done') {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      <div className="modal-overlay z-50 bg-black/40"
            role="dialog" aria-modal="true" aria-labelledby="pw-title">
         <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center">
           <h2 id="pw-title" className="font-semibold text-gray-900">Nieuw wachtwoord</h2>
