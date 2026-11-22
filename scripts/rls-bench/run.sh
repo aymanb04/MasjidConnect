@@ -50,6 +50,13 @@ audit=$(q < scripts/rls-bench/40_audit.sql) || { echo "FAIL  40_audit.sql"; exit
 echo "$audit"
 walls=$(echo "SELECT count(*) FROM pg_policies WHERE policyname = 'tenant_wall' AND permissive = 'RESTRICTIVE'" | q)
 tables=$(echo "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'" | q)
+echo "── signup trigger (49)"
+# 49_rollback.sql is spliced in at the marker so the file can prove it would
+# catch the old (migration 26) behaviour.
+signup=$( { sed '/@@ROLLBACK_49@@/,$d' scripts/rls-bench/45_signup.sql
+            cat supabase/49_rollback.sql
+            sed -n '/@@ROLLBACK_49@@/,$p' scripts/rls-bench/45_signup.sql; } | q ) || { echo "FAIL  45_signup.sql"; exit 1; }
+echo "$signup"
 echo "── re-applied: $walls walls on $tables tables"
 
 q <<'SQL'
@@ -86,6 +93,8 @@ broken=$(echo "SELECT count(*) FROM bench.results w JOIN bench.results n ON n.la
 leaks=$(echo "SELECT count(*) FROM bench.results WHERE label='wall' AND metric LIKE 'atk_%' AND value NOT LIKE 'E%' AND value <> '0'" | q)
 seen=$(echo "SELECT count(DISTINCT tbl) FROM bench.results WHERE label='nowall' AND metric LIKE 'atk_%' AND value NOT LIKE 'E%' AND value <> '0'" | q)
 echo "$audit" | grep -q "^FAIL" && { echo "FAIL  audit log checks (above)"; fail=1; }
+echo "$signup" | grep -q "^FAIL" && { echo "FAIL  signup trigger checks (above)"; fail=1; }
+echo "$signup" | grep -q "^PASS" || { echo "FAIL  signup trigger checks printed nothing"; fail=1; }
 [ "$left" = "0" ]          || { echo "FAIL  rollback left $left walls"; fail=1; }
 [ "$walls" = "$tables" ]   || { echo "FAIL  $walls walls for $tables tables"; fail=1; }
 [ "$broken" = "0" ]        || { echo "FAIL  the wall changes $broken own-school outcomes (list 1)"; fail=1; }
