@@ -2,7 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/api-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { closeAccount, eraseUserData } from '@/lib/gdpr-erasure'
+import { closeAccount, eraseUserData, retireAuthUser } from '@/lib/gdpr-erasure'
 
 export async function POST(request: Request) {
     const auth = await requireRole(request, ['admin', 'super_admin'])
@@ -66,10 +66,23 @@ export async function POST(request: Request) {
             )
         }
 
-        // Logged so an erasure can be evidenced to a school or the GBA later.
-        console.info('[/api/user/anonymize] erased', userId, JSON.stringify(report))
+        // ── Step 4: empty the login record (GoTrue soft delete) ─────────────────
+        // Never a hard delete here: anonymising keeps the person's anonymous
+        // history by design. The soft delete removes the name, e-mail and login
+        // identity that auth.users still held (review 2026-11-21, finding #2).
+        const retired = await retireAuthUser(supabaseAdmin, userId, { allowHard: false })
+        if ('error' in retired) {
+            console.error('[/api/user/anonymize] erasure incomplete:', retired.error)
+            return NextResponse.json(
+                { error: 'Het account is afgesloten, maar niet alle gegevens konden worden gewist. Neem contact op met de beheerder.' },
+                { status: 500 }
+            )
+        }
 
-        return NextResponse.json({ success: true, erased: report })
+        // Logged so an erasure can be evidenced to a school or the GBA later.
+        console.info('[/api/user/anonymize] erased', userId, retired.removed, JSON.stringify(report))
+
+        return NextResponse.json({ success: true, erased: { ...report, auth: retired.removed } })
     } catch (e: any) {
         console.error('[/api/user/anonymize]', e.message)
         return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })

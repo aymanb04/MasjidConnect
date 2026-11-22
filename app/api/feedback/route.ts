@@ -25,8 +25,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Bericht is verplicht.' }, { status: 400 })
   }
   // Cap the payload. Without this any authenticated user can push an unbounded
-  // string into the table; 4000 also keeps us under Discord's 4096-char embed
-  // description limit, so the webhook below can't fail on a long message.
+  // string into the table. (The Discord ping below never carries the message.)
   if (message.length > MAX_MESSAGE_LEN) {
     return NextResponse.json(
       { error: `Bericht is te lang (max ${MAX_MESSAGE_LEN} tekens).` },
@@ -55,7 +54,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Opslaan mislukt.' }, { status: 500 })
   }
 
-  // Optional Discord webhook — set DISCORD_FEEDBACK_WEBHOOK_URL in Vercel env vars
+  // Optional Discord ping (DISCORD_FEEDBACK_WEBHOOK_URL in Vercel). It says
+  // THAT feedback arrived and of which type, nothing else: the message, the
+  // sender's role and the page URL stay in our own database (superadmin →
+  // feedback). Discord is not a sub-processor in the DPA, and staff write
+  // free text that can name pupils; page URLs can carry a pupil's id
+  // (/dossiers/<uuid>). Review 2026-11-21, finding #4. Never add content here
+  // without first adding Discord to legal/sub-verwerkers.md.
   const webhookUrl = process.env.DISCORD_FEEDBACK_WEBHOOK_URL
   if (webhookUrl) {
     const emoji: Record<string, string> = { bug: '🐛', suggestie: '💡', vraag: '❓' }
@@ -66,15 +71,10 @@ export async function POST(req: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           embeds: [{
-            title:  `${emoji[feedbackType] ?? '📩'} ${feedbackType.charAt(0).toUpperCase() + feedbackType.slice(1)} — MasjidConnect`,
-            description: message.trim(),
+            title: `${emoji[feedbackType] ?? '📩'} Nieuwe feedback (${feedbackType})`,
+            description: 'Lees het bericht in MasjidConnect → Superadmin → Feedback.',
             color: colour[feedbackType] ?? 0x1B6B4A,
-            fields: [
-              { name: 'Rol',   value: auth.caller.role,  inline: true },
-              { name: 'Pagina', value: page_url ?? '—',  inline: true },
-            ],
             timestamp: new Date().toISOString(),
-            footer: { text: 'MasjidConnect Feedback' },
           }],
         }),
       })

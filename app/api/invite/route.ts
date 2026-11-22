@@ -71,8 +71,12 @@ export async function POST(request: Request) {
             }
         }
 
+        // Only the names travel in user metadata. Since migration 49 the signup
+        // trigger ignores role/tenant_id there (anyone can write user metadata
+        // through signUp()), so the new profile starts as a stub without a
+        // school, and the step right below gives it its role and school.
         const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-            data: { first_name, last_name, role, tenant_id },
+            data: { first_name, last_name },
             redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? request.headers.get('origin')}/reset-password`,
         })
 
@@ -98,6 +102,30 @@ export async function POST(request: Request) {
                 },
                 { status: 400 }
             )
+        }
+
+        // Role and school, written by the server (migration 49). Unlike the
+        // enrolment steps below this one is not optional: without it the
+        // person has an account that belongs to no school. So if it fails, the
+        // account is removed again and the admin can simply retry.
+        if (data.user) {
+            const { error: roleErr } = await supabaseAdmin
+                .from('profiles')
+                .update({ role, tenant_id })
+                .eq('id', data.user.id)
+            if (roleErr) {
+                console.error('[/api/invite] set role/school:', roleErr.message)
+                const { error: undoErr } = await supabaseAdmin.auth.admin.deleteUser(data.user.id)
+                if (undoErr) console.error('[/api/invite] undo invite:', undoErr.message)
+                return NextResponse.json(
+                    {
+                        error: undoErr
+                            ? 'De uitnodiging is verstuurd, maar de rol en school konden niet worden ingesteld. Meld dit even: het account moet worden nagekeken.'
+                            : 'De uitnodiging kon niet worden opgeslagen. Er is niets aangemaakt; probeer het opnieuw.',
+                    },
+                    { status: 500 }
+                )
+            }
         }
 
         // From here on the account EXISTS, so a failure below must not turn into
