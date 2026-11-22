@@ -48,8 +48,10 @@ import { OWNED_TABLES, SCRUBBED_TABLES } from './personal-data-map'
  */
 export async function closeAccount(admin: SupabaseClient, userId: string): Promise<string | null> {
   const { error: authErr } = await admin.auth.admin.updateUserById(userId, {
-    email:        `anon-${userId}@deleted.invalid`,
-    ban_duration: '876000h',
+    email:         `anon-${userId}@deleted.invalid`,
+    // Without this an admin e-mail change can stay pending instead of applying.
+    email_confirm: true,
+    ban_duration:  '876000h',
   })
   if (authErr) return `auth ban: ${authErr.message}`
 
@@ -75,6 +77,41 @@ export async function closeAccount(admin: SupabaseClient, userId: string): Promi
     .eq('id', userId)
   if (profileErr) return `profile scrub: ${profileErr.message}`
   return null
+}
+
+/**
+ * Remove the person from Supabase Auth, the last step of an erasure.
+ *
+ * Why this exists (review 2026-11-21, finding #2): closeAccount() scrubs the
+ * profile, but the login record kept the name. Invite and bulk-onboard put
+ * first_name/last_name in auth.users.raw_user_meta_data, and the identity kept
+ * the original login address in identity_data. A hard delete would remove all
+ * of it, but it almost never succeeds: deleting the auth user cascades into
+ * profiles, and attendance_records/submissions block that (see the note at the
+ * top of this file).
+ *
+ * So: try the hard delete (`allowHard`), and otherwise use GoTrue's own soft
+ * delete (models.User.SoftDeleteUser + SoftDeleteUserIdentities). It keeps the
+ * auth.users ROW (no cascade, so the anonymous statistics stay valid) but
+ * hashes e-mail and phone, empties user AND app metadata, empties every
+ * identity's identity_data, removes the password, revokes all sessions and
+ * sets deleted_at. Nothing readable is left. Calling it twice is a no-op.
+ *
+ * Returns 'hard' | 'soft', or an error message.
+ */
+export async function retireAuthUser(
+  admin: SupabaseClient,
+  userId: string,
+  opts: { allowHard: boolean },
+): Promise<{ removed: 'hard' | 'soft' } | { error: string }> {
+  if (opts.allowHard) {
+    const { error } = await admin.auth.admin.deleteUser(userId)
+    if (!error) return { removed: 'hard' }
+    // Expected for anyone with attendance or submissions: fall through.
+  }
+  const { error } = await admin.auth.admin.deleteUser(userId, true)
+  if (error) return { error: `auth soft delete: ${error.message}` }
+  return { removed: 'soft' }
 }
 
 export interface ErasureReport {

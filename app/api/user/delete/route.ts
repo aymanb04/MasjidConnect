@@ -2,7 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/api-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { closeAccount, eraseUserData } from '@/lib/gdpr-erasure'
+import { closeAccount, eraseUserData, retireAuthUser } from '@/lib/gdpr-erasure'
 
 export async function DELETE(request: Request) {
     const auth = await requireRole(request, ['super_admin'])
@@ -64,19 +64,30 @@ export async function DELETE(request: Request) {
             )
         }
 
-        // Cascade removes the profile and class links. When history blocks it,
-        // the person stays as an anonymous row: erased all the same (Art. 17),
-        // and the school's statistics stay whole.
-        const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
-        if (error) {
-            console.info('[/api/user/delete] kept as anonymous row (history):', userId, error.message, JSON.stringify(report))
-            return NextResponse.json({ success: true, deleted: false, anonymised: true, erased: report })
+        // Last step: the login record. A hard delete cascades away the profile
+        // and class links; when history blocks it (attendance, submissions),
+        // GoTrue's soft delete empties the auth row instead -- name, e-mail and
+        // login identity gone, the anonymous statistics still valid. Before
+        // 2026-11-22 a blocked delete simply stopped here and the auth row kept
+        // the person's name (review finding #2).
+        const retired = await retireAuthUser(supabaseAdmin, userId, { allowHard: true })
+        if ('error' in retired) {
+            console.error('[/api/user/delete] erasure incomplete:', retired.error)
+            return NextResponse.json(
+                { error: 'De gegevens zijn gewist, maar het inlogaccount kon niet worden opgeruimd. Probeer opnieuw of neem contact op.' },
+                { status: 500 }
+            )
         }
 
         // Logged so an erasure can be evidenced to a school or the GBA later.
-        console.info('[/api/user/delete] erased', userId, JSON.stringify(report))
+        console.info('[/api/user/delete] erased', userId, retired.removed, JSON.stringify(report))
 
-        return NextResponse.json({ success: true, deleted: true, anonymised: true, erased: report })
+        return NextResponse.json({
+            success: true,
+            deleted: retired.removed === 'hard',
+            anonymised: true,
+            erased: { ...report, auth: retired.removed },
+        })
     } catch (e: any) {
         console.error('[/api/user/delete]', e.message)
         return NextResponse.json({ error: 'Er is een fout opgetreden.' }, { status: 500 })

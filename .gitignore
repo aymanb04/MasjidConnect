@@ -102,3 +102,6 @@ SECURITY
 # mobile number and the client's internal status; leads/ is a contact list
 # (personal data). To publish one file on purpose: !/marketing/<file>
 /marketing/
+
+# ─── Operator output (ids of real people) ─────────────────────────────
+/retire-erased-auth-*.json
