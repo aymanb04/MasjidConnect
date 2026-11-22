@@ -146,6 +146,63 @@ async function removeObjects(
 }
 
 /**
+ * Every object under `<prefix>/`, one folder level down included. Storage's
+ * list() is not recursive and returns sub-folders as entries with id null.
+ * submission-files is laid out `<user>/<assignment>/<file>`, so one level is
+ * exactly what that bucket needs. Pages past the 1000-entry limit.
+ */
+export async function listUnder(
+  admin: SupabaseClient, bucket: string, prefix: string,
+): Promise<{ paths: string[]; error?: string }> {
+  const paths: string[] = []
+  const walk = async (dir: string, depth: number): Promise<string | undefined> => {
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await admin.storage.from(bucket).list(dir, { limit: 1000, offset })
+      if (error) return `storage/${bucket} list ${depth ? 'sub' : ''}folder: ${error.message}`
+      for (const o of data ?? []) {
+        if (o.id === null) {
+          if (depth === 0) {
+            const e = await walk(`${dir}/${o.name}`, 1)
+            if (e) return e
+          }
+        } else {
+          paths.push(`${dir}/${o.name}`)
+        }
+      }
+      if (!data || data.length < 1000) return undefined
+    }
+  }
+  const error = await walk(prefix, 0)
+  return { paths, error }
+}
+
+/**
+ * After the pupil's dossier is gone, their family row may name nobody but
+ * them (label = family surname). Delete it when no child and no payment points
+ * at it any more; when chart payments still do, keep the row (accounting
+ * records, 7 years, and fee_payments cascades from families) but drop the name.
+ */
+async function releaseFamily(
+  admin: SupabaseClient, familyId: string, tenantId: string, report: ErasureReport,
+): Promise<void> {
+  const { count: kids, error: kErr } = await admin.from('student_details')
+    .select('student_id', { count: 'exact', head: true }).eq('family_id', familyId)
+  if (kErr) { report.errors.push(`families check: ${kErr.message}`); return }
+  if ((kids ?? 0) > 0) return   // a brother or sister is still enrolled: the family stays as it is
+
+  const { count: pays, error: pErr } = await admin.from('fee_payments')
+    .select('id', { count: 'exact', head: true }).eq('family_id', familyId)
+  if (pErr) { report.errors.push(`families payments check: ${pErr.message}`); return }
+
+  const q = (pays ?? 0) > 0
+    ? admin.from('families').update({ label: 'Verwijderd' }).eq('id', familyId).eq('tenant_id', tenantId)
+    : admin.from('families').delete().eq('id', familyId).eq('tenant_id', tenantId)
+  const { error } = await q
+  if (error) report.errors.push(`families ${(pays ?? 0) > 0 ? 'scrub' : 'delete'}: ${error.message}`)
+  else report.rows[(pays ?? 0) > 0 ? 'families_scrubbed' : 'families'] = 1
+}
+
+/**
  * Erase everything belonging to one person, in every table and bucket.
  *
  * Safe to call before an auth-user delete (it removes rows the cascade would
@@ -249,17 +306,34 @@ export async function eraseUserData(
       }
     }
   }
+  // submission-files is laid out `<user_id>/<assignment_id>/<file>` (no tenant
+  // in the path; RLS pins the first segment to the uploader since mig 26), so
+  // everything under the user's folder is theirs. Catches uploads whose row
+  // insert failed, which the submission_files step above can't see.
+  // (Review 2026-11-21, finding #7.)
+  {
+    const { paths, error } = await listUnder(admin, 'submission-files', userId)
+    if (error) report.errors.push(error)
+    else if (paths.length) await removeObjects(admin, 'submission-files', paths, report)
+  }
 
   // ── Rows that are entirely about this person ───────────────────────────────
   // The table list lives in personal-data-map.ts, shared with the export route:
   // what we can erase must be exactly what we can export (Art. 15/17/20 read the
   // same footprint).
+  // The family row (surname) is checked after student_details is gone.
+  const { data: det, error: detErr } = await admin
+    .from('student_details').select('family_id').eq('student_id', userId).maybeSingle()
+  if (detErr) report.errors.push(`student_details family read: ${detErr.message}`)
+  const familyId: string | null = det?.family_id ?? null
+
   for (const { table, key } of OWNED_TABLES) {
     const { error, count } = await admin
       .from(table).delete({ count: 'exact' }).eq(key, userId)
     if (error) report.errors.push(`${table} delete: ${error.message}`)
     else countRows(table, count ?? 0)
   }
+  if (familyId && opts.tenantId) await releaseFamily(admin, familyId, opts.tenantId, report)
 
   // ── Free text about this person, on rows kept for statistics ───────────────
   for (const { table, key, column } of SCRUBBED_TABLES) {
@@ -283,6 +357,9 @@ export async function eraseUserData(
   if (opts.email && !opts.email.endsWith('@deleted.invalid')) {
     const { error, count } = await admin
       .from('invitations').delete({ count: 'exact' }).eq('email', opts.email)
+      // An erasure is one school's request: another school's invitation for the
+      // same address is not ours to remove.
+      .eq('tenant_id', opts.tenantId ?? '00000000-0000-0000-0000-000000000000')
     if (error) report.errors.push(`invitations delete: ${error.message}`)
     else countRows('invitations', count ?? 0)
   }
