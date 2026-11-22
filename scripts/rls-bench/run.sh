@@ -57,6 +57,18 @@ signup=$( { sed '/@@ROLLBACK_49@@/,$d' scripts/rls-bench/45_signup.sql
             cat supabase/49_rollback.sql
             sed -n '/@@ROLLBACK_49@@/,$p' scripts/rls-bench/45_signup.sql; } | q ) || { echo "FAIL  45_signup.sql"; exit 1; }
 echo "$signup"
+echo "── inactive users + erasure guard (50)"
+guards=$( { sed '/@@ROLLBACK_50@@/,$d' scripts/rls-bench/46_guards.sql
+            cat supabase/50_rollback.sql
+            sed -n '/@@ROLLBACK_50@@/,$p' scripts/rls-bench/46_guards.sql; } | q ) || { echo "FAIL  46_guards.sql"; exit 1; }
+echo "$guards"
+# 50 must change nothing for ACTIVE people: full census with and without it.
+echo "SELECT bench.census('with50')" | q >/dev/null || exit 1
+q < supabase/50_rollback.sql >/dev/null || { echo "FAIL  50_rollback.sql"; exit 1; }
+echo "SELECT bench.census('without50')" | q >/dev/null || exit 1
+( echo "SET check_function_bodies = off;"; cat supabase/50_inactive_and_erased_guards.sql ) | q >/dev/null || { echo "FAIL  re-applying 50"; exit 1; }
+changed50=$(echo "SELECT count(*) FROM bench.results a JOIN bench.results b ON a.label='with50' AND b.label='without50' AND (a.who,a.tbl,a.metric)=(b.who,b.tbl,b.metric) WHERE a.value IS DISTINCT FROM b.value" | q)
+echo "── 50 changes $changed50 own-school outcomes for active people (expect 0)"
 echo "── re-applied: $walls walls on $tables tables"
 
 q <<'SQL'
@@ -95,6 +107,9 @@ seen=$(echo "SELECT count(DISTINCT tbl) FROM bench.results WHERE label='nowall' 
 echo "$audit" | grep -q "^FAIL" && { echo "FAIL  audit log checks (above)"; fail=1; }
 echo "$signup" | grep -q "^FAIL" && { echo "FAIL  signup trigger checks (above)"; fail=1; }
 echo "$signup" | grep -q "^PASS" || { echo "FAIL  signup trigger checks printed nothing"; fail=1; }
+echo "$guards" | grep -q "^FAIL" && { echo "FAIL  inactive/erasure guard checks (above)"; fail=1; }
+echo "$guards" | grep -q "^PASS" || { echo "FAIL  inactive/erasure guard checks printed nothing"; fail=1; }
+[ "$changed50" = "0" ]     || { echo "FAIL  migration 50 changes $changed50 outcomes for active people"; fail=1; }
 [ "$left" = "0" ]          || { echo "FAIL  rollback left $left walls"; fail=1; }
 [ "$walls" = "$tables" ]   || { echo "FAIL  $walls walls for $tables tables"; fail=1; }
 [ "$broken" = "0" ]        || { echo "FAIL  the wall changes $broken own-school outcomes (list 1)"; fail=1; }
