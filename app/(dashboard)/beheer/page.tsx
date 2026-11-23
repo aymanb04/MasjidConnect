@@ -18,6 +18,7 @@ import { MoveStudentModal } from '@/components/features/admin/MoveStudentModal'
 import { EditUserModal } from '@/components/features/admin/EditUserModal'
 import { ResetPasswordButton } from '@/components/features/admin/ResetPasswordButton'
 import { ExportUserButton } from '@/components/features/admin/ExportUserButton'
+import { PROFILE_COLUMNS, withContacts } from '@/lib/profile-contacts'
 
 export default function BeheerPage() {
   const { profile, loading: profileLoading } = useProfile()
@@ -56,7 +57,7 @@ export default function BeheerPage() {
     setLoadErr(null)
 
     const [{ data: u, error: uErr }, { data: c, error: cErr }, { data: inv, error: invErr }] = await Promise.all([
-      supabase.from('profiles').select('*').eq('tenant_id', tid).eq('is_active', true).order('last_name'),
+      supabase.from('profiles').select(PROFILE_COLUMNS).eq('tenant_id', tid).eq('is_active', true).order('last_name'),
       supabase.from('classes')
         .select('*, school_years(name), groups(name, created_at), class_students(id), class_teachers(profiles(first_name, last_name))')
         .eq('tenant_id', tid).eq('is_archived', false),
@@ -66,7 +67,10 @@ export default function BeheerPage() {
 
     const firstErr = uErr || cErr || invErr
     if (firstErr) { console.error(firstErr); setLoadErr(firstErr); setLoading(false); return }
-    setUsers(u ?? [])
+    // E-mail + phone come from get_profile_contacts (migration 51).
+    const { data: withC, error: cErr2 } = await withContacts(supabase, (u ?? []) as unknown as { id: string }[])
+    if (cErr2) { console.error(cErr2); setLoadErr(cErr2); setLoading(false); return }
+    setUsers(withC)
     setClasses(sortClasses((c ?? []).map((x: any) => ({
       ...x, group_name: x.groups?.name, group_created_at: x.groups?.created_at,
     }))))
@@ -79,8 +83,9 @@ export default function BeheerPage() {
     setShowArchived(true)
     if (archivedUsers.length) return
     setArchivedLoading(true)
-    const { data, error } = await supabase.from('profiles').select('*')
+    const { data: rows, error: rowsErr } = await supabase.from('profiles').select(PROFILE_COLUMNS)
       .eq('tenant_id', profile!.tenant_id).eq('is_active', false).order('last_name')
+    const { data, error } = rowsErr ? { data: [], error: rowsErr } : await withContacts(supabase, (rows ?? []) as unknown as { id: string }[])
     if (error) { console.error(error); alert('Gearchiveerde gebruikers laden mislukt. Probeer het opnieuw.'); setShowArchived(false) }
     setArchivedUsers(data ?? [])
     setArchivedLoading(false)

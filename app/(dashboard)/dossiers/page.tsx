@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
+import { withContacts } from '@/lib/profile-contacts'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -55,16 +56,17 @@ export default function DossiersPage() {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, email')
+        .select('id, first_name, last_name')
         .in('id', studentIds)
         .eq('is_active', true)
         .order('last_name')
       if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
-      setStudents(data ?? [])
+      await setWithContacts(data ?? [])
+      return
     } else {
       let query = supabase
         .from('profiles')
-        .select('id, first_name, last_name, email')
+        .select('id, first_name, last_name')
         .eq('role', 'student')
         .eq('is_active', true)
         .order('last_name')
@@ -73,8 +75,17 @@ export default function DossiersPage() {
       }
       const { data, error } = await query
       if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
-      setStudents(data ?? [])
+      await setWithContacts(data ?? [])
+      return
     }
+    setLoading(false)
+  }
+
+  // The e-mail shown under each name, from get_profile_contacts (migration 51).
+  async function setWithContacts(rows: { id: string; first_name: string; last_name: string }[]) {
+    const { data, error } = await withContacts(supabase, rows)
+    if (error) { console.error(error); setLoadErr(error); setLoading(false); return }
+    setStudents(data.map(s => ({ ...s, email: s.email ?? undefined })))
     setLoading(false)
   }
 

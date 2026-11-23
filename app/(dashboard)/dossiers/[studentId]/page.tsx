@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
+import { withContacts } from '@/lib/profile-contacts'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { SignedFileLink } from '@/components/SignedFileLink'
 import { format } from 'date-fns'
@@ -90,12 +91,15 @@ export default function DossierDetailPage() {
     // Separate queries throughout — nested joins silently fail under RLS here.
     const { data: stud, error: studErr } = await supabase
       .from('profiles')
-      .select('id, first_name, last_name, email, phone, tenant_id, role, is_active')
+      .select('id, first_name, last_name, tenant_id, role, is_active')
       .eq('id', studentId)
       .maybeSingle()
     if (studErr) { console.error(studErr); setLoadErr(studErr); setLoading(false); return }
     if (!stud || stud.role !== 'student') { setStudent(null); setLoading(false); return }
-    setStudent(stud)
+    // E-mail + phone through get_profile_contacts (migration 51).
+    const { data: [withC], error: contactErr } = await withContacts(supabase, [stud])
+    if (contactErr) { console.error(contactErr); setLoadErr(contactErr); setLoading(false); return }
+    setStudent(withC)
 
     const [{ data: det, error: detErr }, { data: fams, error: famsErr }, { data: links, error: linksErr },
            { data: examScores, error: scoresErr }, { data: noteRows, error: notesErr },

@@ -13,6 +13,7 @@ import { DeleteUserButton } from '@/components/features/admin/DeleteUserButton'
 import { ReactivateUserButton } from '@/components/features/admin/ReactivateUserButton'
 import LogoIconCropper from '@/components/features/admin/LogoIconCropper'
 import { useScrollLock } from '@/lib/hooks/useScrollLock'
+import { PROFILE_COLUMNS, withContacts } from '@/lib/profile-contacts'
 
 export default function SuperAdminPage() {
   const { profile, loading: profileLoading } = useProfile()
@@ -49,7 +50,7 @@ export default function SuperAdminPage() {
     setLoadErr(null)
     const [{ data: t, error: tErr }, { count, error: countErr }, { data: classRows, error: classErr }] = await Promise.all([
       supabase.from('tenants').select('*').order('created_at', { ascending: false }),
-      supabase.from('profiles').select('*', { count: 'estimated', head: true }),
+      supabase.from('profiles').select('id', { count: 'estimated', head: true }),
       supabase.from('classes').select('tenant_id').eq('is_archived', false),
     ])
     if (tErr) { console.error(tErr); setLoadErr(tErr); setLoading(false); return }
@@ -123,7 +124,9 @@ export default function SuperAdminPage() {
     setExpandedTenant(tenantId)
     if (tenantUsers[tenantId]) return
     setUsersLoading(prev => ({ ...prev, [tenantId]: true }))
-    const { data, error } = await supabase.from('profiles').select('*').eq('tenant_id', tenantId).eq('is_active', true).order('last_name')
+    const { data: rows, error: rowsErr } = await supabase.from('profiles').select(PROFILE_COLUMNS).eq('tenant_id', tenantId).eq('is_active', true).order('last_name')
+    // Contacts come from get_profile_contacts (migration 51), see lib/profile-contacts.ts.
+    const { data, error } = rowsErr ? { data: [], error: rowsErr } : await withContacts(supabase, (rows ?? []) as unknown as { id: string }[])
     setUsersLoading(prev => ({ ...prev, [tenantId]: false }))
     if (error) { console.error(error); alert('Gebruikers laden mislukt.'); setExpandedTenant(null); return }
     setTenantUsers(prev => ({ ...prev, [tenantId]: data ?? [] }))
@@ -132,7 +135,10 @@ export default function SuperAdminPage() {
   function reloadTenantUsers(tenantId: string) {
     setTenantUsers(prev => { const next = { ...prev }; delete next[tenantId]; return next })
     setUsersLoading(prev => ({ ...prev, [tenantId]: true }))
-    supabase.from('profiles').select('*').eq('tenant_id', tenantId).eq('is_active', true).order('last_name')
+    supabase.from('profiles').select(PROFILE_COLUMNS).eq('tenant_id', tenantId).eq('is_active', true).order('last_name')
+      .then(({ data: rows, error: rowsErr }) => rowsErr
+        ? { data: [], error: rowsErr }
+        : withContacts(supabase, (rows ?? []) as unknown as { id: string }[]))
       .then(({ data, error }) => {
         if (error) console.error(error)
         else setTenantUsers(prev => ({ ...prev, [tenantId]: data ?? [] }))
@@ -146,8 +152,9 @@ export default function SuperAdminPage() {
     setShowArchivedFor(prev => ({ ...prev, [tenantId]: next }))
     if (!next || archivedUsers[tenantId]) return
     setArchivedLoading(prev => ({ ...prev, [tenantId]: true }))
-    const { data, error } = await supabase.from('profiles').select('*')
+    const { data: rows, error: rowsErr } = await supabase.from('profiles').select(PROFILE_COLUMNS)
       .eq('tenant_id', tenantId).eq('is_active', false).order('last_name')
+    const { data, error } = rowsErr ? { data: [], error: rowsErr } : await withContacts(supabase, (rows ?? []) as unknown as { id: string }[])
     setArchivedLoading(prev => ({ ...prev, [tenantId]: false }))
     if (error) { console.error(error); alert('Gearchiveerde gebruikers laden mislukt.'); setShowArchivedFor(prev => ({ ...prev, [tenantId]: false })); return }
     setArchivedUsers(prev => ({ ...prev, [tenantId]: data ?? [] }))

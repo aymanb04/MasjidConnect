@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase/singleton'
 import { useProfile } from '@/lib/hooks/useProfile'
+import { withContacts } from '@/lib/profile-contacts'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { getDeadlineLabel, getSubmissionStatusBadge, isHandedInViaApp } from '@/lib/utils'
 import { ArrowLeft, FileText, BookOpen, Users, Plus, Clock, GraduationCap, Mail, BarChart2, X, Loader2, SlidersHorizontal } from 'lucide-react'
@@ -48,7 +49,7 @@ export default function KlasDetailPage() {
         : supabase.from('assignments').select('*').eq('class_id', klasId).eq('is_published', true)
       ).order('due_date', { ascending: true }),
       supabase.from('lesson_modules').select('*, module_documents(id)').eq('class_id', klasId).eq('is_visible', true).order('order_index'),
-      supabase.from('class_teachers').select('profiles(id, first_name, last_name, email)').eq('class_id', klasId),
+      supabase.from('class_teachers').select('profiles(id, first_name, last_name)').eq('class_id', klasId),
     ])
 
     const firstErr = kErr || aErr || mErr || tcErr
@@ -56,12 +57,19 @@ export default function KlasDetailPage() {
     setKlas(k)
     setAssignments(a ?? [])
     setModules(m ?? [])
-    setTeachers(tc?.map((x: any) => x.profiles).filter(Boolean) ?? [])
+    // The mail buttons need e-mail addresses: get_profile_contacts (migration 51)
+    // gives a pupil only their own teachers' address, staff what their role allows.
+    // A failed lookup only hides the mail buttons, so it doesn't block the page.
+    const { data: tWithC, error: tcCErr } = await withContacts(getSupabase(), tc?.map((x: any) => x.profiles).filter(Boolean) ?? [])
+    if (tcCErr) console.error(tcCErr)
+    setTeachers(tWithC)
 
     if (isTeacher) {
-      const { data: s, error: sErr } = await supabase.from('class_students').select('profiles(id, first_name, last_name, email)').eq('class_id', klasId)
+      const { data: s, error: sErr } = await supabase.from('class_students').select('profiles(id, first_name, last_name)').eq('class_id', klasId)
       if (sErr) { console.error(sErr); setLoadErr(sErr); setLoading(false); return }
-      setStudents(s?.map((x: any) => x.profiles).filter(Boolean) ?? [])
+      const { data: sWithC, error: scErr } = await withContacts(supabase, s?.map((x: any) => x.profiles).filter(Boolean) ?? [])
+      if (scErr) console.error(scErr)   // only hides the mail buttons
+      setStudents(sWithC)
     }
 
     if (['admin', 'super_admin'].includes(profile!.role)) {
