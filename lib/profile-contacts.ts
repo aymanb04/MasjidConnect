@@ -10,8 +10,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  * teachers' e-mail address). Don't name either column in a profiles select or
  * embed (`profiles(email)`).
  *
- * A new profiles column needs an entry here (the rls-bench compares this list
- * with the table).
+ * Since migration 52, signed-in users have no SELECT on email/phone at all, so
+ * `select('*')` or naming either column fails with "permission denied".
+ *
+ * A new profiles column needs a GRANT in its migration AND an entry here (the
+ * rls-bench compares this list, the grants and the table).
  */
 // One literal (not a concatenation) so supabase-js can still type the result.
 export const PROFILE_COLUMNS =
