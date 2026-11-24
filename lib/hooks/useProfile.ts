@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/singleton'
 import type { Profile } from '@/lib/types'
+import { PROFILE_COLUMNS } from '@/lib/profile-contacts'
 
 function getStoredSession() {
     if (typeof window === 'undefined') return null
@@ -42,9 +43,9 @@ async function loadProfile(userId: string): Promise<Loaded> {
     // which is how a genuinely missing profile stays distinguishable from a
     // transient query failure. single() reports both as an error, and signing a
     // user out on a network blip would be worse than the bug being fixed.
-    const first = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+    const first = await supabase.from('profiles').select(PROFILE_COLUMNS).eq('id', userId).maybeSingle()
     if (first.error) {
-        const retry = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+        const retry = await supabase.from('profiles').select(PROFILE_COLUMNS).eq('id', userId).maybeSingle()
         if (retry.error) return { profile: null, fatal: 'profiel-onbereikbaar' }
         if (!retry.data) return { profile: null, fatal: 'geen-profiel' }
         return { profile: retry.data as Profile, fatal: null }

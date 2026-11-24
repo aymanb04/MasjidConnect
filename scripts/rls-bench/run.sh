@@ -69,6 +69,19 @@ echo "SELECT bench.census('without50')" | q >/dev/null || exit 1
 ( echo "SET check_function_bodies = off;"; cat supabase/50_inactive_and_erased_guards.sql ) | q >/dev/null || { echo "FAIL  re-applying 50"; exit 1; }
 changed50=$(echo "SELECT count(*) FROM bench.results a JOIN bench.results b ON a.label='with50' AND b.label='without50' AND (a.who,a.tbl,a.metric)=(b.who,b.tbl,b.metric) WHERE a.value IS DISTINCT FROM b.value" | q)
 echo "── 50 changes $changed50 own-school outcomes for active people (expect 0)"
+echo "── contact lookup (51)"
+contacts=$( { sed '/@@ROLLBACK_51@@/,$d' scripts/rls-bench/47_contact_lookup.sql
+              cat supabase/51_rollback.sql
+              sed -n '/@@ROLLBACK_51@@/,$p' scripts/rls-bench/47_contact_lookup.sql; } | q ) || { echo "FAIL  47_contact_lookup.sql"; exit 1; }
+echo "$contacts"
+# The app's column list (lib/profile-contacts.ts) must be every profiles column except email + phone.
+appcols=$(sed -n "/^export const PROFILE_COLUMNS/,/'$/p" lib/profile-contacts.ts | grep -o "'[^']*'" | tr -d "'")
+colcheck=$(echo "SELECT CASE WHEN (SELECT string_agg(c, ',' ORDER BY c) FROM unnest(string_to_array(replace('$appcols', ' ', ''), ',')) c)
+                     = (SELECT string_agg(column_name, ',' ORDER BY column_name) FROM information_schema.columns
+                         WHERE table_schema='public' AND table_name='profiles' AND column_name NOT IN ('email','phone'))
+                THEN 'PASS  app PROFILE_COLUMNS = every profiles column except email + phone'
+                ELSE 'FAIL  app PROFILE_COLUMNS and the profiles table differ' END" | q)
+echo "$colcheck"
 echo "── re-applied: $walls walls on $tables tables"
 
 q <<'SQL'
@@ -109,6 +122,9 @@ echo "$signup" | grep -q "^FAIL" && { echo "FAIL  signup trigger checks (above)"
 echo "$signup" | grep -q "^PASS" || { echo "FAIL  signup trigger checks printed nothing"; fail=1; }
 echo "$guards" | grep -q "^FAIL" && { echo "FAIL  inactive/erasure guard checks (above)"; fail=1; }
 echo "$guards" | grep -q "^PASS" || { echo "FAIL  inactive/erasure guard checks printed nothing"; fail=1; }
+echo "$contacts" | grep -q "^FAIL" && { echo "FAIL  contact lookup checks (above)"; fail=1; }
+echo "$contacts" | grep -q "^PASS" || { echo "FAIL  contact lookup checks printed nothing"; fail=1; }
+echo "$colcheck" | grep -q "^PASS" || fail=1
 [ "$changed50" = "0" ]     || { echo "FAIL  migration 50 changes $changed50 outcomes for active people"; fail=1; }
 [ "$left" = "0" ]          || { echo "FAIL  rollback left $left walls"; fail=1; }
 [ "$walls" = "$tables" ]   || { echo "FAIL  $walls walls for $tables tables"; fail=1; }
