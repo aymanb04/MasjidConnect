@@ -82,6 +82,18 @@ colcheck=$(echo "SELECT CASE WHEN (SELECT string_agg(c, ',' ORDER BY c) FROM unn
                 THEN 'PASS  app PROFILE_COLUMNS = every profiles column except email + phone'
                 ELSE 'FAIL  app PROFILE_COLUMNS and the profiles table differ' END" | q)
 echo "$colcheck"
+echo "── contact columns (52)"
+columns=$( { sed '/@@ROLLBACK_52@@/,$d' scripts/rls-bench/48_contact_columns.sql
+             cat supabase/52_rollback.sql
+             sed -n '/@@ROLLBACK_52@@/,$p' scripts/rls-bench/48_contact_columns.sql; } | q ) || { echo "FAIL  48_contact_columns.sql"; exit 1; }
+echo "$columns"
+# 52 must change nothing else: full own-school census with and without it.
+echo "SELECT bench.census('with52')" | q >/dev/null || exit 1
+q < supabase/52_rollback.sql >/dev/null || { echo "FAIL  52_rollback.sql"; exit 1; }
+echo "SELECT bench.census('without52')" | q >/dev/null || exit 1
+( echo "SET check_function_bodies = off;"; cat supabase/52_profile_contact_columns.sql ) | q >/dev/null || { echo "FAIL  re-applying 52"; exit 1; }
+changed52=$(echo "SELECT count(*) FROM bench.results a JOIN bench.results b ON a.label='with52' AND b.label='without52' AND (a.who,a.tbl,a.metric)=(b.who,b.tbl,b.metric) WHERE a.value IS DISTINCT FROM b.value" | q)
+echo "── 52 changes $changed52 own-school outcomes (expect 0)"
 echo "── re-applied: $walls walls on $tables tables"
 
 q <<'SQL'
@@ -125,6 +137,9 @@ echo "$guards" | grep -q "^PASS" || { echo "FAIL  inactive/erasure guard checks 
 echo "$contacts" | grep -q "^FAIL" && { echo "FAIL  contact lookup checks (above)"; fail=1; }
 echo "$contacts" | grep -q "^PASS" || { echo "FAIL  contact lookup checks printed nothing"; fail=1; }
 echo "$colcheck" | grep -q "^PASS" || fail=1
+echo "$columns" | grep -q "^FAIL" && { echo "FAIL  contact column checks (above)"; fail=1; }
+echo "$columns" | grep -q "^PASS" || { echo "FAIL  contact column checks printed nothing"; fail=1; }
+[ "$changed52" = "0" ]     || { echo "FAIL  migration 52 changes $changed52 outcomes"; fail=1; }
 [ "$changed50" = "0" ]     || { echo "FAIL  migration 50 changes $changed50 outcomes for active people"; fail=1; }
 [ "$left" = "0" ]          || { echo "FAIL  rollback left $left walls"; fail=1; }
 [ "$walls" = "$tables" ]   || { echo "FAIL  $walls walls for $tables tables"; fail=1; }
