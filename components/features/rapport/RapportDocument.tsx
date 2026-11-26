@@ -4,6 +4,12 @@
 // De Kroon template. Rendering approach: HTML + browser print (Ctrl+P / the print
 // button) — the browser shapes Arabic natively. Layout verified against the
 // mosque's real rapport PDF (2026-07-05).
+//
+// Direction: the document is RTL, so every value a user typed carries dir="auto"
+// (direction from its own first letter). Without it, Dutch text in the RTL
+// context loses its edge characters: "Fatima A." printed as ".Fatima A" and
+// "2140 Borgerhout" as "Borgerhout 2140". Arabic values stay RTL. The comment
+// cell gets the same effect from unicode-bidi:plaintext.
 
 export interface RapportDocLine {
   subjectNl: string
@@ -87,11 +93,11 @@ export default function RapportDocument({
             {logoUrl
               // eslint-disable-next-line @next/next/no-img-element -- tenant logos live on arbitrary hosts; next/image would need every host whitelisted
               ? <img src={logoUrl} alt="" className="rp-logo-img" />
-              : <span className="rp-logo-txt">{schoolName}</span>}
+              : <span className="rp-logo-txt" dir="auto">{schoolName}</span>}
           </div>
           <div className="rp-school">
-            <div className="rp-name">{schoolName}</div>
-            {schoolLines.filter(Boolean).map((l, i) => <div key={i}>{l}</div>)}
+            <div className="rp-name" dir="auto">{schoolName}</div>
+            {schoolLines.filter(Boolean).map((l, i) => <div key={i} dir="auto">{l}</div>)}
           </div>
         </div>
         <hr className="rp-rule" />
@@ -103,11 +109,11 @@ export default function RapportDocument({
           </div>
           <div>
             <div className="rp-lab">المستوى / Niveau</div>
-            <div className="rp-val">{level || ' '}</div>
+            <div className="rp-val" dir="auto">{level || ' '}</div>
           </div>
           <div>
             <div className="rp-lab">اسم الطالب(ة) / Naam leerling</div>
-            <div className="rp-val" style={{ gridColumn: 'span 2' }}>{studentName}</div>
+            <div className="rp-val" dir="auto" style={{ gridColumn: 'span 2' }}>{studentName}</div>
           </div>
         </div>
 
@@ -126,7 +132,7 @@ export default function RapportDocument({
                 <tr key={i}>
                   <td className="rp-subject">
                     {ar && <div className="rp-ar">{ar}</div>}
-                    <div className="rp-nl2">{ln.subjectNl}</div>
+                    <div className="rp-nl2" dir="auto">{ln.subjectNl}</div>
                   </td>
                   <td className="rp-result">{fmtResult(ln.result)}</td>
                   <td className="rp-comment">{ln.comment}</td>
