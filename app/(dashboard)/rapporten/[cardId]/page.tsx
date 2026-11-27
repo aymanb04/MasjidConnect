@@ -9,7 +9,7 @@ import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import RapportDocument from '@/components/features/rapport/RapportDocument'
 import { ScrollX } from '@/components/ui/ScrollX'
 import { ArrowLeft, Printer, Loader2, CheckCircle2, Undo2, Save, Lock, RefreshCw } from 'lucide-react'
-import { recalculateCard } from '@/lib/rapport'
+import { recalculateCard, findMissingParts, type MissingParts } from '@/lib/rapport'
 
 type Line = {
   id: string; class_id: string; subject_snapshot: string | null
@@ -36,6 +36,9 @@ export default function RapportCardPage() {
   const [saveMsg, setSaveMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [loadErr, setLoadErr] = useState<unknown>(null)
+  // Per class: puntenverdeling parts with no data yet (staff only, drafts only).
+  const [missing, setMissing] = useState<Map<string, MissingParts>>(new Map())
+  const [missingErr, setMissingErr] = useState(false)
 
   const isAdmin = profile ? ['admin', 'super_admin'].includes(profile.role) : false
   const isOwner = profile && card ? card.student_id === profile.id : false
@@ -74,17 +77,28 @@ export default function RapportCardPage() {
     setYearName(yr?.name ?? '')
 
     // Which subjects may this caller edit?
+    let mine = new Set<string>()
     if (['admin', 'super_admin'].includes(profile!.role)) {
-      setEditable(new Set((ln ?? []).map((l: any) => l.class_id)))
+      mine = new Set((ln ?? []).map((l: any) => l.class_id))
     } else if (profile!.role === 'teacher') {
       const classIds = (ln ?? []).map((l: any) => l.class_id)
       const { data: ct, error: ctErr } = classIds.length
         ? await supabase.from('class_teachers').select('class_id').eq('teacher_id', profile!.id).in('class_id', classIds)
         : { data: [] as any[], error: null }
       if (ctErr) { console.error(ctErr); setLoadErr(ctErr); setLoading(false); return }
-      setEditable(new Set((ct ?? []).map((r: any) => r.class_id)))
-    } else {
-      setEditable(new Set())
+      mine = new Set((ct ?? []).map((r: any) => r.class_id))
+    }
+    setEditable(mine)
+
+    // Which scores are worked out without one of their parts (e.g. no exam yet)?
+    // Only for the subjects this person may edit: a teacher can't read the scores
+    // of a colleague's class, so those would look "missing". Never blocks the page.
+    setMissing(new Map()); setMissingErr(false)
+    if (c.status === 'draft' && mine.size) {
+      try {
+        const found = await findMissingParts([{ id: c.id, student_id: c.student_id, semester: c.semester }], mine)
+        setMissing(found.get(c.id) ?? new Map())
+      } catch (e) { console.error(e); setMissingErr(true) }
     }
     setLoading(false)
   }
@@ -141,10 +155,21 @@ export default function RapportCardPage() {
 
   async function togglePublish() {
     if (!card) return
+    const next = card.status === 'draft' ? 'published' : 'draft'
+    // Publishing is when the family sees it: say what is still empty or incomplete.
+    if (next === 'published') {
+      const empty = lines.filter(l => l.result === null).length
+      const partial = lines.filter(l => l.result !== null && missing.get(l.class_id)?.missing.length).length
+      const notes = [
+        empty ? `${empty} ${empty === 1 ? 'vak heeft' : 'vakken hebben'} nog geen score.` : '',
+        partial ? `${partial} ${partial === 1 ? 'vak heeft een score' : 'vakken hebben een score'} die berekend is zonder een onderdeel van de puntenverdeling (zie de oranje melding).` : '',
+        missingErr ? 'Kon niet controleren of er onderdelen ontbreken.' : '',
+      ].filter(Boolean)
+      if (notes.length && !confirm(`Dit rapport publiceren? De leerling en de ouders zien het dan meteen.\n\nLet op: ${notes.join(' ')}`)) return
+    }
     setPublishing(true)
     setSaveMsg(null)
     const supabase = getSupabase()
-    const next = card.status === 'draft' ? 'published' : 'draft'
     const { error } = await supabase.from('rapport_cards').update({
       status: next,
       published_by: next === 'published' ? profile!.id : null,
@@ -273,6 +298,13 @@ export default function RapportCardPage() {
                         className="input text-sm py-1.5 w-20 disabled:bg-gray-50 disabled:text-gray-500" placeholder="—" />
                       <span className="text-sm text-gray-400">%</span>
                     </div>
+                    {card.status === 'draft' && missing.get(l.class_id)?.missing.length ? (
+                      // Staff only (never printed): the score leaves out a part of the puntenverdeling.
+                      <p className="mt-1 text-[11px] leading-snug text-amber-700">
+                        Onvolledig: {missing.get(l.class_id)!.missing.join(', ')}{' '}
+                        {missing.get(l.class_id)!.missing.length === 1 ? 'ontbreekt' : 'ontbreken'} nog
+                      </p>
+                    ) : null}
                   </div>
                   <textarea rows={2} value={l.comment ?? ''} disabled={!editableLine}
                     onChange={e => updateLine(l.id, { comment: e.target.value })}

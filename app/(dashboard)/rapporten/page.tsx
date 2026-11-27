@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase/singleton'
-import { computeRapportLines, recalculateCard, SkipError } from '@/lib/rapport'
+import { computeRapportLines, recalculateCard, SkipError, findMissingParts, countIncompleteCards } from '@/lib/rapport'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { PageLoader, LoadError } from '@/components/ui/PageShell'
 import { FileText, Loader2, Sparkles, ChevronRight, CheckCircle2, PencilLine, RefreshCw, Printer } from 'lucide-react'
@@ -179,13 +179,22 @@ export default function RapportenPage() {
       .select('rapport_card_id').in('rapport_card_id', drafts.map(s => cards[s.id].id)).is('result', null)
     if (emptyErr) console.error(emptyErr)
     const emptyCards = new Set((empty ?? []).map((r: any) => r.rapport_card_id)).size
+    // Scores worked out without a part of the puntenverdeling (usually the exam).
+    let partialCards = 0, partialErr = false
+    try {
+      partialCards = countIncompleteCards(await findMissingParts(drafts.map(s => ({ id: cards[s.id].id, student_id: s.id, semester }))))
+    } catch (e) { console.error(e); partialErr = true }
     if (!confirm(
       `${drafts.length} ${drafts.length === 1 ? 'rapport' : 'rapporten'} publiceren? Leerlingen en ouders zien ze dan meteen.` +
       // Without this the warning below silently vanished on a failed check.
       (emptyErr ? `\n\nLet op: kon niet controleren of er vakken zonder score zijn.` : '') +
       (emptyCards ? `
 
-Let op: ${emptyCards} ${emptyCards === 1 ? 'rapport heeft' : 'rapporten hebben'} nog een vak zonder score.` : '')
+Let op: ${emptyCards} ${emptyCards === 1 ? 'rapport heeft' : 'rapporten hebben'} nog een vak zonder score.` : '') +
+      (partialCards ? `
+
+Let op: ${partialCards} ${partialCards === 1 ? 'rapport heeft' : 'rapporten hebben'} een vak met een onvolledige score: berekend zonder een onderdeel van de puntenverdeling (bv. het examen ontbreekt nog). Open het rapport om te zien welk.` : '') +
+      (partialErr ? `\n\nLet op: kon niet controleren of er onvolledige scores zijn.` : '')
     )) return
     await runBulk('gepubliceerd', drafts, async s => {
       const { data, error } = await getSupabase().from('rapport_cards').update({
