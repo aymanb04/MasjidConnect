@@ -40,11 +40,15 @@ export async function computeRapportLines(
   if (!classes.length) throw new SkipError('heeft geen klassen dit schooljaar')
   const classIds = classes.map((c: any) => c.id)
 
+  // Every group the pupil has a class in, e.g. "Groep 1 / Groep 2". Picking one
+  // was a guess (the app records no "main" group) and printed a wrong level for
+  // a pupil who takes a subject in another group.
   let level = ''
   const groupIds = Array.from(new Set(classes.map((c: any) => c.group_id).filter(Boolean)))
   if (groupIds.length) {
     const g = must<any[]>(await supabase.from('groups').select('id, name').in('id', groupIds as string[]), 'groep')
-    level = g[0]?.name ?? ''
+    level = g.map((x: any) => String(x.name ?? '')).filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'nl', { numeric: true })).join(' / ')
   }
 
   const assignList = must<any[]>(await supabase.from('assignments')
@@ -155,4 +159,133 @@ export async function recalculateCard(
   const { error: cErr } = await supabase.from('rapport_cards').update({ level_snapshot: level }).eq('id', card.id)
   if (cErr) throw new Error(`niveau bijwerken mislukt: ${cErr.message}`)
   return { updated, added, removed }
+}
+
+// ---- which parts of a weighted score are still missing ---------------------
+
+/** `missing`: names of the puntenverdeling parts without data; `hasScore`: the line has a result. */
+export interface MissingParts { missing: string[]; hasScore: boolean }
+
+const CHUNK = 200     // ids per .in(): a few hundred still fits a URL, more may not
+const PAGE = 1000     // PostgREST returns at most this many rows per request
+
+async function readAll<T>(
+  ids: string[],
+  q: (chunk: string[], from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
+): Promise<T[]> {
+  const out: T[] = []
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK)
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await q(chunk, from, from + PAGE - 1)
+      if (error) throw new Error(error.message)
+      out.push(...(data ?? []))
+      if (!data || data.length < PAGE) break
+    }
+  }
+  return out
+}
+
+/**
+ * For each card and subject: the parts of the class's puntenverdeling that have
+ * no data yet for this pupil (e.g. ["Examen"]). A weighted score with a missing
+ * part is worked out from the parts that ARE there (lib/grading computeWeighted),
+ * so it looks final while it isn't. Classes without a puntenverdeling are left
+ * out: their score is the plain average and has no parts.
+ *
+ * Mirrors computeRapportLines: homework counts once a published assignment with
+ * a maximum has a score, a test once a test with a maximum has a score, the exam
+ * per semester, a handmatig part once the teacher filled it in.
+ *
+ * `onlyClasses`: restrict to these classes (a teacher may only read the scores of
+ * classes they teach; anything else would show as "missing").
+ */
+export async function findMissingParts(
+  cards: { id: string; student_id: string; semester: 1 | 2 }[],
+  onlyClasses?: Set<string>,
+): Promise<Map<string, Map<string, MissingParts>>> {
+  const supabase = getSupabase()
+  const result = new Map<string, Map<string, MissingParts>>()
+  if (!cards.length) return result
+
+  const lines = await readAll<any>(cards.map(c => c.id), (ids, from, to) =>
+    supabase.from('rapport_lines').select('id, rapport_card_id, class_id, result').in('rapport_card_id', ids).order('id').range(from, to))
+  const relevant = lines.filter(l => !onlyClasses || onlyClasses.has(l.class_id))
+  const classIds = Array.from(new Set(relevant.map(l => l.class_id as string)))
+  if (!classIds.length) return result
+
+  const cats = (await readAll<any>(classIds, (ids, from, to) =>
+    supabase.from('grade_categories').select('id, class_id, name, source, weight').in('class_id', ids).order('id').range(from, to)))
+    .filter(c => Number(c.weight) > 0)
+  if (!cats.length) return result
+  const weighted = Array.from(new Set(cats.map(c => c.class_id as string)))
+  const bySource = (s: string) => Array.from(new Set(cats.filter(c => c.source === s).map(c => c.class_id as string)))
+
+  const have = new Set<string>()   // "source|student|class" or "handmatig|student|category"
+
+  const hwClasses = bySource('huiswerk')
+  if (hwClasses.length) {
+    const asg = (await readAll<any>(hwClasses, (ids, from, to) =>
+      supabase.from('assignments').select('id, class_id, max_score').in('class_id', ids).eq('is_published', true).order('id').range(from, to)))
+      .filter(a => a.max_score)
+    const asgClass = new Map(asg.map(a => [a.id, a.class_id]))
+    const subs = await readAll<any>(asg.map(a => a.id), (ids, from, to) =>
+      supabase.from('submissions').select('id, assignment_id, student_id').in('assignment_id', ids).order('id').range(from, to))
+    const subById = new Map(subs.map(s => [s.id, s]))
+    const fb = await readAll<any>(subs.map(s => s.id), (ids, from, to) =>
+      supabase.from('submission_feedback').select('submission_id, score').in('submission_id', ids).order('id').range(from, to))
+    for (const f of fb) {
+      if (f.score === null || f.score === undefined) continue
+      const s = subById.get(f.submission_id)
+      if (s) have.add(`huiswerk|${s.student_id}|${asgClass.get(s.assignment_id)}`)
+    }
+  }
+
+  const testClasses = bySource('toetsen')
+  if (testClasses.length) {
+    const tests = (await readAll<any>(testClasses, (ids, from, to) =>
+      supabase.from('class_tests').select('id, class_id, max_score').in('class_id', ids).order('id').range(from, to)))
+      .filter(t => t.max_score)
+    const testClass = new Map(tests.map(t => [t.id, t.class_id]))
+    const ts = await readAll<any>(tests.map(t => t.id), (ids, from, to) =>
+      supabase.from('test_scores').select('test_id, student_id').in('test_id', ids).order('id').range(from, to))
+    for (const t of ts) have.add(`toetsen|${t.student_id}|${testClass.get(t.test_id)}`)
+  }
+
+  const examClasses = bySource('examen')
+  if (examClasses.length) {
+    const ex = await readAll<any>(examClasses, (ids, from, to) =>
+      supabase.from('exam_scores').select('class_id, student_id, semester').in('class_id', ids).order('id').range(from, to))
+    for (const e of ex) have.add(`examen|${e.student_id}|${e.class_id}|${e.semester}`)
+  }
+
+  const manual = cats.filter(c => c.source === 'handmatig')
+  if (manual.length) {
+    const cs = await readAll<any>(manual.map(c => c.id), (ids, from, to) =>
+      supabase.from('category_scores').select('category_id, student_id').in('category_id', ids).order('id').range(from, to))
+    for (const x of cs) have.add(`handmatig|${x.student_id}|${x.category_id}`)
+  }
+
+  const cardById = new Map(cards.map(c => [c.id, c]))
+  for (const l of relevant) {
+    if (!weighted.includes(l.class_id)) continue
+    const card = cardById.get(l.rapport_card_id)
+    if (!card) continue
+    const missing = cats.filter(c => c.class_id === l.class_id).filter(c =>
+      c.source === 'handmatig' ? !have.has(`handmatig|${card.student_id}|${c.id}`)
+      : c.source === 'examen'  ? !have.has(`examen|${card.student_id}|${c.class_id}|${card.semester}`)
+      : !have.has(`${c.source}|${card.student_id}|${c.class_id}`),
+    ).map(c => String(c.name))
+    if (!missing.length) continue
+    if (!result.has(card.id)) result.set(card.id, new Map())
+    result.get(card.id)!.set(l.class_id, { missing, hasScore: l.result !== null && l.result !== undefined })
+  }
+  return result
+}
+
+/** Cards that will print a score worked out without one of its parts. */
+export function countIncompleteCards(found: Map<string, Map<string, MissingParts>>): number {
+  let n = 0
+  for (const perClass of Array.from(found.values())) if (Array.from(perClass.values()).some(p => p.hasScore)) n++
+  return n
 }

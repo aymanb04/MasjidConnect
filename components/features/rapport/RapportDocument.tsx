@@ -28,15 +28,27 @@ export interface RapportDocProps {
   lines: RapportDocLine[]
 }
 
-// Known subjects → Arabic label (falls back to the Dutch name for anything else).
+// Known subjects → Arabic label, printed above the Dutch name. Anything else
+// prints the Dutch name only. Keys are in the form subjectKey() produces, so
+// "Qur'an", "Qur’an", "QURAN " and "Koran" all find the same label.
 const ARABIC_SUBJECT: Record<string, string> = {
-  arabisch: 'اللغة العربية',
-  islam: 'التربية الإسلامية',
-  koran: 'القرآن الكريم',
-  quran: 'القرآن الكريم',
+  arabisch: 'اللغة العربية', arabic: 'اللغة العربية', arabe: 'اللغة العربية',
+  islam: 'التربية الإسلامية', islamitischeopvoeding: 'التربية الإسلامية', islamonderwijs: 'التربية الإسلامية',
+  koran: 'القرآن الكريم', quran: 'القرآن الكريم', qoran: 'القرآن الكريم', qoraan: 'القرآن الكريم', kuran: 'القرآن الكريم',
+  tajwid: 'التجويد', tajweed: 'التجويد', tadjwid: 'التجويد',
+  fiqh: 'الفقه', fikh: 'الفقه', fiqah: 'الفقه',
+  sira: 'السيرة النبوية', sirah: 'السيرة النبوية', seerah: 'السيرة النبوية', siera: 'السيرة النبوية',
+  aqida: 'العقيدة', aqidah: 'العقيدة', aqeedah: 'العقيدة', akida: 'العقيدة', aqiedah: 'العقيدة',
+  hadith: 'الحديث', hadieth: 'الحديث', hadiet: 'الحديث',
+  akhlaq: 'الأخلاق', akhlaaq: 'الأخلاق', achlaq: 'الأخلاق', akhlak: 'الأخلاق',
+  tahfiz: 'الحفظ', tahfidh: 'الحفظ', hifz: 'الحفظ', hifdh: 'الحفظ', hifd: 'الحفظ',
 }
-function arabicFor(nl: string): string | null {
-  return ARABIC_SUBJECT[nl.trim().toLowerCase()] ?? null
+/** Lower-case, no accents, no apostrophes/hyphens/spaces: "Qur’an " → "quran". */
+export function subjectKey(nl: string): string {
+  return nl.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '')
+}
+export function arabicFor(nl: string): string | null {
+  return ARABIC_SUBJECT[subjectKey(nl)] ?? null
 }
 
 function fmtResult(n: number | null): string {
