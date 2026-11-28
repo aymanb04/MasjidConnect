@@ -36,5 +36,8 @@
     "next": {
       "postcss": "^8.5.31"
     }
+  },
+  "engines": {
+    "node": "24.x"
   }
 }
