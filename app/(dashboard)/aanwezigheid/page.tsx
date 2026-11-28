@@ -576,7 +576,7 @@ function MarkAttendanceView({ cls, siblings, profile, onBack }: {
           <h2 className="font-semibold text-gray-900">
             {multi ? `${cls.group_name ?? ''} — ${active.map(c => c.name).join(', ')}` : cls.name}
           </h2>
-          <p className="text-sm text-gray-400 capitalize">
+          <p className="text-sm text-gray-400 first-letter:uppercase">
             {format(new Date(date), 'EEEE d MMMM yyyy', { locale: nl })}
           </p>
         </div>
@@ -883,7 +883,7 @@ function HistoryView({
                 className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors text-left"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm text-gray-900 capitalize">{dateLabel}</p>
+                  <p className="font-medium text-sm text-gray-900 first-letter:uppercase">{dateLabel}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{sess.teacher_name}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0 text-xs">
@@ -1093,7 +1093,7 @@ function SessionDetailView({
           {cls.name[0]}
         </div>
         <div>
-          <h2 className="font-semibold text-gray-900 capitalize">{dateLabel}</h2>
+          <h2 className="font-semibold text-gray-900 first-letter:uppercase">{dateLabel}</h2>
           <p className="text-sm text-gray-400">{cls.name} · {session.teacher_name}</p>
         </div>
       </div>
@@ -1275,7 +1275,7 @@ function MyRecordsView({
             return (
               <div key={`${sess.class_id}_${sess.session_date}_${i}`} className="flex items-center gap-3 px-4 py-3">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-700 capitalize">{dateLabel}</p>
+                  <p className="text-sm text-gray-700 first-letter:uppercase">{dateLabel}</p>
                   {cls && (
                     <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
                       <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: cls.color }} />

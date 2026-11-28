@@ -269,7 +269,7 @@ export default function OudercontactPage() {
                     <CalendarClock size={18} className="text-primary-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm text-gray-900 capitalize">
+                    <p className="font-medium text-sm text-gray-900 first-letter:uppercase">
                       {format(new Date(slot.starts_at), 'EEEE d MMMM', { locale: nl })}
                       {' · '}
                       {format(new Date(slot.starts_at), 'HH:mm')}–{format(new Date(slot.ends_at), 'HH:mm')}

@@ -173,7 +173,7 @@ export function AttendanceAlertsCard({ profile }: { profile: any }) {
             <span className="text-gray-700">
               Niet gemarkeerd: <span className="font-medium">{m.className}</span>
               {' — '}
-              <span className="capitalize">{format(new Date(m.date), 'EEEE d MMMM', { locale: nl })}</span>
+              <span>{format(new Date(m.date), 'EEEE d MMMM', { locale: nl })}</span>
             </span>
           </Link>
         ))}
